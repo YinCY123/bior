@@ -181,6 +181,17 @@ Sometimes you have two sets of `IRanges` and you need to known which ones are cl
 
 Functions for this include `nearest()`, `preced()`, `follow()`.  
 
+```{r}
+ir1
+```
+
+```{r}
+ir2
+```
+
+```{r}
+nearest(x = ir1, subject = ir2)
+```
 
 
 
