@@ -1,0 +1,91 @@
+---
+title: "AnnotationHub"
+author: "yincy"
+date: "11/6/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages, message=FALSE}
+library(GenomicRanges)
+library(rtracklayer)
+library(AnnotationHub)
+```
+
+## Overview  
+We are going to use AnnotationHub and GenomicRanges to access ENCODE data on the H3K4me3 histone modification in a specific cell line. This histone modification is believed to mark active promoters, and we are going to attempt to verify this statement.  
+
+- getting the ENCODE histone data using AnnotationHub  
+- getting promoters using AnnotationHub  
+- comparing the histone data and promoters using `findOverlaps` in GenomicRanges.  
+
+## Getting the data  
+```{r}
+ah <- AnnotationHub()
+ah <- subset(ah, species = "Homo sapiens")
+```
+
+search for two keywords: **H3K4me3** and **Gm12878** which is the name of the cell line we are interested in.  
+```{r}
+phs <- query(ah, pattern = "H3K4me3")
+phs <- query(ah, pattern = "Gm12878")
+```
+NOTE: query searching in multiple fields  
+
+```{r}
+phs
+```
+
+```{r}
+phs$title
+```
+
+
+```{r}
+phs$dataprovider
+```
+
+
+This result is a great illustration of the mess of public data. It turns our that E116 is a Roadmap Epigenetics code for the Gm12878 cell line. The first 5 hits are from ENCODE, hosted at UCSC and the last 6 hits are from Roadmap Epigenomics hosted at the Broad Institute. The Roadmap data is different representation (and peaks) from the same underlying data. For the ENCODE data, two different centers did the same experiment in the same cell line (Broad, hit 1) and (Uw, hit 2-5), where Uw exposed data on two replicates (whatever that means). These two experiments seems to be analyzed using different algorithms. It is even possible that the Roadmap data is from the same raw data but just analyzed using different algorithms.  
+
+```{r}
+gr <- subset(phs, title == "wgEncodeUwHistoneGm12878H3k4me3StdPkRep1.narrowPeak.gz")[[1]]
+```
+
+```{r}
+gr2 <- subset(phs, title == "E116-H3K4me3.narrowPeak.gz")[[1]]
+```
+
+
+This gives us two GRanges objects, let's look at the distribution of peak widths  
+```{r}
+summary(width(gr1));summary(width(gr2))
+```
+
+```{r}
+table(width(gr1));table(width(gr2))
+```
+
+```{r}
+phs <- query(ah, pattern = "RefSeq")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
