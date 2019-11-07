@@ -25,8 +25,43 @@ We are going to use AnnotationHub and GenomicRanges to access ENCODE data on the
 ## Getting the data  
 ```{r}
 ah <- AnnotationHub()
-ah <- subset(ah, species = "Homo sapiens")
 ```
+
+The object is organized as a vector, with single-dimension indexing. You can get information about a single resource by indexing with a single `[`; using two brackets `[[` downloads the object.  
+```{r}
+ah[1]
+```
+
+The way you use `AnnotationHub` is by using various tools to narrow down your hub to a single or a small number of datasets. Then you download these datasets for your own usage.  
+```{r}
+unique(ah$dataprovider)
+```
+
+```{r}
+unique(ah$rdataclass)
+```
+
+You can narrow down the hub by using one (or more) of the following strategies  
+- Use `subset` (or `[`) to do a specific subsetting operation.  
+- Use `query` to do a command-line search over the metadata of the hub.  
+- Use `display` to get a Shiny interface in a browser, so you can browse the object.  
+
+It is often useful to start with a very rough subsetting, for example to data from a specific species. The subset function is useful for doing a standard R subsetting (the function also works on data.frames).  
+
+```{r}
+ah <- subset(ah, species == "Homo sapiens")
+```
+
+We can use `query` to search the hub. The (possible) drawback to query is that it searches over different fields in the hub, so watch out with using s search term which is very non-specific. The query is a regular expression, which by default is case-insensitive. Here we locate all datasets on the H3K4me3 histone modification (in H. sapiens because we selected this species above).  
+U
+```{r}
+query(ah, "H3K4me3")
+```
+
+```{r}
+hist <- display(ah)
+```
+
 
 search for two keywords: **H3K4me3** and **Gm12878** which is the name of the cell line we are interested in.  
 ```{r}
@@ -40,12 +75,12 @@ phs
 ```
 
 ```{r}
-phs$title
+phs$title %>% head()
 ```
 
 
 ```{r}
-phs$dataprovider
+phs$dataprovider %>% unique()
 ```
 
 
@@ -62,19 +97,29 @@ gr2 <- subset(phs, title == "E116-H3K4me3.narrowPeak.gz")[[1]]
 
 This gives us two GRanges objects, let's look at the distribution of peak widths  
 ```{r}
-summary(width(gr1));summary(width(gr2))
+summary(width(gr));summary(width(gr2))
 ```
 
+
 ```{r}
-table(width(gr1));table(width(gr2))
+summary(width(gr));summary(width(gr2))
 ```
+
 
 ```{r}
 phs <- query(ah, pattern = "RefSeq")
 ```
 
+```{r}
+refseq <- phs[phs$genome == "hg19" & phs$title == "RefSeq Genes"]
+```
 
-  
+```{r}
+refseq <- refseq[[1]]
+```
+
+
+
 
 
 
