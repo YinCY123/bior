@@ -1,0 +1,286 @@
+---
+title: "GenomicRanges"
+author: "yincy"
+date: "11/6/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages}
+library(GenomicRanges)
+library(magrittr)
+```
+
+## GRanges  
+`GRanges` are like `IRanges` with strand and chromosome. Strand can be +, - and *. The value * indicates 'unknown strand' or 'unstranded'.  
+
+This value usually gets treated as a third strand, which is sometimes confusing to users.  
+
+```{r}
+?GRanges
+gr <- GRanges(seqnames = "chr1", 
+              strand = c("+", "-", "+"),
+              ranges = IRanges(start = c(1, 3, 5), width = 3))
+```
+
+Natrual accessor functions: `strand()`, `seqnames()`, `ranges()`, `start()`, `end()`, `width()`.  
+
+Because the they have strand, we now have operations which are relative to the direction of transcription: `upstream()`, `downstream()`.  
+
+```{r}
+flank(gr, width = 2, start = T); flank(gr, width = 2, start = F)
+```
+```{r}
+strand(gr)
+start(gr)
+end(gr)
+width(gr)
+seqnames(gr)
+```
+
+
+## GRanges, seqinfo  
+`GRanges` operate within a universe of sequences (chromosome/contigs) and their lengths.  
+```{r}
+seqinfo(gr)
+```
+
+```{r}
+seqlengths(gr) <- c("chr1" = 10)
+seqinfo(gr)
+```
+
+```{r}
+seqlevels(gr)
+```
+
+```{r}
+seqlengths(gr)
+```
+
+Especially the length of the chromosomes are used by some functions. For example `gaps()` return the stretches of the genome not covered by the `GRanges`.  
+```{r}
+gaps(x = gr, start = 1L, end = seqlengths(gr));gr
+length(gr)
+```
+
+In this example, we known that the last gap stops at 10, because that is the length of the chromosome.  
+
+Note how a range on the * strand appears in the result.  
+
+```{r}
+seqlevels(gr) <- c("chr1", "chr2")
+seqnames(gr) <- c("chr1", "chr2", "chr1")
+```
+
+When you `sort()` a GRanges, the sorting order of the chromosomes is determined by their order in `seqlevel`.   
+```{r}
+sort(gr)
+```
+
+```{r}
+seqlevels(gr) <- c("chr2", "chr1")
+sort(gr)
+```
+
+associate a genome with a GRanges  
+```{r}
+genome(gr) <- "hg19"
+gr
+```
+
+This is becomes valuable when you deal with data from different genome versions, because it allows R to throw an error when you compare two GRanges from different genomes   
+```{r}
+gr2 <- gr
+genome(gr2) <- "hg18"
+findOverlaps(gr, gr2)
+```
+
+## DataFrame  
+The `S4Vectors` package introduced the **DataFrame** class. This class is very similar to the bae `data.frame` class from R, but it allows columns of any class, provided a number of required methods are supported. For example, **DataFrame** can have `IRanges` as columns, unlike data.frame.  
+
+```{r}
+ir <- IRanges(start = 1:2, width = 3)
+df1 <- DataFrame(iranges = ir)
+```
+
+```{r}
+df1$iranges
+```
+
+```{r}
+df2 <- data.frame(iranges = ir)
+```
+
+## Granges, metadata  
+`GRanges` (unlike `IRanges`) may have associated metadata. This is immensely useful. The formal way to access and set this metadata is through `values` or `elementMetadata` or `mcols`  
+
+```{r}
+gr <- GRanges(seqnames = "chr1", 
+              strand = c("+", "-", "+"),
+              ranges = IRanges(start = c(1, 3, 5), width = 3))
+
+values(gr) <- DataFrame(score = c(0.1, 0.5, 0.3))
+gr
+```
+
+A much easier way to set and access metadata is through the $ operator  
+```{r}
+gr$score
+```
+
+
+```{r}
+gr$score2 <- gr$score * 2
+gr
+```
+
+## findOverlaps  
+`findOverlas` works exactly as for `IRanges`. But the `strand` information can be confusing.  
+```{r}
+gr2 <- GRanges(seqnames = c("chr1", "chr2", "chr1"),
+               strand = "*",
+               ranges = IRanges(start = c(1, 3, 5), width = 3))
+gr2
+```
+
+```{r}
+gr
+```
+
+```{r}
+findOverlaps(gr, gr2)
+```
+
+Notice how the * strand overlaps both + and -. There is an argument *ignore.strand* to `findOverlaps` which will ignore the strand information (so + overlaps -). Several other functions in `GenomicRanges` have an *ignore.strans* argument as well.  
+
+```{r}
+findOverlaps(gr, gr2, ignore.strand = T)
+```
+
+
+## subsetByOverlaps  
+A common operation is to select only certain ranges from a `GRanges` which overlap something else.   
+```{r}
+subsetByOverlaps(gr, gr2)
+```
+
+
+## makeGRangesFromeDataFrame  
+A common situation is that you have data which looks like a GRanges but is really stored as a classic data.frame, with chr, start etc. The makeGRangesFromDataFrame converts this data.frame into a GRanges. An argument tells you whether you want to keep any additional columns.  
+```{r}
+df <- data.frame(chr = "chr1", 
+                 start = 1:3, 
+                 end = 4:6,
+                 score = 7:9)
+makeGRangesFromDataFrame(df)
+```
+
+```{r}
+makeGRangesFromDataFrame(df, keep.extra.columns = T)
+```
+
+## seqinfo 
+The `GRanges` class contains `seqinfo` information about the length and the names of the chromosomes. Here we will briefly discuss strategies for harmonizing this information.  
+
+The `GenomeInfoDb` package addresses a seemingly small, but consistent problem: different online resources uses different naming conventions for chromosomes. In more technical jargon, this package helps keeping your `seqinfo` and `seqlevels` harmonized.  
+
+## Drop and keep seqlevels  
+It is common to want to remove `seqlevels` from a `GRanges` object.   
+```{r}
+gr <- GRanges(seqnames = c("chr1", "chr2"),
+              ranges = IRanges(start = 1:2, end = 4:5))
+
+seqlevels(gr) <- c("chr1", "chr2")
+```
+
+In `GenomeInfoDb` you find `dropSeqlevels()` and `keepSeqlevels`.  
+```{r}
+gr <- GRanges(seqnames = c("chr1", "chr2"),
+              ranges = IRanges(start = 1:2, end = 4:5))
+```
+
+```{r}
+dropSeqlevels(x = gr, value = "chr1", pruning.mode = "coarse")
+```
+
+
+```{r}
+keepSeqlevels(x = gr, value = "chr2", pruning.mode = "coarse")
+```
+
+get rid of weired looking chromosome names with `keepStandardChromosomes()`  
+```{r}
+gr <- GRanges(seqnames = c("chr1", "chrU345"),
+              ranges = IRanges(start = 1:2, end = 4:5))
+
+keepStandardChromosomes(gr, pruning.mode = "coarse")
+```
+
+
+## Changing style  
+It is an inconvenient truth that different online resources uses different naming convention for chromosomes. This can even be different from organism to organism. For example, for the fruitfly (Drosophila Melanogaster) NCBI and Ensembl uses “2L” and UCSC uses “chr2L”. But NCBI and Ensembl differs on some contigs: NCBI uses “Un” and Ensembl used “U”.  
+
+```{r}
+gr <- GRanges(seqnames = "chr1", ranges = IRanges(start = 1:2, width = 2))
+```
+
+
+```{r remap}
+newStyle <- mapSeqlevels(seqnames = seqlevels(gr),style = "NCBI" )
+
+gr <- renameSeqlevels(gr, value = newStyle)
+```
+
+This can in principle go wrong, if the original set of `seqlevels` are inconsistent (not a single style).  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Summary 
+- GRange are much like IRange object  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

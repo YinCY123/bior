@@ -54,7 +54,7 @@ names(irl) <- paste("A", 1:3, sep = "") # row names
 irl
 ```
 
-```{r only have one dimension}
+```{r IRange object only have one dimension}
 dim(irl); length(irl)
 ```
 
@@ -71,13 +71,12 @@ c(irl, ir2)
 ```
 
 
-## Normal IRanges 
+## Normal IRanges  
 A normal IRanges is a minimal representation of the IRanges viewed as a set. Each integer only occur in a single range and there are as few ranges as possible. In addition, it is ordered.  
 
 Many functions produce a normal `IRanges`. Created by `reduce()`.  
 ```{r}
 ir <- IRanges(start = c(1, 3, 7, 9), width = c(4, 2, 2, 2))
-ir
 ```
 
 ```{r}
@@ -176,11 +175,30 @@ countOverlaps(query = ir1, subject = ir2) # query overlaped with subject
 ```
 
 
-##Finding nearest IRanges  
+
+## Finding nearest IRanges  
 Sometimes you have two sets of `IRanges` and you need to known which ones are closest to each other.  
 
 Functions for this include `nearest()`, `preced()`, `follow()`.  
 
+```{r}
+ir1
+```
+
+```{r}
+ir2
+```
+
+```{r}
+nearest(x = ir1, subject = ir2)
+```
+
+## Summary 
+- IRange object just like a vector  
+
+- IRange object elements can be accessed and replaced like vector  
+
+- IRange object elements can be manipulated like set  
 
 
 
