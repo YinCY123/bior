@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(GenomicRanges)
 library(rtracklayer)
 library(AnnotationHub)
+library(magrittr)
 ```
 
 ## Overview  
@@ -118,10 +119,75 @@ refseq <- phs[phs$genome == "hg19" & phs$title == "RefSeq Genes"]
 refseq <- refseq[[1]]
 ```
 
+```{r}
+table(refseq$name) %>% table()
+```
+
+(the table(table()) construction may seems weird at first, but its a great way to get a quick tabular summary of occurrences with the same name). This shows that almost all genes have a single transcript, which reflects how conservative RefSeq is.  
 
 
+```{r}
+promoters <- promoters(refseq)
+table(width(promoters))
+```
+
+```{r}
+ov <- findOverlaps(query = promoters, subject = gr)
+```
+
+how many percent of the peaks are in a promoter  
+```{r}
+length(unique(queryHits(ov)))/length(gr)
+```
+
+how many percent of promoters have a peak in them  
+```{r}
+length(unique(subjectHits(ov)))/length(promoters)
+```
+
+My rule of thumb is that any cell type has at most 50% of genes expressed, which fits well with these numbers. We also see that there are many H3K4me3 peaks which do not lie in a genic promoter. This is actually expected.  
+
+```{r}
+sum(width(reduce(gr))) / 10^6
+```
+
+```{r}
+sum(width(reduce(promoters)))/10^6
+```
+
+```{r}
+sum(width(intersect(gr, promoters, ignore.strand = T)))/10^6
+```
 
 
+# from vignette  
+## Accessing Genome-Scale Data  
+### Non-model organism gene annotations  
+Bioconductor offers pre-built org.* annotation packages for model organisms, with their use described in the OrgDb section of the Annotation work flow. Here we discover available OrgDb objects for less-model organisms  
+
+```{r}
+library(AnnotationHub)
+```
+
+```{r}
+ah <- AnnotationHub()
+```
+
+```{r}
+query(ah, "OrgDb")
+```
+
+```{r}
+orgdb <- query(x = ah, pattern = c("OrgDb", "maintainer@bioconductor.org"))[[1]]
+```
+
+```{r}
+keytypes(orgdb)
+```
+
+```{r}
+columns(orgdb)
+```
 
 
 

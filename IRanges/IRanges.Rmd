@@ -203,6 +203,165 @@ nearest(x = ir1, subject = ir2)
 
 
 
+## from vignette  
+Two central classes are available in Bioconductor for representing ranges: the IRanges class
+defined in the IRanges package for representing ranges defined on a single space, and the
+GRanges class defined in the GenomicRanges package for representing ranges defined on
+multiple spaces.  
+
+
+```{r}
+library(IRanges)
+library(magrittr)
+```
+
+
+```{r}
+ir1 <- IRanges(start = 1:10, width = 10:1)
+ir2 <- IRanges(start = 1:10, end = 11)
+ir3 <- IRanges(end = 11, width = 10:1)
+
+identical(ir1, ir2) && identical(ir1, ir3)
+```
+
+```{r}
+ir <- IRanges(start = c(1, 8, 14, 15, 19, 34, 40),
+              width = c(12, 6, 6, 15, 6, 2, 7))
+```
+
+```{r}
+start(ir);end(ir);width(ir)
+```
+
+```{r}
+ir[1:4]
+```
+
+```{r}
+ir[start(ir) <= 15]
+```
+
+
+```{r create a function to plot ranges}
+plotRanges <- function(x, xlim = x, main = deparse(substitute(x)), col = "black", sep = 0.5, ...){
+    height <- 1
+    if(is(xlim, "IntegerRanges"))
+        xlim <- c(min(start(xlim)), max(end(xlim)))
+    bins <- disjointBins(IRanges(start(x), end(x) + 1))
+    plot.new()
+    plot.window(xlim, c(0, max(bins)*(height + sep)))
+    ybottom <- bins * (sep + height) - height
+    rect(start(x)-0.5, ybottom, end(x) + 0.5, ybottom + height, col = col, ...)
+    title(main)
+    axis(1)
+}
+```
+
+```{r}
+par(mar = c(6, 0, 6, 0))
+plotRanges(ir)
+```
+
+it is occasionally useful to think of an IRanges object as a set of integers, where no elements are repeated and order does not matter.  
+
+
+## IRangesList  
+The IRangesList class asserts that each element is an IRanges object and provides convenience
+methods, such as `start`, `end` and `width` accessors that return IntegerList objects, aligning
+with the IRangesList object.  
+
+```{r}
+?IRangesList
+rl <- IRangesList(ir, rev(ir))
+start(rl)
+```
+
+```{r}
+lambda <- c(rep(0.001, 4500), seq(0.001, 10, length.out = 500), seq(10, 0.001, length.out = 500))
+
+xVector <- rpois(1e7, lambda)
+yVector <- rpois(1e7, lambda)
+
+xRle <- Rle(xVector)
+yRle <- Rle(yVector)
+
+irextract <- IRanges(start = c(4501:4901), width = 100)
+xRle[irextract]
+```
+
+
+##Finding Overlapping Ranges  
+```{r}
+ol <- findOverlaps(ir, reduce(ir))
+```
+
+
+## counting overlapping reanges  
+```{r}
+cov <- coverage(ir)
+plotRanges(ir)
+cov <- as.vector(cov)
+mat <- cbind(seq_along(cov) - 0.5, cov)
+d <- diff(cov) != 0
+mat <- rbind(cbind(mat[d, 1] + 1, mat[d, 2]), mat)
+mat <- mat[order(mat[, 1]), ]
+lines(mat, col = "red", lwd = 2)
+axis(2)
+```
+
+
+## Finding Neighboring Ranges  
+The `nearest` function finds the nearest neighbor ranges (overlapping is zero distance). The `precede` and `follow` functions find the non-overlapping nearest neighbors on a specific side.  
+
+
+##Transforming Ranges  
+```{r adjusting start, end and widths}
+ir; shift(ir, 10)
+```
+
+```{r ranges can only be narrowed}
+ir; narrow(ir, start = 1:5, width = 2)
+```
+
+```{r restrict ensures every range falls within a set of bounds}
+ir; restrict(ir, start = 2, end = 10) #cut ranges in that region
+```
+
+The `threeband` function extends `narrow` so that the remaining left and right regions adjacent to the narrowed region are also returned in separate IRanges objects.  
+
+```{r}
+threebands(ir, start = 1:5, width= 2)
+```
+
+
+**The arithmetic operators +, - and * change both the start and the end/width by symmetrically expanding or contracting each range**.  
+
+Adding or subtracting a numeric (integer) vector to an IRanges causes each range to be expanded or contracted on each side by the corresponding value in the numeric vector.  
+
+```{r}
+ir ;ir + seq_len(length(ir))
+```
+
+
+The `*` operator symmetrically magnifies an IRanges object by a factor, where positive contracts (zooms in) and negative expands (zooms out).  
+
+```{r}
+ir; ir * -2 # double the width
+```
+
+```{r}
+ir; ir * 2 # narrows the width 
+```
+
+
+
+
+
+
+
+
+
+
 
 
 
