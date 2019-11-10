@@ -1,0 +1,163 @@
+---
+title: "GenomicFeatures"
+author: "yincy"
+date: "11/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load packages}
+library('GenomicFeatures')
+library('TxDb.Hsapiens.UCSC.hg19.knownGene')
+```
+
+
+## Overview  
+The `GenomicFeatures` package contains functionality for so-called transcript database or TxDb objects.  
+
+These objects contains a coherent interface to transcripts. Transcripts are complicated because higher organisims usually have many different transcripts for each gene locus.  
+
+
+```{r}
+txdb <- TxDb.Hsapiens.UCSC.hg19.knownGene
+```
+
+
+A `TxDb` object is really an interface to a `SQLite` database. You can query the database using a number of tools detailed in the package vignette, but usually you use convenience functions to extract the relevent information.  
+
+**Extract basic quantities**  
+- `genes()`  
+- `transcripts()`  
+- `cds()`  
+- `exons()`  
+- `microRNAs()`  
+- `tRNAs()`  
+- `promoters()`   
+
+
+**Extract quantities and group**  
+- `transcriptsBy(by = c("gene", "exon", "cds"))`  
+- `cdsBy(by = c("tx", "gene"))`  
+- `exonsBy(by = c("tx", "gene"))`  
+- `intronsByTranscript()`  
+- `fiveUTRsByTranscript()`  
+- `threeUTRsByTranscript()`  
+
+**Other functions**  
+- `transcriptLengths()` (optionally include CDS length etc).  
+- `XXByOverlaps()` (select features based on overlaps with `XX` being `transcript`, `cds` or `exon`).  
+
+
+**Mapping between genome and transcript coordinates**  
+- `extractTranscriptSeqs()` (getting RNA sequencing of the transcripts).  
+
+
+## Gene, exons and transcripts  
+```{r}
+gr <- GRanges(seqnames = "chr1", strand = "+", ranges = IRanges(start = 11874, end = 14409))
+subsetByOverlaps(x = genes(txdb), gr)
+```
+
+```{r}
+subsetByOverlaps(x = genes(txdb), gr, ignore.strand = T)
+```
+
+```{r}
+subsetByOverlaps(x = transcripts(txdb), gr)
+```
+The gene has 3 transcripts; again we only have coordinates of the pre-mRNA here. There are 3 different transcript names (tx_name) which are identifiers from UCSC and then we have a TxDb specific transcript id (tx_id) which is an integer.  
+
+
+```{r}
+subsetByOverlaps(x = exons(txdb), gr)
+```
+
+Here we get 6 exons, but no indication of which exons makes up which transcripts. To get this, we can do  
+
+```{r}
+subsetByOverlaps(x = exonsBy(txdb, by = "tx"), gr)
+```
+
+```{r}
+subsetByOverlaps(x = cdsBy(x = txdb, by = "tx"), gr)
+```
+
+```{r}
+subsetByOverlaps(x = cds(txdb), gr)
+```
+The output of cds() is not very useful by itself, since each range is part of a CDS, not the entire cds. We need to know how these ranges together form a CDS, and for that we need cdsBy(by = "tx"). We can see that only one of the three transcripts has a CDS by looking at their CDS lengths.   
+
+```{r}
+subset(transcriptLengths(txdb, with.cds_len = T), gene_id == "100287102")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
