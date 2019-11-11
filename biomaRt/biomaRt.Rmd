@@ -1,0 +1,73 @@
+---
+title: "biomaRt"
+author: "yincy"
+date: "11/11/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(biomaRt)
+```
+
+## Overview  
+We use a large number of different databases in computational biology. “Biomart” is a flexible interface to a biological database. The idea is that any kind of resource can setup a Biomart and then users can access the data using a single set of tools to access multiple databases.  
+
+Databases supporting the Biomart interface includes Ensembl (from EBI), HapMap and UniProt.  
+
+## Specifying a mart and a dataset  
+```{r}
+listMarts()
+```
+
+```{r}
+mart <- useMart(biomart = "ensembl")
+```
+
+```{r}
+listDatasets(mart = mart)
+```
+
+```{r}
+ensembl <- useDataset(dataset = "hsapiens_gene_ensembl", mart = mart)
+```
+
+
+## Building a query  
+```{r}
+values <- c("202763_at","209310_s_at","207500_at")
+
+getBM(attributes = c("ensembl_gene_id", "affy_hg_u133_plus_2"),
+      filters = c("affy_hg_u133_plus_2"),
+      values = values,
+      mart = ensembl)
+```
+
+
+Important note: Biomart (at least Ensembl) logs how often you query. If you query to many times, it disable access for a while. So the trick is to make a single vectorized query using a long list of values and not call getBM() for each individual value (doing this is also much, much slower).  
+
+```{r}
+listAttributes(ensembl, page = "feature_page")
+```
+
+```{r}
+listFilters(ensembl)
+```
+
+An attribute can be part of multiple pages. It turns out that getBM() can only return a query which uses attributes from a single page. If you want to combine attributes from multiple pages you need to do multiple queries and then merge them.  
+
+Another aspect of working with getBM() is that sometimes the return data.frame contains duplicated rows. This is a consequence of the internal structure of the database and how queries are interpreted.  
+
+```{r}
+getBM(attributes = c())
+```
+
+
+
+
+
+
