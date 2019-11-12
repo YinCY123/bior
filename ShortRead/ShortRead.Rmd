@@ -1,0 +1,85 @@
+---
+title: "ShortRead"
+author: "yincy"
+date: "11/12/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load package, message=FALSE}
+library(ShortRead)
+library(magrittr)
+```
+
+
+## Overview  
+The ShortRead package contains functionality for reading and examining raw sequence reads (typically in FASTQ format).  
+
+## ShortRead  
+The ShortRead package was one of the first Bioconductor packages to deal with low-level analysis of high-throughput sequencing data. Some of its functionality has now been superseded by other packages, but there is still relevant functionality left.  
+
+
+### Reading FASTQ files  
+The FASTQ file format is the standard way of representing raw (unaligned) next generation sequencing reads, particular for the Illumina platform. The format basically consists of 4 lines per read, with the lines containing  
+- Read name (sometimes includes flowcell ID or other information).  
+- Read nucleotides  
+- Either empty or a repeat of line 1  
+- Encoded read quality scores  
+
+Paired-end reads are stored in two separate files, where the reads are ordered the same (this is obviously fragile; what if reads are re-ordered in one file and not the other).  
+
+These files are read by `readFastq()` which produces an object of class `ShortReadQ`  
+```{r}
+fastqDir <- system.file("extdata", "E-MTAB-1147", package = "ShortRead")
+fastqPath <- list.files(fastqDir, pattern = ".fastq.gz$", full = TRUE)[1]
+reads <- readFastq(fastqPath)
+```
+
+Here we directly point the function to the file path. A paradigm which is often used in Bioconductor is to first put the file path into an object which represents a specific file type and then read it  
+
+```{r}
+fqFile <- FastqFile(fastqPath)
+```
+
+```{r}
+reads <- readFastq(fqFile)
+```
+
+
+This appears to make little sense in this situation, but for really big files it makes sense to access them in chunks  
+
+
+The `ShortReadQ` class is very similar to a `DNAStringSet` but it has two sets of strings: one for the read nucleotides and one for the base qualities.  
+
+```{r}
+sread(reads)
+```
+
+```{r}
+quality(reads)
+```
+
+```{r}
+id(reads)
+```
+
+
+### A word on quality scores  
+convert quality scores to integer  
+```{r}
+as(quality(reads), "matrix") %>% .[1:5, 1:5]
+```
+
+In this conversion, each letter is matched to an integer between 0 and 40. This matching is known as the “encoding” of the quality scores and there has been different ways to do this encoding. Unfortunately, it is not stored in the FASTQ file which encoding is used, so you have to know or guess the encoding. The ShortRead package does this for you.  
+
+### Reading alignment files  
+In the early days of next generation sequencing, there was no standardized alignment output format. different aligners produced different output file, including Bowtie and MAQ. Later on, the SAM / BAM format was introduced and this is now the standard alignment output. ShortRead contains tools for reading these older alignment formats through the `readAligned()` function (the `type` argument support options such as `type="Bowtie"` and `type="MAQMap"` and `type="MAQMapShort"`).  
+
+The package has some very old support for parsing BAM files, but use `Rsamtools` and `GenomicAlignments` for this task instead.  
+
+
+
+
