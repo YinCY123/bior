@@ -355,16 +355,86 @@ ir; ir * 2 # narrows the width
 
 
 
+## Summary  
+- construct an IRange class object  
+```{r}
+ir <- IRanges(start = 1:10, end = 20:11)
+```
+
+```{r}
+ir1 <- IRanges(start = 1:10, width = seq(from = 20, to = 2, by = -2))
+```
+
+```{r}
+ir2 <- IRanges(end = 20:11, width = seq(from = 20, to = 2, by = -2))
+```
+
+```{r}
+identical(ir, ir1); identical(ir, ir2)
+```
+
+
+- Access and modify with accessor functions  
+```{r}
+start(ir)
+start(ir) <- 10:1
+```
+
+
+```{r}
+end(ir)
+end(ir) <- 11:20
+```
+
+```{r}
+width(ir)
+width(ir) <- seq(20, 2, -2)
+```
+
+Vector extraction  
+```{r}
+ir[1:3]
+```
+
+Intre-range operation  
+```{r}
+findOverlaps(ir, ir1)
+```
+
+```{r}
+countOverlaps(ir, ir1)
+```
+
+```{r}
+coverage(ir)
+```
+
+
+Intra-range operation  
+```{r}
+?nearest
+nearest(ir, ir1)
+```
+
+```{r}
+precede(ir, ir1)
+```
+
+```{r}
+follow(ir, ir1)
+```
 
 
 
+```{r}
+ir <- IRanges(start = c(1, 8, 14, 15, 19, 34, 40),
+              width = c(12, 6, 6, 15, 6, 2, 7))
+```
 
 
-
-
-
-
-
+```{r}
+narrow(ir, start = 1:5, width = 2)
+```
 
 
 
