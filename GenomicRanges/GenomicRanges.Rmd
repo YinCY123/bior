@@ -372,7 +372,7 @@ Note how the queryLength is 2 and not 20. What we know from the first row of thi
 This is actually a feature if we think of the GRangesList as a set of transcript, where each GRanges gives you the exon of the transcript. With this interpretation, findOverlaps tells you whether or not the transcript overlaps some region of interest, and this is true if any of the exons of the transcript overlaps the region.  
 
 
-##Other Lists  
+## Other Lists  
 There are many other types of `XXList`  
 - `RleList`  
 - `IRangesList`  
@@ -383,11 +383,47 @@ There are many other types of `XXList`
 and many others.  
 
 
-  
+# From Vignette 
+## An introduction to the GenomicRanges package  
+### Introduction  
+The `GenomicRanges` package serves as the foundation for representing genomic locations within the Bioconductor project. In the Bioconductor package hierarchy, it builds upon the `IRanges` (infrastructure) package and provides support for the `BSgenome` (infrastructure), `Rsamtools` (I/O), `ShortRead` (I/O & QA), `rtracklayer` (I/O), `GenomicFeatures` (infrastructure), `GenomicAlignments` (sequence reads), `VariantAnnotation` (called variants), and many other Bioconductor packages.  
+
+This package lays a foundation for genomic analysis by introducing three classes (*GRanges*, *GPos*, and *GRangesList*), which are used to represent genomic ranges, genomic positions, and groups of genomic ranges.  
 
 
+### GRanges: Genomic Ranges  
+The GRanges class represents a collection of genomic ranges that each have a single start and end location on the genome. It can be used to store the location of genomic features such as contiguous binding sites, transcripts, and exons.  
+
+```{r}
+gr <- GRanges(
+    seqnames = Rle(c("chr1", "chr2", "chr1", "chr3"), c(1, 3, 2, 4)),
+    ranges = IRanges(101:110, end = 111:120, names = head(letters, 10)),
+    strand = Rle(strand(c("-", "+", "*", "+", "-")), c(1, 2, 2, 3, 2)),
+    score = 1:10,
+    GC = seq(1, 0, length=10))
+```
+
+The output of the GRanges show method separates the information into a left and right hand region that are separated by | symbols. The genomic coordinates (seqnames, ranges, and strand) are located on the left-hand side and the metadata columns (annotation) are located on the right.  
+
+```{r}
+gr
+seqnames(gr)
+ranges(gr) # out IRanges object
+range(gr) # output GRanges object  
+granges(gr) # output GRanges object 
+strand(gr)
+mcols(gr)
+mcols(gr)$score
+seqlengths(gr) <- c(249250621, 243199373, 198022430)
+names(gr)
+```
 
 
+```{r}
+sp <- split(gr, f = rep(1:2, each = 5))
+
+c(sp[[1]], sp[[2]])
+```
 
 
 
