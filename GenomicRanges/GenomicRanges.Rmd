@@ -426,7 +426,40 @@ c(sp[[1]], sp[[2]])
 ```
 
 
+# GenomicRanges HOWTOs  
+## How to read single-end reads from a BAM file  
+Several functions are availabe for reading BAM files into R  
+- `readGAlignments()`  
+- `readGAlignmentPairs()`  
+- `readGAlignmentsList()`  
+- `scanBam()`  
 
+`scanBam()` in `Rsamtools` is a low-level function that returns a list of lists.  
+
+Single-end reads can be loaded with the `readGAlignments` function from the `GenomicAlignments` package.  
+
+```{r}
+library(pasillaBamSubset)
+un1 <- untreated1_chr4() # single-end reads 
+```
+
+
+```{r}
+library(GenomicAlignments)
+gal <- readGAlignments(un1)
+```
+
+
+We input records that overlap position 1 to 5000 on the negative strand with `flag` and `cigar` as metadata columns.  
+```{r}
+what <- c("flag", "cigar")
+which <- GRanges(seqnames = "chr4", 
+                 ranges = IRanges(start = 1, end = 5000))
+
+flag <- scanBamFlag(isMinusStrand = TRUE)
+param <- ScanBamParam(flag = flag, what = what, which = which)
+neg <- readGAlignments(file = un1, param = param)
+```
 
 
 
