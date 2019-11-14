@@ -225,3 +225,121 @@ There are a number of other, specialized, alignment functions in `Biostrings`.
 
 
 
+# From vignette  
+## The XString class and its subsetting operator [  
+The `XString` is in fact a virtual class and therefore cannot be instanciated. Only subclasses (or subtypes) `BString`, `DNAString`, `RNAString` and `AAString` can. These classes are direct extensions of the XString class.  
+
+```{r}
+b <- BString(x = "I am a BString object")
+```
+
+```{r}
+length(b)
+```
+
+```{r}
+d <- DNAString(x = "TTGAAAA-CTC-N")
+```
+
+```{r}
+length(d)
+```
+
+The differences with a BString object are  
+- only letters from the **IUPAC** *extended genetic alphabet* and the gap letter (-) are allowed  
+- each letter in the argument passed to the `DNAString` function is encoded in a special way before it's stored in the DNAString object.  
+
+
+```{r}
+d[3]
+```
+
+```{r}
+d[7:12]
+```
+
+```{r}
+d[]
+```
+
+```{r}
+b[length(b):1]
+```
+
+
+In fact the subsetting operator for XString objects is not efficient and one should always
+use the subseq method to extract a substring from a big string  
+
+```{r}
+bb <- subseq(x = b, start = 3, end = 6)
+```
+
+```{r}
+dd1 <- subseq(x = d, end = 7)
+dd2 <- subseq(x = d, start = 8)
+```
+
+
+to dump an XString object as a character vector (of length 1), use the `toString` method  
+```{r}
+toString(dd2)
+```
+ 
+Note that length(dd2) is equivalent to nchar(toString(dd2)) but the latter would be very inefficient on a big DNAString object.  
+
+
+## The == binary operator for XString objects  
+```{r}
+bb == "am a"
+dd2 != DNAString("TG")
+```
+
+When the 2 sides of == don’t belong to the same class then the side belonging to the “lowest” class is first converted to an object belonging to the class of the other side (the “highest” class).  
+
+The class (pseudo-)order is character < BString < DNAString.  
+
+When comparing an RNAString object with a DNAString object, U and T are considered equals  
+```{r}
+r <- RNAString(x = d)
+```
+
+```{r}
+r == d
+```
+
+
+## The XString Views class and its subsetting operators [ and [[  
+The Views virtual class is a general container for storing a set of views on an arbitrary Vector object, called the "subject".  
+
+An `XStringViews` object contains a set of views on the same `XString` object called the subject string.  
+```{r}
+v4 <- Views(dd2, start = 3:0, end = 5:8)
+```
+
+```{r}
+length(v4)
+```
+
+**Note that the last 2 views are out of limits**.  
+You can select a subset of views from an `XStringViews` object:  
+```{r}
+v4[4:2]
+```
+
+```{r}
+v4[[2]]
+```
+
+You can't extract a view that is out of limits.  
+
+Note that, when start and end are numeric vectors and i is a single integer, **Views(b, start, end)[[i]]** is equivalent to **subseq(b, start[i], end[i])**.  
+
+
+
+
+
+
+
+
+
+
