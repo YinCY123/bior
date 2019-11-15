@@ -28,19 +28,23 @@ This class has inspired many other data containers in Bioconductor and can be co
 data(ALL)
 ```
 
-This is an experiment done on an Affymetrix HGU 95av2 gene expression microarray; the authors profiled 128 samples.  
+This is an experiment done on an Affymetrix HGU95av2 gene expression microarray; the authors profiled 128 samples.  
 
 ```{r}
 experimentData(ALL)
 ```
 
 
-The core of the object are two matrices   
+**The core of the object are two matrices**   
 - the `exprs` matrix containing the 12625 gene expression measurements on the 128 samples  
 - the `pData data.frame` containing phenotype data on the samples.  
 
 ```{r}
 exprs(ALL) %>% .[1:4, 1:4]
+```
+
+```{r}
+pData(ALL) %>% .[1:4, 1:4]
 ```
 
 
@@ -53,9 +57,6 @@ sampleNames(ALL) %>% head()
 featureNames(ALL) %>% head()
 ```
 
-```{r}
-pData(ALL)
-```
 
 
 access individual columns of this `data.frame` by using the `$` operator.  
@@ -110,49 +111,175 @@ But these days, it seems that varLabels are constrained to be equal to the colum
 
 
 ## The eSet class  
-The ExpressionSet class is an example of an eSet. The ExpressionSet class has a single measurement matrix which we access by exprs. In contrast to this, the eSet class can have any number of measurement matrices with arbitrary names, although all matrices needs to have the same dimension.  
+The ExpressionSet class is an example of an `eSet`. The `ExpressionSet` class has a single measurement matrix which we access by `exprs`. In contrast to this, the `eSet` class can have any number of measurement matrices with arbitrary names, although **all matrices needs to have the same dimension**.  
 
-An example of another eSet derived class is NChannelSet which is meant to store multichannel microarray measurements; an example is a two-color array where the microarray has been imaged in two different colors.  
+An example of another `eSet` derived class is `NChannelSet` which is meant to store multichannel microarray measurements; an example is a two-color array where the microarray has been imaged in two different colors.  
 
-Another example of classes are from the minfi package for DNA methylation arrays; here there are classes such as RGChannelSet for a two color microarray and MethylSet for methylation measurements.  
-
-Another example of classes are from the minfi package for DNA methylation arrays; here there are classes such as RGChannelSet for a two color microarray and MethylSet for methylation measurements.  
+Another example of classes are from the `minfi` package for DNA methylation arrays; here there are classes such as `RGChannelSet` for a two color microarray and `MethylSet` for methylation measurements.  
 
 
+# From vignette  
+## Building an ExpressionSet From .CEL and other files  
+Many users have access to .CEL or other files produced by microarray chip manufacturer hardware. Usually the strategy is to use a Bioconductor package such as `affyPLM`, `affy`, `oligo`, or `limma`, to read these files. These Bioconductor packages have functions (e.g., `ReadAffy`, `expresso`, or `justRMA` in `affy`) to read .CEL files and perform preliminary preprocessing, and to represent the resulting data as an ExpressionSet or other type of object. Suppose the result from reading and preprocessing CEL or other files is named object, and object is different from ExpressionSet; a good bet is to try  
+```{r}
+library(convert)
+as(object, "ExpressionSet")
+```
 
 
+## Building an ExpressionSet From Scratch  
+## Assay data  
+One important part of the experiment is a matrix of `expression' values. The values are usually derived from microarrays of one sort or another, perhaps after initial processing by manufacturer software or Bioconductor packages. The matrix has F rows and S columns, where F is the number of features on the chip and S is the number of samples.  
+
+A likely scenario is that your assay data is in a 'tab-delimited' text file (as exported from a spreadsheet, for instance) with rows corresponding to features and columns to samples. The strategy is to read this file into R using the read.table command, converting the result to a matrix.  
+
+```{r}
+dataDirectory <- system.file("extdata", package = "Biobase")
+exprsFile <- file.path(dataDirectory, "exprsData.txt")
+exprs <- as.matrix(read.table(file = exprsFile, 
+                              header = TRUE, 
+                              sep = "\t",
+                              row.names = 1, 
+                              as.is = TRUE))
+```
+
+```{r}
+class(exprs);dim(exprs);colnames(exprs)
+head(exprs[, 1:5])
+```
+
+```{r}
+miniSet <- ExpressionSet(assayData = exprs)
+```
 
 
+## Phenotypic data  
+Phenotypic data summarizes information about the samples.  
+```{r}
+pDataFile <- file.path(dataDirectory, "pData.txt")
+pData <- read.table(pDataFile, 
+                    row.names = 1, 
+                    header = TRUE,
+                    sep = "\t")
+```
+
+```{r}
+dim(pData); rownames(pData)
+```
+
+```{r}
+summary(pData)
+```
+
+**Note that the number of rows of phenotypic data match the number of columns of expression data, and indeed that the row and column names are identically ordered**.  
+```{r}
+all(rownames(pData) == colnames(exprs))
+```
+
+This is an essential feature of the relationship between the assay and phenotype data; ExpressionSet will complain if these names do not match.  
 
 
+```{r}
+metadata <- data.frame(labelDescription = c("Patient gender", "Case/control status", "Tumor progress on XYZ scale"), 
+                       row.names = c("gender", "type", "score"))
+```
 
 
+Create and view an AnnotationDataFrame instance  
+```{r}
+phenoData <- new(Class = "AnnotatedDataFrame", data = pData, varMetadata  = metadata)
+```
+
+```{r}
+head(pData(phenoData))
+```
 
 
+## Annotations and feature data  
+Meta-data on features is as important as meta-data on samples, and can be very large and diverse.
+
+The `annotate` and `AnnotationDbi` packages provides basic data manipulation tools for the meta-data packages.
+
+```{r}
+annotation <- "hgu95av2"
+```
 
 
+```{r}
+experimentData <- new(Class = "MIAME",
+                      name = "Pierre Fermat",
+                      lab = "Francis Galton Lab",
+                      contact = "pfermat@lab.not.exist",
+                      title = "Smoking-Cancer Experiemnt",
+                      abstract = "An example ExpressionSet",
+                      url = "www.lab.not.exist",
+                      other = list(notes = "Created fro text files"))
+```
 
 
+```{r}
+exampleSet <- ExpressionSet(assayData = exprs,
+                            phenoData = phenoData,
+                            experimentData = experimentData,
+                            annotation = "hgu95av2")
+```
+
+```{r}
+exprs(exampleSet) %>% head()
+pData(exampleSet)
+
+```
 
 
+## ExpressionSet Bascis  
+accessing data elements  
+```{r}
+exampleSet$gender
+```
+
+```{r}
+exampleSet$gender[1:5] == "Female"
+```
+
+```{r}
+featureData(exampleSet)
+```
+
+```{r}
+featureNames(exampleSet) %>% head()
+```
+
+```{r}
+sampleNames(exampleSet) %>% head()
+```
+
+```{r}
+varLabels(exampleSet)
+```
+
+```{r}
+exprs(exampleSet) %>% dim()
+```
+
+Subsetting  
+```{r}
+exampleSet[1:5, 1:3] %>% dim()
+```
 
 
+```{r}
+males <- exampleSet[, exampleSet$gender == "Male"]
+dim(males)
+```
 
 
+```{r}
+data("sample.ExpressionSet")
+print(sample.ExpressionSet)
+```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+```{r}
+rbind(exprs(sample.ExpressionSet[1, ]), pData(sample.ExpressionSet)[, 1, drop = T])
+```
 
 
