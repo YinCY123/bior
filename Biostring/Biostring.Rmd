@@ -334,6 +334,136 @@ You can't extract a view that is out of limits.
 
 Note that, when start and end are numeric vectors and i is a single integer, **Views(b, start, end)[[i]]** is equivalent to **subseq(b, start[i], end[i])**.  
 
+Subsetting also works with negative or logical values with the expected semantic (the same
+as for R built-in vectors):  
+```{r}
+v4[-3]
+```
+
+```{r}
+v4[c(TRUE, FALSE)]
+```
+
+Note that the logical vector is recycled to the length of v4.  
+
+
+## A few more XStringViews objects  
+```{r}
+v12 <- Views(DNAString(x = "TAATAATG"), start = -2:9, end = 0:11)
+```
+
+```{r}
+as(d, "Views")
+v12[0]
+v12[FALSE]
+Views(d)
+```
+
+
+## The == binary operator for XStringViews objects  
+This operator is the vectorized version of the == operator defined previously for XString objects  
+```{r}
+v12 == DNAString(x = "TAA")
+```
+
+
+```{r}
+v12[v12 == v12[4]]
+```
+
+```{r}
+v12[v12 == v12[1]]
+```
+
+
+## The start, end and width methods  
+```{r}
+start(v4)
+```
+
+```{r}
+end(v4)
+```
+
+```{r}
+width(v4)
+```
+
+
+# Pairwise Sequence Alignments  
+## Introduction  
+`pairwiseAlignment()` function aligns a set of *pattern* strings to a *subject* string in a global, local, or overlap (ends-free) fashion with or without affine gaps using either a fixed or quality-based substitution scoring scheme.  
+
+This function's computation time is proportional to the product of the two string lengths being aligned.  
+
+## Pairwise Sequence Alignment Problems  
+The pairwise sequence alignment types, substitution scoring schemes, and gap penalties influence alignment scores in the following manner.  
+
+- Pairwise Sequence Alignment Types:  The type of pairwise sequence alignment determines the substring ranges to apply the substitution scoring and gap penalty schemes.  
+
+For the three primary (global, local, overlap) and two derivative (subject overlap, pattern overlap) pairwise sequence alignment types, the resulting substring ranges are as follows.  
+
+- Substitution Scoring Schemes:  The substitution scoring scheme sets the values for the aligned character pairings within the substring ranges determined by the type of pairwise sequence alignment. This scoring scheme can be fixed for character pairings or quality-dependent for character pairings.  
+
+```{r}
+pairwiseAlignment(pattern = c("succeed", "precede"), subject = "supersede")
+```
+
+The type of pairwise sequence alignment is set by specifying the *type* argument to be one of 'global', 'local', 'overlap', 'global-local', and 'local-global'.  
+
+```{r}
+pairwiseAlignment(pattern = c("succeed", "precede"), subject = "supersede", type = "local")
+```
+
+```{r}
+pairwiseAlignment(pattern = c("succeed", "precede"), 
+                  subject = "supersede", 
+                  gapOpening = 0,
+                  gapExtension = 1)
+```
+
+The substitution scoring scheme is set using three arguments, two of which are quality-based related (`patternQuality`, `subjectQuality`) and one is fixed substitution related (`substitutionMatrix` ). When the substitution scores are fixed by character pairing, the `substituionMatrix` argument takes a matrix with the appropriate alphabets as dimension names. The `nucleotideSubstitutionMatrix` function tranlates simple match and mismatch scores to the full spectrum of IUPAC nucleotide codes.  
+
+```{r}
+submat <- matrix(-1, nrow = 26, ncol = 26, dimnames = list(letters, letters))
+diag(submat) <- 0
+```
+
+```{r}
+pairwiseAlignment(pattern = c("succeed", "precede"), 
+                  subject = "supersede", 
+                  gapOpening = 0,
+                  gapExtension = 1,
+                  substitutionMatrix = submat)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
