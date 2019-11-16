@@ -190,13 +190,88 @@ columns(orgdb)
 ```
 
 
+# From vignette  
+## AnnotationHub objects  
+```{r}
+ah <- AnnotationHub()
+```
+
+Now at this point you have already done everything you need in order to start retrieving annotations. For most operations, using the AnnotationHub object should feel a lot like working with a familiar `list` or `data.frame`.  
+
+```{r}
+ah
+```
+
+```{r}
+ah$dataprovider %>% unique()
+```
 
 
+```{r}
+ah$species %>% unique() %>% head()
+```
+
+```{r}
+ah$rdataclass %>% unique() %>% head()
+```
+
+The query method lets you search rows for specific strings, returning an AnnotationHub instance with just the rows matching the query.  
+
+```{r}
+dm <- query(x = ah, pattern = c("ChainFile", "UCSC", "Drosophila melanogaster"))
+```
 
 
+```{r}
+mcols(dm)
+```
+
+By default the show method will only display the first 5 and last 5 rows. There are already thousands of records present in the hub.  
 
 
+```{r}
+ahs <- query(x = ah, pattern = c("inparanoid8", "ailuropoda"))
+```
+
+```{r}
+d <- display(object = ah)
+```
 
 
+## Using AnnotationHub to retrieve data  
+```{r}
+dm
+```
+
+```{r}
+dm["AH15146"]
+```
+
+downloading  
+```{r}
+dm[["AH15146"]]
+```
+
+
+## Configuring AnnotationHub objects  
+When you create the `AnnotationHub` object, it will set up the object for you with some default settings. See `?AnnotationHub` for ways to customize the hub source, the local cache, and other instance-specific options, and `?getAnnotationHubOption` to get or set package-global options for use across sessions.  
+
+```{r}
+ah
+```
+
+By default the AnnotationHub object is set to the latest snapshotData and a snapshot version that matches the version of Bioconductor that you are using. You can also learn about these data with the appropriate methods.  
+```{r}
+snapshotDate(ah)
+```
+
+If you are interested in using an older version of a snapshot, you can list previous versions with the possibleDates() like this  
+```{r}
+pd <- possibleDates(ah)
+```
+
+```{r}
+snapshotDate(ah) <- pd[1]
+```
 
 
