@@ -113,7 +113,6 @@ alphabetFrequency(vi)
 ```
 
 The advantage of Views is that they don’t duplicate the sequence information from the subject; all they keep track of are indexes into the subject (stored as IRanges). This makes it very (1) fast, (2) low-memory and makes it possible to do things like  
-
 ```{r}
 shift(x = vi, shift = 10)
 ```
