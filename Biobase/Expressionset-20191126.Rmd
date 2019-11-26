@@ -1,0 +1,121 @@
+---
+title: "expressionset"
+author: "yincy"
+date: "11/26/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### assayData  
+```{r}
+dataDir <- system.file("extdata", package = "Biobase")
+exprFile <- file.path(dataDir, "exprsData.txt")
+```
+
+```{r}
+exprs <- as.matrix(read.table(file = exprFile, header = TRUE, sep = "\t", row.names = 1, as.is = T))
+class(exprs)
+```
+
+```{r}
+colnames(exprs)
+```
+
+```{r}
+head(exprs)
+```
+
+
+### phenoData  
+```{r}
+pDataFile <- file.path(dataDir, "pData.txt")
+pData <- read.table(pDataFile, row.names = 1, header = T, sep = "\t")
+```
+
+```{r}
+summary(pData)
+```
+
+```{r}
+all(rownames(pData) == colnames(exprs))
+```
+
+```{r}
+metaData <- data.frame(labelDescription = c("Patient gender", "Case/Control status", "Tumor progress on xyz scale"), row.names = colnames(pData))
+```
+
+
+```{r}
+adf <- new(Class = "AnnotatedDataFrame", data = pData, varMetadata = metaData)
+```
+
+```{r}
+varMetadata(adf)
+```
+
+```{r}
+dimLabels(adf)
+featureNames(adf)
+sampleNames(adf)
+```
+
+```{r}
+head(pData(adf))
+```
+
+
+### annotation  
+```{r}
+annotation <- "hgu95av2"
+```
+
+
+### experimentData  
+```{r}
+experimentData <- new(Class = "MIAME", 
+                      name = "Pierre Fermat", 
+                      lab = "Francis Galton Lab",
+                      title = "Smoking-Cancer Experiemtn",
+                      abstract ="An experiemtn ExpressionSet",
+                      url = "www.lab.not.exist",
+                      other = list(notes = "Created from text files"))
+```
+
+
+### combine up  
+```{r}
+exampelSet <- new(Class = "ExpressionSet",
+                  exprs = exprs,
+                  phenoData = adf,
+                  experimentData = experimentData,
+                  annotation = annotation)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
