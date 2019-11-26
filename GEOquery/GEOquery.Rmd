@@ -6,11 +6,12 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
 ```
 
 ```{r}
 library(GEOquery)
+library(magrittr)
 ```
 
 
@@ -35,7 +36,7 @@ At the end of the day, GEO has series identifiers (like GSE19486) and sample ide
 
 
 ## GEOquery  
-```{r}
+```{r, message=FALSE, warning=FALSE}
 eList <- getGEO(GEO = "GSE11675")
 ```
 
@@ -76,16 +77,6 @@ eList <- getGEOSuppFiles(GEO = "GSE11675")
 ## Other packages  
 - `SRAdb` for Short Read Archive (SRA)  
 - `ArrayExpress` a similar database to NCBI GEO but hosted at the EBI  
-
-
-
-
-
-
-
-
-
-
 
 
 
