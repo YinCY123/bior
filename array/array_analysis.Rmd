@@ -93,17 +93,17 @@ qc_report <- qc(Data)
 ```
 
 
-从这里，我们可以看出，QCStats这个结构都包含有哪些数据，它包括：  
-    - 尺度因子:scale.factors   
-    - 标准化平均值：target  
-    - P所占比例：percent.present  
-    - 平均背景噪音：average.background    
+从这里，我们可以看出，QCStats这个结构都包含有哪些数据，它包括：   
+    - 尺度因子:scale.factors    
+    - 标准化平均值：target   
+    - P所占比例：percent.present   
+    - 平均背景噪音：average.background     
     - 最小噪音：minimum.background  
-    - 最大背景噪音：maximum.background  
-    - 嵌入探针BioB：bioBCalls  
-    - 嵌入探针：spikes  
-    - 质量控制探针beat-action和GAPDH：qc.probes  
-    - 以及芯片数据类型：arraytype。
+    - 最大背景噪音：maximum.background   
+    - 嵌入探针BioB：bioBCalls   
+    - 嵌入探针：spikes   
+    - 质量控制探针beat-action和GAPDH：qc.probes   
+    - 以及芯片数据类型：arraytype.  
 
 
 我们一次一览如此多的信息，会让人眼花，我们还是使用simpleAffy提供的方法来一条一条地看信息吧。这里比较重要的方法是：  
@@ -208,6 +208,85 @@ boxplot(Data, col = colors)
 虽然通常情况下，我们认为，荧光的强度大小与mRNA或者cDNA丰度是成正比的，但是我们知道，尤其是在两极，这个比例关系并不一定存在，比如背景的自发荧光会干扰低表达量的基因检测；而高荧光强度时，荧光检测探头可能会被饱合，而无法区分检测上限以上强度的荧光强度。   
 
 最简单地用于显示原始数据这种荧光强度依赖效应的方法是绘制R-I(ratio-intensity)图，又称MA图。MA图中定义M=log2(R/G); A=1/2·log2(R·G)。图中，Media指示出中值偏离0的程度，IQR是四分位距（interquartile range），两者都是越接近0越好。从图中我们可以看到，原始数据中，中值偏离0，而且头尾两部分都偏离0更远。经过一种标准化的算法处理数据之后，我们发现，数据中值基本为0，头尾的偏离也都被修正了。反过来说，我们对数据绘制RI图可以直观化地显示实验数据进入下一步分析比较时的可靠性。  
+
+```{r}
+MAplot(object = Data[, 1:6], pairs = TRUE, plot.method = "smoothScatter")
+```
+
+```{r}
+data.rma <- rma(object = Data)
+plot(data.rma[, 1:6], pairs = T, plot.method = "smoothScatter")
+```
+
+我们还可以查看一下在实验过程中RNA降解的情况。我们知道，RNA通常都是从5’端开始降解的，所以我们可以想象5’端的探针荧光强度应该低于3’端的荧光强度。斜率接近0说明降解较少或者全部被降解。然而实际实验中，降解较少是不太可能的，所以当斜率过小时，很可能表明RNA降解严重。  
+```{r}
+data.deg <- AffyRNAdeg(Data)
+```
+
+
+```{r}
+plotAffyRNAdeg(data.deg, col = colors)
+legend("topleft", legend = rownames(pData(Data)), col = colors, lwd= 2, inset = 0.05, bty = "n", cex = 0.7)
+```
+
+
+### PCA analysis  
+PCA(principal component analysis)，主要成份分析，其实是样品归类的一种分析手段。经过PCA分析之后，平行实验所提供的基因芯片数据应该聚扰在一起，而不同设计的实验所提供的基因芯片数据应该分离。这可以帮助我们很快的识别出一组平行实验当中，有哪些数据是可靠的，而哪些数据可以被放弃。实际的操作可能更好理解。我们使用gcrma(rma的一种扩展)来对数据进行预处理，然后使用affycoretools库当中的plotPCA来进行PCA分析作图。我们注意到它的结果和NUSE的结果保持一致。  
+```{r}
+library(affycoretools)
+```
+
+
+## 提取差异表达的基因  
+从基因芯片当中提取生物学的信息需要合理的统计学方法。人们已经为优化传统统计学方法在基因芯片方面的应用做出了多年的努力。但是直到现在，最主要的努力依然还是依据实验设计的差别，用统计学方法提取出差异表达的基因，然后再转回使用实验的方法去验证这个结果。  
+
+现在常用的分析手段主要有：significance analysis of microarrays(SAM)，CyberT和Rank products(RP)三种手段。其中CyberT是bioconductor当中最为常用的分析手段，因为它的算法完整地被limma库实现。但有研究指出，使用SAM和RP算法相结合可能是最佳的方案。其实任何一种算法都是有局限性的，我们需要从根本上对算法有所了解，然后才能有针对性地选择合适的算法。  
+
+
+```{r}
+library(affy)
+```
+
+
+```{r}
+pd <- read.AnnotatedDataFrame(filename = "estrogen/estrogen.txt", 
+                              header = T, 
+                              row.names = 1,
+                              sep = "")
+pData(pd)
+```
+
+
+```{r}
+data <- ReadAffy(filenames = paste("estrogen",rownames(pData(pd)), sep = "/"), verbose = T)
+```
+
+
+### SAM algorithm   
+SAM算法过程基于数据的噪音分析。一般的，信噪比会随着信号的降低而减小。然而当人们针对每一个基因进行分析时，发现即使他们的信号在同一水平，每一个基因的表达噪音都不一样。所以无法笼统地给出一个具体地线性方程来分析全部基因，必须一个一个基因单独分析。假设有对照实验I和U两组，I和U实验各有平行实验w组，对于某个指定的基因i，定义相对差异值 （relative difference(d(i))）为基因i在实验组I和U当中的平均值之差除以I和U的总体标准误差均值。因为当标准误差均值过低时，会产生一个较高的d(i)值，所以总体的标准误差均值增加了一个较正项。  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
