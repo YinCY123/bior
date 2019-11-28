@@ -1,0 +1,84 @@
+---
+title: "ImmG"
+author: "yincy"
+date: "11/28/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
+```
+
+
+```{r}
+library(GEOquery)
+library(magrittr)
+```
+
+
+Immune cell populations encompassing all major lineages were isolated by flow cytometry to high-purity according to ImmGen SOP [ImmGen](https://www.immgen.org/). 10,000 cells (except some rare cell populations) were used to construct each ATAC-seq library, using the Fast-ATAC protocol. Libraries were dual-indexed and pooled for high-throughput sequencing.
+Highly purified cell samples were isolated in parallel from the same populations for gene expression profiling by low-input RNAseq (ImmGen protocol, per umbrella GSE126267). These corresponding RNAseq datasets are available at GSE109125.  
+
+
+```{r}
+gse100738_sample_info <- getGEO(GEO = "GSE100738", GSEMatrix = F)
+```
+
+
+```{r}
+gse100738_header <- slot(gse100738_sample_info, "header")
+gse100738_gsms <- slot(gse100738_sample_info, "gsms")
+```
+
+
+```{r}
+gse100738_gsms %>% names()
+```
+
+
+```{r}
+gse100738_gsms %>% class()
+```
+
+
+```{r}
+cell <- sapply(X = gse100738_gsms, FUN = function(x){
+    cell = c(x@header$geo_accession, 
+             x@header$source_name_ch1, 
+             x@header$title, 
+             x@header$characteristics_ch1[1],
+             x@header$characteristics_ch1[2], 
+             x@header$description[1], 
+             x@header$description[2], 
+             x@header$instrument_model)
+}, simplify = TRUE)
+```
+
+
+```{r}
+cell_info <- data.frame(gsm_accession = cell[1, ],
+                        source = cell[2, ],
+                        cell_abs = cell[3, ],
+                        strain = cell[4, ],
+                        cell_type = cell[5, ],
+                        selection_marker = cell[6, ],
+                        supliment_file_base_name = cell[7, ],
+                        plantform = cell[8, ],
+                        stringsAsFactors = F)
+```
+
+```{r}
+cell_info$strain <- gsub("strain: ", "", cell_info$strain)
+cell_info$cell_type <- gsub("cell type: ", "", cell_info$cell_type)
+```
+
+
+```{r}
+unique(cell_info$source)
+```
+
+```{r}
+unique(cell_info$cell_type)
+```
+
+
