@@ -41,19 +41,46 @@ gse109125_gsms %>% class()
 ```
 
 ```{r}
-sapply(gse109125_gsms, function(x){
+cells <- sapply(gse109125_gsms, function(x){
     cell <- c(x@header$characteristics_ch1[1],
               x@header$characteristics_ch1[2],
               x@header$characteristics_ch1[3],
               x@header$characteristics_ch1[4],
               x@header$characteristics_ch1[5],
-              x@header$description,
+              x@header$description[1],
               x@header$geo_accession,
               x@header$instrument_model,
               x@header$source_name_ch1,
               x@header$title)
-})
+}, simplify = T)
 ```
+
+
+
+```{r}
+gse109125_gsms$GSM2932488@header
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
