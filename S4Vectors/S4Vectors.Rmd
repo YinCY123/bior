@@ -4,12 +4,138 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
 ```
 
 ```{r}
 library(S4Vectors)
 ```
+
+
+### Vector-like and list-like objects  
+In the context of the `S4Vectors` package, a vector-like object is an ordered finite collection of elements.   
+
+All vector-like objects have three main properties:   
+    1. a notion of length or number of elements   
+    2. the ability to extract elements to create new vector-like objects  
+    3. the ability to be concatenated with one or more vector-like objects to form larger vectorlike objects.   
+    
+The main functions for these three operations are `length`, `[`, and `c`.   
+
+Some vector-like objects can also have a list-like semantic, which means that individual
+elements can be extracted with `[[`.  
+
+In `S4Vectors` and many other Bioconductor packages, vector-like and list-like objects derive from the `Vector` and `List` virtual classes, respectively. **Note that List is a subclass of Vector**.  
+
+
+#### Vector-like objects  
+The Rle class defined in the `S4Vectors` package is used to represent a run-length encoded (compressed) sequence of *logical*, *integer*, *numeric*, *complex*, *character*, *raw*, or *factor* values.  
+```{r}
+showClass("Rle")
+```
+
+```{r}
+set.seed(0)
+lambda <- c(rep(0.001, 4500), seq(0.001, 10, length = 500), seq(10, 0.001, length = 500))
+
+xVector <- rpois(n = 1e7, lambda = lambda)
+yVector <- rpois(n = 1e7, lambda = lambda[c(251:length(lambda), 1:250)])
+
+xRle <- Rle(values = xVector)
+yRle <- Rle(values = yVector)
+```
+
+
+```{r}
+length(xRle)
+xRle[1]
+```
+
+```{r}
+zRle <- c(xRle, yRle)
+```
+
+
+#### Subsetting a vector-like object  
+When this subsetting does not duplicate or reorder the elements being extracted, the result is
+called a *subsequence*.  
+
+the S4Vectors package supports seven additional functions for sequence extraction:  
+    1. `window` - Extracts a subsequence over a specified region.   
+    2. `subset` - Extracts the subsequence specified by a logical vector.  
+    3. `head` - Extracts a consecutive subsequence containing the first n elements.  
+    4. `tail` - Extracts a consecutive subsequence containing the last n elements.  
+    5. `rev` - Creates a new sequence with the elements in the reverse order.  
+    6. `rep` - Creates a new sequence by repeating sequence elements.  
+    
+```{r}
+xSnippet <- window(xRle, 4751, 4760)
+```
+
+```{r}
+head(xSnippet)
+```
+
+```{r}
+tail(xSnippet)
+```
+
+```{r}
+rev(xSnippet)
+```
+
+
+```{r}
+rep(xSnippet, 2)
+```
+
+```{r}
+subset(xSnippet, subset = xSnippet >= 5   )
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
