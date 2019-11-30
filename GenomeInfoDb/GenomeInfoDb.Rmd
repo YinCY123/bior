@@ -11,6 +11,8 @@ knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
 
 ```{r}
 library(GenomeInfoDb)
+library(GenomicRanges)
+library(magrittr)
 ```
 
 
@@ -296,19 +298,15 @@ y <- Seqinfo(seqnames = c("chr3", "chr4", "chrM"),
 
 
 ```{r}
-merge(x = x, y = y)
+merge(x, y)
 ```
 
 
+```{r}
+merge(y, x)
+```
 
-
-
-
-
-
-
-
-
+Note that, strictly speaking, merging 2 Seqinfo objects is not a commutative operation, i.e., in general 'z1 <- merge(x, y)' is not identical to 'z2 <- merge(y, x)'. However 'z1' and 'z2' are guaranteed to contain the same information (i.e. the same rows, but typically not in the same order) 
 
 
 
