@@ -29,7 +29,7 @@ There are two basic types of containers for representing strings. One container 
 dna1 <- DNAString(x = "ACGT-N")
 ```
 
-```{r}
+```{r, eval=FALSE}
 DNAString(x = "ADE")
 ```
 
@@ -397,22 +397,28 @@ width(v4)
 This function's computation time is proportional to the product of the two string lengths being aligned.  
 
 ## Pairwise Sequence Alignment Problems  
+The optimal pairwise sequence alignment is the pairwise sequence alignment with the largest score for the specified alignment type, substitution scoring scheme, and gap penalties.  
+
 The pairwise sequence alignment types, substitution scoring schemes, and gap penalties influence alignment scores in the following manner.  
 
-- Pairwise Sequence Alignment Types:  The type of pairwise sequence alignment determines the substring ranges to apply the substitution scoring and gap penalty schemes.  
+- **Pairwise Sequence Alignment Types**:  The type of pairwise sequence alignment determines the substring ranges to apply the substitution scoring and gap penalty schemes.  
 
-For the three primary (global, local, overlap) and two derivative (subject overlap, pattern overlap) pairwise sequence alignment types, the resulting substring ranges are as follows.  
+For the three primary (global, local, overlap) and two derivative (subject overlap, pattern overlap) pairwise sequence alignment types, **the resulting substring ranges** are as follows.  
+[](./alignment_type.PNG)
 
-- Substitution Scoring Schemes:  The substitution scoring scheme sets the values for the aligned character pairings within the substring ranges determined by the type of pairwise sequence alignment. This scoring scheme can be fixed for character pairings or quality-dependent for character pairings.  
+- **Substitution Scoring Schemes**:  The substitution scoring scheme sets the values for the aligned character pairings within the substring ranges determined by the type of pairwise sequence alignment. This scoring scheme can be fixed for character pairings or quality-dependent for character pairings.  
 
 ```{r}
-pairwiseAlignment(pattern = c("succeed", "precede"), subject = "supersede")
+pairwiseAlignment(pattern = c("succeed", "precede"), 
+                  subject = "supersede")
 ```
 
 The type of pairwise sequence alignment is set by specifying the *type* argument to be one of 'global', 'local', 'overlap', 'global-local', and 'local-global'.  
 
 ```{r}
-pairwiseAlignment(pattern = c("succeed", "precede"), subject = "supersede", type = "local")
+pairwiseAlignment(pattern = c("succeed", "precede"), 
+                  subject = "supersede", 
+                  type = "local")
 ```
 
 ```{r}
@@ -436,34 +442,6 @@ pairwiseAlignment(pattern = c("succeed", "precede"),
                   gapExtension = 1,
                   substitutionMatrix = submat)
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
