@@ -9,7 +9,27 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+[From this web site](http://qiubio.com/new/book/chapter-06/#%E8%B4%A8%E9%87%8F%E5%88%86%E6%9E%90quality-control-by-atacseqqc)
 
+Tn5 transposase可以随机插入到打开的chromatin中，因为Tn5 transposome中设计有PCR primer，当我们随后进行PCR扩增以后，每两个Tn5插入位点之间的序列就会被扩增出来。因为大多数的Linker DNA的大小介于10-80bp之间，所有得到的大多数片段都会是小于100bp的。而每个Nucleosome的DNA大小为180bp左右，加上两边插入进的冗余，我们会得到大约200bp长度是mono-nucleosome的DNA。如果是两个Nucleosome之间的片段的话，就是400bp左右。  
+
+
+### Quality Control  
+```{r}
+library(ATACseqQC)
+```
+
+```{r}
+bamFile <- system.file("extdata", "GL1.bam", package = "ATACseqQC", mustWork = T)
+
+bamFile.labels <- gsub(".bam", "", basename(bamFile))
+```
+
+
+generate fragment size distribution  
+```{r}
+fragSize <- fragSizeDist(bamFiles = bamFile, bamFiles.labels = bamFile.labels)
+```
 
 
 
