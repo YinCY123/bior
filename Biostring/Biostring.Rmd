@@ -440,8 +440,172 @@ pairwiseAlignment(pattern = c("succeed", "precede"),
                   subject = "supersede", 
                   gapOpening = 0,
                   gapExtension = 1,
-                  substitutionMatrix = submat)
+                  substitutionMatrix = submat,
+                  type = "global")
 ```
+
+When the substitution scores are quality-based, the `patternQuality` and `subjectQuality` arguments represent the equivalent of [x - 99] numeric quality values for the respective strings, and the optional `fuzzyMatrix` argument represents how the closely two characters match on a [0, 1] scale.  
+
+The `patternQuality` and `subjectQuality` arguments accept quality measures in either a `PhredQuality`, `SolexaQuality`, or `IlluminaQuality` scaling.   
+
+For `PhredQuality` and `IlluminaQuality` measures Q = [0, 99], the probability of an error in the base read is given by 10^-Q/10^ and for `SolexaQuality` measures Q = [-5, 99], they are given by 1-1/(1+10^-Q/10^).  
+
+```{r}
+pairwiseAlignment(pattern = c("succeed", "precede"),
+                  subject = "supersede",
+                  substitutionMatrix = submat,
+                  gapOpening = 0,
+                  gapExtension = 1,
+                  scoreOnly = T)
+```
+
+
+```{r}
+pairwiseAlignment(pattern = "syzygy",
+                  subject = "zyzzyx",
+                  type = "local")
+```
+
+```{r}
+pairwiseAlignment(pattern = "syzygy",
+                  subject = "zyzzyx",
+                  type = "global")
+```
+
+
+```{r}
+pairwiseAlignment(pattern = "syzygy",
+                  subject = "zyzzyx",
+                  type = "overlap")
+```
+
+
+## Pairwise Sequence Alignment Classes  
+Biostrings package provide five specialty classes:  
+    - `PairwiseAlignments`:  used to represent *elementwise alignments* between a **set of patterns** and a **set of subjects**.  
+    
+    - `PairwiseAlignmentsSingleSubject`: inherits from the *PairwiseAlignments* and their both the results of a fit from the `pairwiseAlignment` function, being used to represent all patterns aligning to a single subject.     
+    
+    - `PairwiseAlignmentsSingleSubjectSummary`:
+    
+    - `AlignedXStringSet`: hold the 'gapped' S~i~ substrings with a fix subsitution scoring scheme.  
+    
+    - `QualityAlignedXStringSet`: hold the gapped S~i~ substrings with a quality-based scoring scheme.      
+    
+
+```{r}
+pa1 <- pairwiseAlignment(pattern = c("scceed", "precede"),
+                         subject = "supersede")
+class(pa1)
+```
+
+```{r}
+summary(pa1)
+```
+
+
+```{r}
+pa2 <- pairwiseAlignment(pattern = c("succeed", "precede"),
+                         subject = "supersede",
+                         substitutionMatrix = submat,
+                         gapOpening = 0, 
+                         gapExtension = 1)
+class(pattern(pa2))
+```
+
+
+## Pairwise Sequence Alignment Helper Functions  
+The `score`, `nedit`, `nmatch`, `nmismatch`, and `nchar` functions return numeric vectors containing information on the pairwise sequence alignment score, Levenshtein edit distance, number of matches, number of mismatches, and number of aligned characters respectively.  
+
+```{r}
+pa2 <- pairwiseAlignment(pattern = c("succeed", "precede"),
+                         subject = "supersede",
+                         gapOpening = 0,
+                         gapExtension = 1,
+                         substitutionMatrix = submat)
+```
+
+```{r}
+score(pa2)
+```
+
+```{r}
+nedit(pa2)
+```
+
+```{r}
+nmatch(pa2)
+```
+
+```{r}
+nmismatch(pa2)
+```
+
+```{r}
+nchar(pa2)
+```
+
+```{r}
+as.character(pa2)
+```
+
+```{r}
+as.matrix(pa2)
+```
+
+```{r}
+aligned(pa2)
+```
+
+```{r}
+consensusMatrix(pa2)
+```
+
+```{r}
+summary(pa2)
+```
+
+```{r}
+mismatchTable(pa2)
+```
+
+```{r}
+mismatchSummary(pa2)
+```
+
+
+```{r}
+pattern(pa2)
+```
+
+```{r}
+subject(pa2)
+```
+
+
+## Edit Distances  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
