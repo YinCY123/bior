@@ -40,6 +40,12 @@ if(!file.exists(sqlfile))
     sqlfile <- getSRAdbFile()
 
 sra_con <- dbConnect(SQLite(), sqlfile)
+conversion <- sraConvert(in_acc = c("SRP055170"), 
+                         sra_con = sra_con)
+
+out <- getSRAfile(conversion$sample,
+                  sra_con = sra_con,
+                  fileType = "sra")
 ```
 
 
