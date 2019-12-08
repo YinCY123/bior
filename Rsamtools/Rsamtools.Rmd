@@ -1,0 +1,158 @@
+---
+title: "Rsamtools"
+author: "yincy"
+date: "12/8/2019"
+output: html_document:
+  toc: true
+  toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
+```
+
+```{r}
+library(Rsamtools)
+```
+
+
+## Introduction  
+The main purpose of the Rsamtools package is to import BAM files into R. Rsamtools also provides some facility for file access such as record counting, index file creation, and filtering to create new files containing subsets of the original. An important use case for Rsamtools is as a starting point for creating R objects suitable for a diversity of work flows, e.g., AlignedRead objects in the ShortRead package (for quality assessment and read manipulation), or GAlignments objects in GenomicAlignments package (for RNA-seq and other applications).  
+
+
+## Input  
+```{r}
+which <- IRangesList(seq1 = IRanges(start = 1000, end = 2000),
+                     seq2 = IRanges(start = c(100, 1000), end =  c(1000, 2000)))
+
+what <- c("rname", "strand", "pos", "qwidth", "seq")
+param <- ScanBamParam(which = which, what = what)
+```
+
+```{r}
+bamFile <- system.file("extdata", "ex1.bam", package = "Rsamtools")
+bam <- scanBam(file = bamFile, param = param)
+```
+
+Like `scan` , `scanBam` returns a list of values. Each element of the list corresponds to a range specified by the which argument to `ScanBamParam.`  
+
+```{r}
+class(bam)
+```
+
+```{r}
+names(bam)
+```
+
+Each element is itself a list, containing the elements specified by the `what` and `tag` arguments to `ScanBamParam`.  
+
+```{r}
+class(bam[[1]])
+```
+
+```{r}
+names(bam[[1]])
+```
+
+```{r}
+sapply(bam[[1]], class)
+```
+
+A paradigm for collapsing the list-of-lists into a single list is  
+```{r}
+.unlist <- function(x){
+  x1 <- x[[1L]]
+  if(is.factor(x1)){
+    structure(unlist(x), class = "factor", levels = levels(x1))
+  }else{
+    do.call(c, x)
+  }
+}
+
+bam <- unname(bam)
+elts <- setNames(bamWhat(param), bamWhat(param))
+lst <- lapply(elts, function(elt) .unlist(lapply(bam, "[[", elt)))
+```
+
+
+```{r}
+head(do.call("DataFrame", lst))
+```
+
+```{r}
+list.files(path = dirname(bamFile), pattern = "ex1.bam(.bai)?")
+```
+
+Indexing provides two significant benefits:  
+
+- First, an index allows a BAM file to be efficiently accessed by range. A corollary is that providing a which argument to ScanBamParam requires an index.   
+
+- Second, coordinates for extracting information from a BAM file can be derived from the index, so a portion of a remote BAM file can be retrieved with local access only to the index.  
+
+```{r}
+na19240url <- "ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/pilot_data/data/NA19240/alignment/NA19240.chrom6.SLX.maq.SRP000032.2009_07.bam"
+which <- IRangesList("6" = IRanges(start = 100000L, end = 110000L))
+param <- ScanBamParam(which = which, what = scanBamWhat())
+na19240bam <- scanBam(na19240url, param = param)
+```
+
+
+Additional ways of interacting with BAM files include `scanBamHeader` (to extract header information) and `countBam` (to count records matching param ). `filterBam` filters reads from the source file according to the criteria of the ScanBamParam parameter, writing reads passing the filter to a new file. The function `sortBam` sorts a previously unsorted BAM , while The function `indexBam` creates an index file from a sorted BAM file.  
+
+`readPileup` reads a pileup file created by samtools, importing SNP, indel, or all variants into a GRanges object.  
+
+
+### Large bam files  
+```{r}
+summaryFunction <- function(seqname, bamFile, ...){
+  param <- ScanBamParam(what = c("pos", "qwidth"),
+                        which = GRanges(seqname, IRanges(1, 1e7)),
+                        flag = scanBamFlag(isUnmappedQuery = FALSE))
+  x <- scanBam(bamFile, ..., param = param)[[1]]
+  coverage(IRanges(x[["pos"]], width = x[["qwidth"]]))
+}
+```
+
+
+```{r}
+seqnames <- paste("seq", 1:2, sep = "")
+cvg <- lapply(seqnames, summaryFunction, bamFile)
+names(cvg) <- seqnames
+cvg
+```
+
+
+## Views  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
