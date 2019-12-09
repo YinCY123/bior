@@ -224,7 +224,31 @@ Often when one has a collection of objects, there is a need to attach metadata t
     1. Metadata about the object as a whole: this metadata us accessed via `metadata` accessor and is represented as an ordinary **list**.  
     
     2. Metadata about the individual elements of the object: this metadata is accessed via the `mcols` accessor (`mcols` stands for *metadata columns*) and is represneted as a DataTable object. This DataTable object can be thought of as hte rsult of binding together one or several vector-like objects (the metadata columns) of the same length as the Vector object. Each row of the DataTable object annotates the coresponding element of the Vector object.  
-    
+   
+   
+ 
+
+`aggregate`: Splits the data into subsets, computes summary statistics for each, and returns the result in a convenient form.  
+```{r}
+rl <- Rle(c(1,1,1,1,2,2,3,3,2,2))
+ir <- IRanges(start = c(2, 6), width = 2)
+aggregate(x = rl, by = ir, FUN = mean)
+```
+
+
+```{r}
+coverage(ir)
+```
+
+```{r}
+ir <- IRanges(start = 1:10, width = 3)
+rl <- coverage(ir)
+```
+
+select regions by `slice()` function  
+```{r}
+slice(x = rl, lower = 2, upper = 3, includeLower = T, includeUpper = T)
+```
 
 
 
