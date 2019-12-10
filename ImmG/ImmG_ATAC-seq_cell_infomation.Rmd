@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
 ```{r}
 library(GEOquery)
 library(magrittr)
+library(tidyverse)
 ```
 
 
@@ -32,7 +33,7 @@ gse100738_gsms <- slot(gse100738_sample_info, "gsms")
 
 
 ```{r}
-gse100738_gsms %>% names()
+gse100738_gsms %>% names() %>% head()
 ```
 
 
@@ -42,7 +43,7 @@ gse100738_gsms %>% class()
 
 
 ```{r}
-cell <- sapply(X = gse100738_gsms, FUN = function(x){
+cells <- sapply(X = gse100738_gsms, FUN = function(x){
     cell = c(x@header$geo_accession, 
              x@header$source_name_ch1, 
              x@header$title, 
@@ -52,33 +53,22 @@ cell <- sapply(X = gse100738_gsms, FUN = function(x){
              x@header$description[2], 
              x@header$instrument_model)
 }, simplify = TRUE)
-```
 
 
-```{r}
-cell_info <- data.frame(gsm_accession = cell[1, ],
-                        source = cell[2, ],
-                        cell_abs = cell[3, ],
-                        strain = cell[4, ],
-                        cell_type = cell[5, ],
-                        selection_marker = cell[6, ],
-                        supliment_file_base_name = cell[7, ],
-                        plantform = cell[8, ],
-                        stringsAsFactors = F)
+cells <- t(cells) %>% as_tibble()
+colnames(cells) <- c("geo_accession", "Source_name", "sample", "strain", "cell_type", "selection_marker", "supplement_file_extension", "instrument_model")
+cells$strain <- gsub("strain: ", "", cells$strain)
+cells$cell_type <- gsub("cell type: ", "", cells$cell_type)
+cells$species <- rep("Mmusculus", dim(cells)[1])
 ```
 
 ```{r}
-cell_info$strain <- gsub("strain: ", "", cell_info$strain)
-cell_info$cell_type <- gsub("cell type: ", "", cell_info$cell_type)
+cells$Source_name_ch1 %>% unique()
 ```
 
 
-```{r}
-unique(cell_info$source)
-```
 
-```{r}
-unique(cell_info$cell_type)
-```
+
+
 
 

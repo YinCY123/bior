@@ -2,14 +2,17 @@
 title: "atac-20191128"
 author: "yincy"
 date: "11/28/2019"
-output: html_document
+output: 
+    prettydoc::html_pretty:
+        theme: tactile
+        highlight: tango
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
 ```
 
-[From this website: ](https://yiweiniu.github.io/blog/2019/03/ATAC-seq-data-analysis-from-FASTQ-to-peaks/)
+[From this website: ](https://rockefelleruniversity.github.io/RU_ATAC_Workshop.html)
 
 
 ## ATAC-seq overview  
@@ -21,20 +24,21 @@ ATAC-seq overview ![](./figure/ATAC-seq.PNG)
 Comparing chromatin accessibility assays  
 ![](./figure/chromatin-accessibility assays.PNG)
 
-ATAC-seq can be used to  
-    - generate epigenomic profiles  
-    - map accessible chromatin across tissues or conditions  
-    - retrieve nucleosome positions  
-    - identify important transcription factors  
-    - generate occupancy of TFs (footprinting)  
+ATAC-seq can be used to:   
+
+- generate epigenomic profiles  
+- map accessible chromatin across tissues or conditions  
+- retrieve nucleosome positions  
+- identify important transcription factors  
+- generate occupancy of TFs (footprinting)  
     
     
 ## Experimental design  
-    - two or more biological replicates  
-    - each replicate has 25 million non-duplicate, non-mitochondrial aligned reads for single-end sequencing and 50 million for paired-ended sequencing  
-    - typically, no need for input  
-    - use as few PCR cycles as possible when constructing the libarry  
-    - paired-end sequencing is prefered  
+- two or more biological replicates  
+- each replicate has 25 million non-duplicate, non-mitochondrial aligned reads for single-end sequencing and 50 million for paired-ended sequencing  
+- typically, no need for input  
+- use as few PCR cycles as possible when constructing the libarry  
+- paired-end sequencing is prefered  
     
 
 
