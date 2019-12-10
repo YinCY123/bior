@@ -1,0 +1,83 @@
+---
+title: "SRAdb"
+author: "yincy"
+date: "12/10/2019"
+output: 
+  html_document:
+    highlight: tango
+    df_print: paged
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, error = F)
+```
+
+```{r}
+library(SRAdb)
+```
+
+## Getting started  
+```{r}
+#sqlfile <- getSRAdbFile() # the actual SRAmeta sqlite database, > 35 GB
+sqlfile <- file.path(system.file("extdata", package = "SRAdb"), "SRAmetadb_demo.sqlite")
+```
+
+details about the file  
+```{r}
+file.info(sqlfile)
+```
+
+Create a connection for later queries  
+```{r}
+sra_con <- dbConnect(drv = SQLite(), dbname = sqlfile)
+```
+
+```{r, fig.align='center', out.width="80%"}
+knitr::include_graphics(path = "./figures/SRA-tables.png")
+```
+
+
+
+## Interacting with the database  
+list all the tables in the SQLite database  
+```{r}
+sra_tables <- dbListTables(con = sra_con)
+```
+
+list database fields associated with a table  
+```{r}
+dbListFields(conn = sra_con, "sra")
+```
+
+SQL schema associated with a table  
+```{r, rows.print = 5, cols.print = 5, rownames.print = F}
+dbGetQuery(conn = sra_con, statement = "PRAGMA TABLE_INFO(study)")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
