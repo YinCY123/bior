@@ -19,7 +19,7 @@ library(SRAdb)
 
 ## Getting started  
 ```{r}
-#sqlfile <- getSRAdbFile() # the actual SRAmeta sqlite database, > 35 GB
+sqlfile <- getSRAdbFile() # the actual SRAmeta sqlite database, > 35 GB
 sqlfile <- file.path(system.file("extdata", package = "SRAdb"), "SRAmetadb_demo.sqlite")
 ```
 
