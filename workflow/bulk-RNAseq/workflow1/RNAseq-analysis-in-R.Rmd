@@ -3,7 +3,7 @@ title: "RNAseq-analysis-in-R"
 author: "yincy"
 date: "1/5/2020"
 output: 
-    prettydoc: html_pretty:
+    prettydoc::html_pretty: 
         theme: cayman
         highlight: github
 ---
@@ -336,11 +336,13 @@ topGO(go, n = 10)
 ```
 
 
-First, we will perform a gene ontology (GO) enrichment analysis using the goana function in limma. There are approximately 20,000 GO terms, and they are split into three categories: BP (biological process), MF (molecular function) and CC (cellular component). goana uses annotation from the appropriate Bioconductor package and can be used for any of the five species specified (Hs, Mm, Rn, Dm or Pt).  
+First, we will perform a gene ontology (GO) enrichment analysis using the `goana` function in limma. There are approximately 20,000 GO terms, and they are split into three categories: BP (biological process), MF (molecular function) and CC (cellular component). `goana` uses annotation from the appropriate Bioconductor package and can be used for any of the five species specified (Hs, Mm, Rn, Dm or Pt).  
 
+
+### Gene ontology testing with goana and take gene length into account
 goana has an advantage over other methods, such as DAVID, in that there is the option to take into account the gene length bias inherent in RNA-Seq data.  
     
-Suppose we want to identify GO terms that are over-represented in the basal lactating group compared to the basal pregnancy group. This can be achieved by applying the goana function to the differential expression results of that comparison. goana takes the fit.cont object, the coefficient of interest and the species.  
+Suppose we want to identify GO terms that are over-represented in the basal lactating group compared to the basal pregnancy group. This can be achieved by applying the `goana` function to the differential expression results of that comparison. `goana` takes the fit.cont object, the coefficient of interest and the species.  
 
 
 ```{r}
