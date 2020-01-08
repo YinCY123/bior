@@ -1,0 +1,14 @@
+---
+title: "limma"
+author: "yincy"
+date: "1/7/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Chapter 15 RNA-seq Data  
+
