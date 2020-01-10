@@ -1,0 +1,137 @@
+---
+title: "R-Programming-for-Bioinformatics"
+author: "yincy"
+date: "1/10/2020"
+output: html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Chapter 2  R Language Fundamentals  
+**Many Operations in R are vectorized, and understanding and using vectorization is an essential component of becoming a proficient programmer**.  
+
+**Attributes**:  
+
+- Attributes can be attached to any R object except `NULL` and they are used quite extensively.  
+- Attributes are stored, by name, in a list.  
+- All attributes can be retrived using `attributes`, or any particular attribute can be accessed or modified using the `attr` function.  
+- Attributes can be used by programmers to attach any sort of information they want to any R object. R uses attributes for amny things; the S3 class system is based largely on attributes, dimensions of arrays, and names on vectors, to name but a few.   
+
+```{r}
+x <- 1:10
+attr(x, "foo") <- 11
+x
+```
+
+```{r}
+mean
+methods(mean)
+```
+
+
+### Some special values  
+**NULL**: The value **NULL** is the null object. It has length zero and disappears when concatentated with any other object. It is the default value for the elements of a list.  
+**NA**: misssing value. It is worth emphasizing that there is a distinct missing value (NA) for each basic type and these can be accessed through constants such as **NA_integer_**.   
+
+```{r}
+typeof(NA)
+as.character(NA)
+as.integer(NA)
+typeof(as.integer(NA))
+typeof(as.character(NA))
+```
+
+**Inf** and **-Inf**: infinity, `is.finite()`, `is.infinite`  
+
+```{r}
+y <- 1/0
+y
+-y
+```
+
+**NaN**: not a number, `is.nan`  
+
+```{r}
+y - y
+```
+
+### Types of objects  
+
+Vector:  
+
+- logical  
+- integer  
+- real  
+- complex  
+- string  
+- raw  
+
+```{r}
+typeof(y)
+typeof(is.na)
+typeof(mean)
+
+mode(NA)
+storage.mode(letters)
+```
+
+```{r}
+is.integer(y)
+is.double(y)
+is.character(y)
+is.numeric(y)
+```
+
+Types of functions:  
+
+- builtins  
+- specials  
+- closures   
+
+Users can only create closures (unless they want to modify the internals of R), and these are the easiest functions to understand since they are written in R.  
+
+The main difference between the two types of internal functions is whether or not they evaluate their arguments; specials do not.  
+
+
+S regards an array as consisting of a vector containing the array’s elements, together with a dimension (or `dim`) attribute. A vector can be given dimensions by using the f unctions `matrix` (two-dimensional data) or `array` (any number of dimensions), or by directly attaching them with the `dim` function.  
+
+Array extents can be named by using the dimnames function or the dimnames argument to matrix or array. Extent names are given as a list, with each list element being a vector of names for the corresponding extent.  
+
+```{r}
+x <- 1:9
+dim(x) <- c(3, 3)
+x
+dimnames(x) <- list(r = c("A", "B", "C"), c = c("a", "b", "c"))
+```
+
+
+### Numerical computing  
+It is important to remember that computers cannot represent all numbers and that machine computation is not identical to computation with real numbers.  
+
+The only numbers that can be represented exactly in R’s numeric type are (some) integers and fractions whose denominator is a power of 2. Other numbers have to be rounded to (typically) 53 binary digits accuracy.  
+
+As a result, two floating point numbers will not reliably be equal unless they have been computed by the same algorithm, and not always even then.  
+
+The numerical characteristics of the computer that R is running on can be obtained from the variable named `.Machine`.  
+
+The function `all.equal` compares two objects using a numeric tolerance of
+.Machine$double.eps^0.5.  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
