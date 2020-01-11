@@ -123,6 +123,148 @@ The function `all.equal` compares two objects using a numeric tolerance of
 .Machine$double.eps^0.5.  
 
 
+### Factors  
+A factor is useful when a potentially large collection of data contains relatively few, discrete levels.  
+
+Factors are not vectors and, in particular, `is.vector` returns **FALSE** for factor.  
+
+A factor is represented as an object of class factor, which is an integer vector of codes and an attribute with name **levels**.  
+
+Factors are instances of S3 classes. Ordinary factors have clas factor and ordered factors have a class vector of length two with ordered as the additional elements.  
+
+There are two tasks that are often performed on factors:  
+
+- One is to drop unused levels; this can be achieved by a call to **factor** since **factor(y)** will drop any unused levels from y if y is a factor.  
+
+- The second tasks is to coarsen the levels of a factor, that is group two or more of them together into a single new level.  
+
+
+```{r}
+set.seed(123)
+x <- sample(letters[1:5], 10, replace = T)
+y <- factor(x)
+y
+attributes(y)
+```
+
+
+```{r}
+y <- sample(letters[1:5], 20, replace = T)
+v <- as.factor(y)
+xx <- list(I = c("a", "e"), II = c("b", "c", "d"))
+levels(v) <- xx
+v
+```
+
+
+In R the value returned by a function is either the value that is explicitly returned by a call to the function `return` or it is simply the value of the last expression.  
+
+```{r}
+seq1 <- function(x) return(x * x)
+seq2 <- function(x)x * x
+
+seq1(1:10)
+seq2(1:10)
+```
+
+
+```{r}
+pcc <- function(str){
+    paste("^", str, sep = "")
+}
+pcc("abcd")
+```
+
+
+```{r}
+scol <- function(mat){
+    for(i in 1:dim(mat)[1]){
+        med <- median(mat[i, ])
+        mad <- mad(mat[i, ])
+        for(j in 1:dim(mat)[2]){
+            mat[i, j] <- (mat[i, j] - med)/mad
+        }
+    }
+    return(mat)
+}
+
+
+scol(matrix(1:9, 3))
+
+
+scol <- function(mat, center, spread){
+    med <- center
+    mad <- spread
+    for(i in 1:dim(mat)[1]){
+        for(j in 1:dim(mat)[2]){
+            mat[i, j] <- (mat[i, j] - med)/mad
+        }
+    }
+    return(mat)
+}
+
+scol(matrix(1:9, 3), 3, 3)
+```
+
+
+scale function:  
+
+- `scale`  
+- `sweep`: more general than `scale`  
+
+
+
+Functional programming:  
+
+- `Reduce`  
+- `Filter`  
+- `Map`  
+- `Negate`  
+
+
+## Flow Control  
+There are three basic paradigms for iteration:  
+
+- `for`  
+- `repeat`  
+- `while`  
+
+for(var in seq) expr  
+while(cond) expr  
+repeat expr  
+
+The use of `break` halts the execution of the inner-most loop and passes control to the next statement.  
+
+The use of `next` halts the execution of the current expr and begins the next evaluation.  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
