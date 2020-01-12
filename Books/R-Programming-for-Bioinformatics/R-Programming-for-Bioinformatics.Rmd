@@ -239,16 +239,248 @@ The use of `next` halts the execution of the current expr and begins the next ev
 
 
 
+# Chapter 3 Object-Oriented Programming in R  
+In an OOP system, real physical things (like airline passengers or the data from a microarray experiment) are generally repre- sented by classes, and methods (functions) are written to handle the different manipulations that need to be performed on the objects.  
+
+In a class-centric system, classes define objects and are repositories for the methods that act on those objects.  
+
+In contrast, languages such as Dylan, Common Lisp, and R separate the class specification from the specification of generic functions, and could be described as being function-centric systems.  
+
+Four general elements that an object-oriented programming language should support:  
+
+- **objects**: encapsulate state information and control behavior.  
+
+- **classes**: describe general properties for groups of objects.  
+
+- **inheritance**: new classes can be defined in terms of existing classes.  
+
+- **polymorphism**: a (generic) function has different behaviors, although similar outputs, depending on the class of one or more its arguments.  
+
+
+Virtually every OOP language implements these in different ways.  
+
+In S3, there is no formal specification for classes and hence there is, at best, weak control of objects and inheritance. The emphasis of the S3 system was on generic functions and polymorphism.  
+
+In S4, formal class definitions were included in the language and based on these, more controlled software tools and paradigms for the creation of objects and the handling of inheritance were introduced.  
+
+
+## The basic of OOP  
+ - A class specification details all the properties that are needed to describe an object.  
+ 
+- An object is an instance of exactly one class and it is the class definition and representation that determine the properties of the object.  
+
+- Instances of a class differ only in their state.  
+
+- New classes can be defined in terms of existing classes through an operation called inheritance.  
+
+- Inheritance allows new classes to extend, often by adding new slots or by combining two or more existing classes into a single composite entity.  
+
+- No class can be its own subclass. A class is a subclass of each of its superclasses.  
+- If the language only allows a class to extend, at most, one class, then we
+say that language has single inheritance.  
+
+- In the S3 system, the class of an instance is determined by the values in the class attribute, which is a vector, and hence is also linear.  
+
+- If the language allows a class to directly extend several classes, then we say that the language supports multiple inheritance and computing the class linearization is more difficult. S4 support multiple dispatch.  
+
+- A mehtod is a type of function that is invoked depending on the class of one or more of its arguments and this process is called dispatch.  
+
+- In some systems, such as S3, methods can be invoked directly, it is more common for them to be invoked via a generic function. When a generic funciton is invoked, the set of methods that might apply must be sorted into a linear order, with the most specific method first and the least specific method last. This is often called method linearization and computing it depends on being able to linearize the class hierarchy.  
+
+- If the language supports dispatching on a single argument, then we say it has single dispatch. Both Java anf the S3 system use single dispatch.  
+
+- When the language supports dispatch on several arguments, we say that the language supports multiple dispatch and the set of specific classes of the arguments for each formal parameter of generic function is called the signature. S4 support multiple dispatch.  
+
+- With multiple dispatch, the additional complication of precedence of the arguments arises. In particular, when method selection depends on inheritance, there may be more than one superclass for which a method has been defined. In this case, a concept of the distance between the class and its superclasses is used to guide selection.  
+
+### Inheritance  
+One of the advantages of a class system is the concept f inheritance.  
+
+The inheritance relationships imply a form of polymorphism. Any instance of the sbclass can be used in place of an instance of the superclass.  
+
+The relationship between a subclass and its superclass should be an *is a* relationship.  
+
+```{r}
+setClass(Class = "Passenger", representation(name = "character", origin = "character", destination = "character"))
+
+setClass(Class = "FreqFlyer", representation(ffnumber = "numeric"), contains = "Passenger")
+
+getClass('FreqFlyer')
+```
+
+
+```{r}
+setClass(Class = "passenger", representation = list(
+    first_name = "character", 
+    last_name = "character",
+    middle_name = "character",
+    origin = "character",
+    destination = "character"
+))
+
+getClass('passenger')
+```
 
 
 
+### Dispatch  
+A method is a specialized function that can be applied to instances of one or more classes. The process of determining the appropriate method to invoke is called dispatch.  
+
+When a generic function is called, it must examine the supplied arguments and determine the applicable methods. All applicable methods are ordered, while for S3 the hierarchy is intrinsically linear and hence has an obvious order.  
+
+In both systems, the applicable methods are arranged from most specific to least specific and the most specific methods is invoked.  
+
+During evaluation, control may be passed to less specific methods by calling `NextMethod` in S3 and via `callNextMethod` for S4.  
+
+In the S3 system, the generic function typically only examines the first argument and dispatches depending on its class.  
+
+
+### Abstract data types  
+In some discussions there is confusion between the use of abstract data types(ADT) and OOP. It is usefull to realize that the ADT paradigm can be adopted in any language, regardless of whether or not it supports OOP.  
+
+All users of the data type must restrict their operations to those defined by the interface.  
+
+```{r}
+setClass(Class = "Rectangle", representation = list(
+    h = "numeric",
+    w = "numeric",
+    area = "numeric"
+))
+
+
+myr <- new(Class = "Rectangle", h = 10, w = 20, area = 200)
+
+setGeneric(name = "area", def = function(shape) standardGeneric(f = "area"))
+
+setMethod(f = "area", 
+          signature = signature(shape = "Rectangle"),
+          definition = function(shape)shape@area)
+
+myr@area
+
+area(myr)
+```
+
+
+### Self-describing data  
+One of the major uses of OOP within the Bioconductor Project is in the construction of self-describing data classes.  
+
+If all information is stored in a single object it is easier to save it, to share it with others, or to use it as input to a function.  
+
+The major benefits that we have found to programming with self-describing
+data are that it is easy to return to a project after some months and re-do an analysis.  
+
+We have also found that it is relatively easy to hand off a project from one analyst to another.  
+
+But perhaps the greatest benefit has come from defining specialized subsetting methods, that is, methods for [ that help to construct an appropriate subset of the object, with all variables correctly aligned.  
+
+
+## S3 OOP  
+The S3 system is relatively easy to describe and to use. It is particularly well suited to interactive use but is not particularly robust.   
+
+Generic functions and methods are quite widely used but there is little use of inheritance and classes are quite loosely defined. In some sense, all objects in R are instances of some class.  
+
+Using `setOldClass` will register an S3 class as an S4 class.  
+
+The `class` attribute is a vector of character values, each of which specifies a particular class. The most specific class comes first, followed by any less specific classes.  
+
+```{r}
+x <- 1:10
+class(x)
+
+dim(x) = c(2,5)
+class(x)
+attr(x, "class")
+inherits(x, "integer")
+```
+
+
+```{r}
+x <- list(name = "Josephine Biologist", 
+          origin = "SEA",
+          destination = "YXY")
+class(x) <- "Passenger"
+
+y <- list(name = "Josephine Physicist",
+          origin = "SEA",
+          destination = "YVA",
+          ffnumber = 10)
+class(y) <- "FreqFlyer"
+
+inherits(y, "Passenger")
+inherits(x, "FreqFlyer")
+```
+
+```{r}
+is.object(x)
+is.object(y)
+
+class(x);class(y)
+```
+
+
+The function `is.object` tests  whether or not an R object has a `class` attribute.  
+
+
+### S3 generic functions and methods  
+In S3, the genric function is responsible for setting up the evaluation environment and for initiating dispatch.   
+
+A generic function does this through a call to `UseMethod` that initiates the dispatch on a single argument, usually the first argument to the generic function.  
+
+For most generic functions, a default method will be needed. The default method is invoked if no applicable methods are found, or if the least specific method makes a call to NextMethod.  
+
+Methods are regular functions and are identified by their name, which is a concatenation of the name of the generic and the name of the class that they are intended to apply to, separated by a dot.  
+
+```{r}
+fun <- function(x, ...) UseMethod("fun")
+fun.default = function(x, ...) print("In the default method")
+fun(2)
+```
+
+```{r}
+fun.Foo <- function(x){
+    print("start of fun.Foo")
+    NextMethod()
+    print("end of fun.Foo")
+}
+
+fun.Bar <- function(x){
+    print("start of fun.Bar")
+    NextMethod()
+    print("end of fun.Bar")
+}
+```
+
+How method dispatch works  
+```{r}
+x <- 1
+class(x) <- c("Foo", "Bar")
+
+fun(x)
+```
+Notice that the call to `NextMethod` transfers control to the next most specific method.  
+
+
+#### Finding methods  
+The function `methods` reports on all available methods for a given generic function but is does this simply by looking at the names.  
+
+find all methods for a given generic function  
+```{r}
+methods(generic.function = "mean")
+```
+
+find all method for a given class
+```{r}
+methods(class = "glm")
+```
+
+
+### Group generics  
+The S3 object system also has the capability for defining methods for groups of functions simultaneously.  
 
 
 
-
-
-
-
+## S4 OOP  
 
 
 
