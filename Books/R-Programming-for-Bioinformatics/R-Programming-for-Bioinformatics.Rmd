@@ -481,18 +481,142 @@ The S3 object system also has the capability for defining methods for groups of 
 
 
 ## S4 OOP  
+Multiple dispatch is supported in S4, but not in S3, and S4 methods are registered directly with the appropriate generic.  
+
+These changes greatly increase the stability of the system and make it much more likely that code will perform as intended by its authors.  
+
+This comes with some costs, however; code is slightly slower (since all aspects are slightly more complex) and it is more difficult to design and modify a system interactively.  
 
 
+### Classes  
+A class definition specifies the structure, inheritance and initialization of instances of that class.  
+
+Classes are instances of the classRepresentation class, and are first-class ob- jects in the language.  
+
+They can be created by users and existing classes can typically be extended or subclassed.  
+
+Classes can be instantiable or virtual; instances can be created for instantiable classes but not for virtual classes.  
 
 
+The following arguments can be specified (there are others as well) in the call to `setClass`:  
+
+- `Class` a character string naming the class.  
+
+- `representation` a named vector of types or classes. The names correspond to the slot names in the class and the types indicate what type of value can be stored in the slot.   
+
+- `contains` a character vector of class names, indicating the classes extended or subclassed by the new class.  
+
+- `prototype` an object (usually a list) providing the default data for the slots specified in the representation.  
+
+- `validity` a function that checks the validity of instances of the class. It must return either **TRUE** or a character vector describing how the object is invalid.  
+
+Once a class has been defined by a call to `setClass`, it is possible to create instances of the class through calls to `new`.  
+
+```{r}
+setClass(Class = "A",
+         representation = list(
+             s1 = 'numeric'
+         ),
+         prototype = prototype(s1 = 0))
+
+myA <- new(Class = 'A')
+myA
+
+m2 <- new(Class = "A", s1 = 10)
+m2
+```
 
 
+```{r}
+setClass(Class = "B",
+         contains = 'A',
+         representation = list(s2 = "character"),
+         prototype = prototype(s2 = "hi"))
+
+myB <- new("B")
+myB
+```
 
 
+`removeClass`  
+```{r}
+setClass(Class = "Ohno", 
+         representation = list(y = "numeric"))
+
+getClass("Ohno")
+removeClass(Class = "Ohno")
+
+tryCatch(expr = getClass(Class = "Ohno"), error = function(x)"Ohno is gone")
+getClass(Class = "Ohno")
+```
 
 
+```{r}
+getSlots('B')
+slotNames("B")
+```
+
+```{r}
+extends("B")
+```
 
 
+```{r}
+extends("B", "A")
+```
+
+```{r}
+extends("A", "B")
+```
+
+
+```{r}
+getClass("matrix")
+```
+
+```{r}
+extends("matrix")
+```
+
+
+```{r, message=F, warning=F}
+library('RBioinf')
+```
+
+```{r}
+superClassNames("B")
+subClassNames("A")
+```
+
+
+One form is coercion where an instance of one class is coerced to the other class, and the second form is an assignment version, where a portion of the object supplied is coerced.  
+
+```{r}
+myb <- new(Class = "B")
+as(myb, "A")
+```
+
+
+```{r}
+mya <- new(Class = "A", s1 = 20)
+as(myb, "A") <- mya
+myb
+```
+
+
+#### Creation of new instances  
+```{r}
+setClass(Class = "Ex1",
+         representation = list(s1 = "numeric"),
+         prototype = prototype(s1 = rnorm(10)))
+```
+
+```{r}
+b <- new(Class = "Ex1")
+
+a <- new(Class = "Ex1")
+b;a
+```
 
 
 
