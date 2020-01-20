@@ -1,0 +1,309 @@
+---
+title: "Guided-Clustering-Tutorial"
+author: "yincy"
+date: "1/17/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
+```
+
+```{r}
+library(Seurat)
+library(tidyverse)
+```
+
+
+## Setup the Seurat Object  
+```{r}
+pbmc.data <- Read10X(data.dir = "./data/filtered_gene_bc_matrices/hg19/")
+pbmc <- CreateSeuratObject(counts = pbmc.data, project = "pbmc3k", min.cells = 3, min.features = 200)
+```
+
+
+## Standard pre-processing workflow  
+### QC and selecting cells for further analysis  
+Seurat allows you to easily explore QC matrics and filter cells based on any user-defined criteria. A few metrics commonly used by the community include:  
+
+- The number of unique genes detected in each cell.  
+    + Low-quality cells or empty droplets will often have very few genes.  
+    + Cell doublets or multiplets may exhibits an aberrantly high gene count.  
+    
+- Similarly, the total number of molecules detected within a cell (correlates strongly with unique genes)  
+
+- The percentage of reads that map to the mitochondrial genome  
+    + Low-quality / dying cells often exhibit extensive mitochondrial contamination  
+    + We calculate mitochondrial QC metrics with the `PercentageFeatureSet` function, which calculates the percentage of counts originating from a set of features  
+    + We use the set of all genes starting with `MT-` as a set of mitochondrial genes  
+    
+
+The `[[` operator can add columns to object metadata.  
+```{r}
+pbmc[["percent.mt"]] <- PercentageFeatureSet(object = pbmc, pattern = "^MT-")
+```
+
+
+
+Visualize QC metrics as a violin plot  
+```{r}
+VlnPlot(pbmc, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+
+FeatureScatter is typically used to visualize feature-feature relationships, but can be used for anything calculated by the object  
+```{r}
+plot1 <- FeatureScatter(object = pbmc, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(object = pbmc, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+CombinePlots(plots = list(plot1, plot2))
+```
+
+
+```{r}
+pbmc <- subset(pbmc, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+```
+
+
+### Normalizing the data  
+After removing unwanted cells from the dataset, the next step is to normalize the data. By default, we employ a global-scaling normalization method “LogNormalize” that normalizes the feature expression measurements for each cell by the total expression, multiplies this by a scale factor (10,000 by default), and log-transforms the result.  
+
+```{r}
+pbmc <- NormalizeData(object = pbmc, normalization.method = "LogNormalize", scale.factor = 10000)
+```
+
+
+### Identification of highly variable features (feature selection)  
+```{r}
+pbmc <- FindVariableFeatures(object = pbmc, selection.method = "vst", nfeatures = 2000)
+```
+
+
+
+Identify the 10 most highly variable genes  
+```{r}
+top10 <- head(VariableFeatures(pbmc), n = 10)
+```
+
+
+plot variable features with and without labels  
+```{r}
+plot1 <- VariableFeaturePlot(pbmc)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = T)
+CombinePlots(plots = list(plot1, plot2))
+```
+
+
+
+### Scaling the data  
+Next, we apply a linear transformation (‘scaling’) that is a standard pre-processing step prior to dimensional reduction techniques like PCA.  
+
+The `ScaleData` function:  
+
+- Shifts the expression of each gene, so that the mean expression across cells is 0  
+
+- Scales the expression of each gene, so that the variance across cells is 1  
+    + This step gives equal weight in downstream analysis, so that highly-expressed genes not dominate  
+    
+- The results of this are stored in `pbmc[["RNA"]]@scale.data`  
+
+```{r}
+all.genes <- rownames(pbmc)
+pbmc <- ScaleData(pbmc, features = all.genes)
+```
+
+
+
+### Perform linear dimensional reduction  
+Next we perform PCA on the scaled data. By default, only the previously determined variable features are used as input, but can be defined using features argument if you wish to choose a different subset.  
+
+```{r}
+pbmc <- RunPCA(object = pbmc, features = VariableFeatures(object = pbmc))
+```
+
+
+```{r}
+VizDimLoadings(object = pbmc, dims = 1:2, reduction = 'pca')
+```
+
+
+```{r}
+DimPlot(object = pbmc, reduction = "pca")
+```
+
+
+```{r}
+for(i in seq_len(4)){
+    do.call(what = "DimHeatmap",
+            args = list(object = pbmc, dims = 1, cells = 500, balanced = T))
+}
+```
+
+
+
+### Determine the 'dimensionality' of the dataset  
+To overcome the extensive technical noise in any single feature for scRNA-seq data, Seurat clusters cells based on their PCA scores, with each PC essentially representing a ‘metafeature’ that combines information across a correlated feature set. The top principal components therefore represent a robust compression of the dataset.  
+
+```{r}
+pbmc <- JackStraw(object = pbmc, num.replicate = 100)
+pbmc <- ScoreJackStraw(object = pbmc, dims = 1:20)
+JackStrawPlot(object = pbmc, dims = 1:15)
+```
+
+```{r}
+ElbowPlot(object = pbmc, ndims = 20)
+```
+
+
+Identifying the true dimensionality of a dataset – can be challenging/uncertain for the user. We therefore suggest these three approaches to consider. The first is more supervised, exploring PCs to determine relevant sources of heterogeneity, and could be used in conjunction with GSEA for example. The second implements a statistical test based on a random null model, but is time-consuming for large datasets, and may not return a clear PC cutoff. The third is a heuristic that is commonly used, and can be calculated instantly. In this example, all three approaches yielded similar results, but we might have been justified in choosing anything between PC 7-12 as a cutoff.  
+
+
+We chose 10 here, but encourage users to consider the following:  
+
+- Dendritic cell and NK aficionados may recognize that genes strongly associated with PCs 12 and 13 define rare immune subsets (i.e. MZB1 is a marker for plasmacytoid DCs). However, these groups are so rare, they are difficult to distinguish from background noise for a dataset of this size without prior knowledge.  
+
+- We encourage users to repeat downstream analyses with a different number of PCs (10, 15, or even 50!). As you will observe, the results often do not differ dramatically.  
+
+- We advise users to err on the higher side when choosing this parameter. For example, performing downstream analyses with only 5 PCs does signifcanltly and adversely affect results.  
+
+
+### Cluster the cells  
+```{r}
+pbmc <- FindNeighbors(object = pbmc, dims = 1:10)
+pbmc <- FindClusters(object = pbmc, resolution = 0.5)
+```
+
+
+### Run non-linear dimensional reduction (UMAP/tSNE)  
+```{r}
+pbmc <- RunUMAP(object = pbmc, dims = 1:10)
+DimPlot(pbmc, reduction = "umap", label = T)
+```
+
+
+```{r}
+pbmc <- RunTSNE(object = pbmc, dims = 1:10)
+DimPlot(object = pbmc, reduction = "tsne", label = T)
+```
+
+
+### Finding differentially expressed features (cluster biomarkers)  
+Seurat can help you find markers that define clusters via differential expression. By default, it identifes positive and negative markers of a single cluster (specified in ident.1), compared to all other cells.  
+
+`FindAllMarkers` automates this process for all clusters, but you can also test groups of clusters vs. each other, or against all cells.  
+
+The `min.pct` argument requires a feature to be detected at a minimum percentage in either of the two groups of cells, and the thresh.test argument requires a feature to be differentially expressed (on average) by some amount between the two groups.  
+
+find all markers of cluster 1
+```{r}
+cluster1.markers <- FindMarkers(object = pbmc, ident.1 = 1, min.pct = 0.25)
+head(cluster1.markers)
+```
+
+
+find all markers distinguishing cluster 5 from clusters 0 and 3  
+```{r}
+cluster5.markers <- FindMarkers(object = pbmc, ident.1 = 5, ident.2 = c(0, 3), min.pct = 0.25)
+head(cluster5.markers)
+```
+
+
+find markers for every cluster compared to all remaining cells, report only the positive ones  
+```{r}
+pbmc.markers <- FindAllMarkers(object = pbmc, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+```
+
+```{r}
+pbmc.markers %>% 
+    group_by(cluster) %>% 
+    top_n(n = 3, wt = avg_logFC)
+```
+
+
+```{r}
+VlnPlot(object = pbmc, features = c("LDHB", "CCR7"))
+```
+
+
+```{r}
+VlnPlot(object = pbmc, features = c("NKG7", "PF4"), slot = "counts", log = T)
+```
+
+
+```{r}
+FeaturePlot(object = pbmc, features = c("MS4A1", "GNLY", "CD3E", "CD14"))
+```
+
+
+### Assigning cell type identity to clusters  
+
+cluster ID   | Markers                 | Cell Type  
+-------------|-------------------------|--------------
+0            | IL7R, CCR7              | Naive CD4+ T
+1            | IL7R, S100A4            | Memory CD4+ 
+2            | CD14, LYZ               | CD14+ Mono  
+3            | MS4A1                   | B
+4            | CD8A                    | CD8+ T 
+5            | FCGR3A, MS4A7           | FCGR3A+ Mono
+6            | GNLY, NKG7              | NK
+7            | FCER1A, CST3            | DC  
+8            | PPBP                    | Platelet 
+
+
+```{r}
+new.cluster.ids <- c("Naive CD4 T", "Memory CD4 T", "CD14+ Mono", "B", "CD8 T", "FCGR3A+ Mono", "NK", "DC", "Platelet")
+
+names(new.cluster.ids) <- levels(pbmc)
+
+pbmc <- RenameIdents(object = pbmc, new.cluster.ids)
+DimPlot(object = pbmc, reduction = "umap", label = T, pt.size = 0.5) + NoLegend()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
