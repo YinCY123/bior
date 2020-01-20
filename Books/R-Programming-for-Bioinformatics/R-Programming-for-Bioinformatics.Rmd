@@ -362,6 +362,52 @@ area(myr)
 ```
 
 
+```{r}
+setClass(Class = "Passenger", 
+         representation = list(name = "character", age = "numeric", origin = "character"))
+
+setGeneric(name = "show", def = function(x) standardGeneric(f = "show"))
+
+setMethod(f = "show", 
+          signature = "Passenger",
+          definition = function(x) print(paste("The passenger ", x@name, " is ", x@age, " and he is from ", x@origin, sep = "")))
+
+
+my_pa <- new(Class = "Passenger", name = "YinCY", age = 18, origin = "hangz")
+show(my_pa)
+```
+
+
+```{r}
+setClass(Class = "Rectangle", 
+         representation = list(height = "numeric", width = "numeric"))
+
+setClass(Class = "Circle",
+         representation = list(r = "numeric"))
+
+setGeneric(name = "area",
+           def = function(x)standardGeneric(f = "area"))
+setMethod(f = "area",
+          signature = "Rectangle",
+          definition = function(x){
+              print(paste("The area of this rectangle is ", x@height * x@width, sep = ""))
+          })
+
+setMethod(f = "area",
+          signature = "Circle",
+          definition = function(x){
+              print(paste("The area of this circle is ", pi * x@r ^ 2, sep = ""))
+          })
+
+myrec <- new(Class = "Rectangle", height = 10, width = 10)
+mycir <- new(Class = "Circle", r = 10)
+
+area(myrec)
+area(mycir)
+```
+
+
+
 ### Self-describing data  
 One of the major uses of OOP within the Bioconductor Project is in the construction of self-describing data classes.  
 
@@ -432,14 +478,16 @@ For most generic functions, a default method will be needed. The default method 
 Methods are regular functions and are identified by their name, which is a concatenation of the name of the generic and the name of the class that they are intended to apply to, separated by a dot.  
 
 ```{r}
-fun <- function(x, ...) UseMethod("fun")
-fun.default = function(x, ...) print("In the default method")
+fun <- function(x, ...)UseMethod(generic = "fun")
+fun.default <- function(x, ...) print("This is the default method.")
+x <- 2
+class(x) <- "default"
 fun(2)
 ```
 
 ```{r}
 fun.Foo <- function(x){
-    print("start of fun.Foo")
+    print("Start of fun.Foo")
     NextMethod()
     print("end of fun.Foo")
 }
@@ -449,15 +497,12 @@ fun.Bar <- function(x){
     NextMethod()
     print("end of fun.Bar")
 }
-```
 
-How method dispatch works  
-```{r}
 x <- 1
 class(x) <- c("Foo", "Bar")
-
 fun(x)
 ```
+
 Notice that the call to `NextMethod` transfers control to the next most specific method.  
 
 
@@ -514,10 +559,10 @@ Once a class has been defined by a call to `setClass`, it is possible to create 
 
 ```{r}
 setClass(Class = "A",
-         representation = list(
+         slots = list(
              s1 = 'numeric'
          ),
-         prototype = prototype(s1 = 0))
+         prototype = list(s1 = 0))
 
 myA <- new(Class = 'A')
 myA
@@ -530,10 +575,10 @@ m2
 ```{r}
 setClass(Class = "B",
          contains = 'A',
-         representation = list(s2 = "character"),
+         slots = list(s2 = "character"),
          prototype = prototype(s2 = "hi"))
 
-myB <- new("B")
+myB <- new("B", s2 = "nihao")
 myB
 ```
 
@@ -619,8 +664,213 @@ b;a
 ```
 
 
+```{r}
+setClass(Class = 'W', 
+         slots = list(c1 = "character"))
+
+setClass(Class = "WA", contains = c("W", "A"))
+
+a1 <- new(Class = "A", s1 = 10)
+w1 <- new(Class = "W", c1 = "hi")
+new(Class = "WA", a1, w1)
+```
+
+```{r}
+setClass(Class = "XX",
+         slots = list(a1 = "numeric", b1 = "character"),
+         prototype = list(a1 = 8, b1 = "hi there"))
+
+new(Class = "XX")
+```
+
+```{r}
+setMethod(f = "initialize", 
+          signature = "XX",
+          definition = function(.Object, ..., b1){
+              callNextMethod(.Object, ..., b1 = b1, a1 = nchar(b1))
+          })
+
+new(Class = "XX", b1 = "yowser")
+```
 
 
+### Accessor functions  
+```{r}
+setClass(Class = "Foo", slots = list(a = "ANY"))
+setGeneric(name = "a", def = function(object)standardGeneric(f = "a"))
+setMethod(f = "a", signature = "Foo", definition = function(object)object@a)
+b <- new(Class = "Foo", a = 10)
+a(b)
+```
+
+
+### Using S3 classes with S4 classes  
+S3 classes can be used to describe the contents of a slot in an S4 class, and they can be used for dispatch in S4 methods by first creating an S4 virtualization of the class. This is done with a call to `setOldClass`, and many such classes are created when the `methods` package is attached.  
+
+
+```{r}
+setOldClass(Classes = "mymatrix")
+getClass(Class = "mymatrix")
+```
+
+```{r}
+setClass(Class = "myS4mat", slots = list(m = "mymatrix"))
+
+x <- matrix(1:10, ncol = 2)
+class(x) <- "mymatrix"
+m4 <- new(Class = "myS4mat", m = x)
+```
+
+
+### S4 generic functions and methods  
+Generic functions are created by calls to `setGeneric` and, once created, methods can be associated with them through calls to `setMethod`.  
+
+The arguments of the method must conform, to some extend, with those of the generic function. The method definition indicates the class of each of the formal arguments and this is called the signature of the method. There can be, at most, one method with any signature.  
+
+```{r}
+setGeneric(name = "foo", 
+           def = function(object, x)standardGeneric(f = "foo"))
+setMethod(f = "foo", 
+          signature = signature("numeric", "character"), 
+          definition = function(object, x) print("Hi, I'm method one"))
+
+methods(generic.function = "foo")
+```
+
+
+```{r}
+setMethod(f = "foo",
+          signature = signature("mat", "list"),
+          definition = function(object, x) print("Hi, I'm method two"))
+
+methods(generic.function = "foo")
+```
+
+
+```{r}
+setGeneric(name = "genSig", signature = c("x"), def = function(x, y = 1) standardGeneric(f = "genSig"))
+
+setMethod(f = "genSig", signature = signature("numeric"), definition = function(x, y = 20) print(y))
+genSig(10)
+```
+
+
+```{r}
+setGeneric(name = "foo", def = function(x, y, ...){
+    y = standardGeneric(f = "foo")
+    print("I'm back")
+    y
+})
+
+setMethod(f = "foo", signature = "numeric", definition = function(x, y, ...){
+    print("I'm gone")
+})
+
+foo(1)
+```
+
+```{r}
+isGeneric(f = "genSig")
+```
+
+```{r}
+getGenerics()
+```
+
+
+```{r}
+library(Biobase)
+allG <- getGenerics()
+allGs <- split(x = allG@.Data, f = allG@package)
+class(allGs)
+allGBB <- allGs[["Biobase"]]
+length(allGBB)
+```
+
+
+```{r}
+allGbb <- getGenerics(where = "package:Biobase")
+length(allGbb)
+```
+
+
+# Chapter 5 Working with Character Data  
+## Builtin capabilities  
+
+```{r}
+library(magrittr)
+library(Biostrings)
+```
+
+```{r}
+mychar <- c("as", "soon", "as possible")
+mychar
+nchar(mychar)
+```
+
+
+```{r}
+dnaseq <- sample(x = c("A", "G", "T", "C"), size = 102, replace = T) %>% paste(collapse = "")
+```
+
+```{r}
+rDtriples <- substring(text = dnaseq, first = seq(1, 102, 3), last = seq(3, 102, 3))
+GENETIC_CODE
+paste(GENETIC_CODE[rDtriples], collapse = "")
+```
+
+
+
+```{r}
+dna2aa <- function(dna){
+    triple <- substring(dna, seq(1, nchar(dna), 3), seq(3, nchar(dna), 3))
+    aa <- paste(GENETIC_CODE[triple], collapse = "")
+    return(aa)
+}
+
+dnaseq <- sample(x = c("A", "G", "T", "C"), size = 102, replace = T) %>% paste(collapse = "")
+dna2aa(dnaseq)
+```
+
+
+```{r}
+dna2rna <- function(inputStr){
+    if(!is.character(inputStr))
+        stop("need character input")
+    is = toupper(inputStr)
+    chartr(old = "T", new = "U", x = is)
+}
+
+randDNA <- function(size = 33){
+    if(size <= 0)
+        stop("need an positive number")
+    x = c("A", "G", "C", "T")
+    return(paste(sample(x, size, replace = T), collapse = ""))
+}
+
+x = c(randDNA(15), randDNA(12))
+dna2rna(x)
+```
+
+
+```{r}
+rna2dna <- function(rnaseq){
+    if(!is.character(rnaseq))
+        stop("please input an rna sequence")
+    return(chartr(old = "U", new = "T", x = rnaseq))
+}
+
+rna2dna(dna2rna(x))
+```
+
+
+```{r}
+compSeq <- function(x){
+    return(chartr(old = "ACTG", new = "TGAC", x = x))
+}
+
+compSeq(x);x
+```
 
 
 
