@@ -35,24 +35,28 @@ More specifically, we will look at which ligands expressed by cancer-associated 
 ```{r, message=FALSE, warning=FALSE}
 library(nichenetr)
 library(tidyverse)
-library(magrittr)
 ```
 
 **Ligand-target model**:  
 This model denotes the prior potential that a particular ligand regulate the expression of a specific target gene.  
 ```{r}
-ligand_target_matrix <- readRDS(file = 'data/ligand_target_matrix.rds')
+ligand_target_matrix <- readRDS(file = '../../../Data/NicheNet/data/ligand_target_matrix.rds')
 ligand_target_matrix %>% dim()
-ligand_target_matrix[1:5, 1:5] # target genes in rows, ligands in columns
+ligand_target_matrix[1:5, 1:5] # target in rows, ligands in columns
 ```
 
 
 Expression data of interacting cells: publicly available single-cell data from CAF and malignant cells from HNSCC tumors.  
 ```{r}
-hnscc_expression <- readRDS(file = 'data/hnscc_expression.rds')
+hnscc_expression <- readRDS(file = '../../../Data/NicheNet/data/hnscc_expression.rds')
 
 expression <- hnscc_expression$expression
+expression %>% dim()
+expression %>% .[1:5, 1:5]
+
 sample_info <- hnscc_expression$sample_info
+sample_info %>% dim()
+sample_info %>% .[1:5, 1:5]
 ```
 
 
@@ -75,7 +79,7 @@ maligant_ids <- sample_info %>%
   filter(`Lymph node` == 0 & !(tumor %in% tumors_remove) & `classified  as cancer cell` == 1) %>% 
   pull(cell)
 
-expressed_genes_sender <- expression[CAF_ids, ] %>% 
+expressed_genes_sender <- expression[CAF_ids, ] %>%  
   apply(2, function(x){10*(2**x - 1)}) %>% 
   apply(2, function(x){log2(mean(x) + 1)}) %>% 
   .[. >= 4] %>% 
@@ -97,7 +101,7 @@ As gene set of interest, we consider the genes of which the expression is possib
 Because we here want to investigate how CAFs regulate the expression of p-EMT genes in malignant cells, we will use the p-EMT gene set defined by Puram et al. as gene set of interest and use all genes expressed in malignant cells as background of genes.  
 
 ```{r}
-geneset_oi <- read_tsv(file = "data/pemt_signature.txt", col_names = "genes") %>% 
+geneset_oi <- read_tsv(file = "../../../Data/NicheNet/data/pemt_signature.txt", col_names = "genes") %>% 
   pull(genes) %>% 
   .[. %in% rownames(ligand_target_matrix)]
 
@@ -105,6 +109,7 @@ geneset_oi <- read_tsv(file = "data/pemt_signature.txt", col_names = "genes") %>
 
 background_expressed_genes <-  expressed_gene_receiver %>% 
   .[. %in% rownames(ligand_target_matrix)]
+
 background_expressed_genes %>% head()
 ```
 
@@ -118,7 +123,7 @@ As potentially active ligands, we will use ligands that are:
 Putative ligand-receptor links were gathered from NicheNet's ligand-receptor data sources.  
 
 ```{r}
-lr_network <- readRDS(file = "data/lr_network.rds")
+lr_network <- readRDS(file = "../../../Data/NicheNet/data/lr_network.rds")
 
 ligands <- lr_network %>% pull(from) %>% unique()
 expressed_ligands <- intersect(x = ligands, y = expressed_genes_sender)
@@ -128,6 +133,7 @@ expressed_receptors <- intersect(x = receptors, y = expressed_gene_receiver)
 
 lr_network_expressed <- lr_network %>% 
   filter(from %in% expressed_ligands & to %in% expressed_receptors)
+
 lr_network_expressed
 ```
 
@@ -137,6 +143,7 @@ This ligand-receptor network contains the expressed ligand-receptor interactions
 potential_ligands <- lr_network_expressed %>% 
   pull(from) %>% 
   unique()
+
 potential_ligands %>% head()
 ```
 
@@ -164,8 +171,9 @@ ligand_activities %>%
        main = "The distribution of Pearson value", 
        col = 'orange', 
        border = "grey")
+
 abline(v = ligand_activities %>% arrange(desc(pearson)) %>% 
-         .[20, ] %>% pull(pearson), col = "red", lty = 2, lwd = 2)
+         pull(pearson) %>% .[20], col = "red", lty = 2, lwd = 2)
 ```
 
 
@@ -195,18 +203,24 @@ active_ligand_target_links_df <- best_upstream_ligands %>%
          n = 250) %>% 
   bind_rows()
 
-active_ligand_target_links_df %>% nrow()
+active_ligand_target_links_df %>% dim()
 
-active_ligand_target_links_df %>% head()
+active_ligand_target_links_df %>% 
+  arrange(-weight)
 ```
 
 ```{r}
-quans <- quantile(x = active_ligand_target_links_df %>% pull(weight), probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
 active_ligand_target_links_df %>% 
   pull(weight) %>% 
   hist(breaks = seq(min(active_ligand_target_links_df$weight), max(active_ligand_target_links_df$weight), length.out = 60),
        main = "Distribution of Weight", col = "orange", border = "grey")
-abline(v = quans, col = 'red', lwd = 2, lty = 2)
+
+abline(v = active_ligand_target_links_df %>% 
+         pull(weight) %>% 
+         quantile(), 
+       col = 'red', 
+       lwd = 2, 
+       lty = 2)
 ```
 
 
@@ -215,15 +229,17 @@ active_ligand_target_links <- prepare_ligand_target_visualization(ligand_target_
                                                                   ligand_target_matrix = ligand_target_matrix,
                                                                   cutoff = 0.25)
 
-active_ligand_target_links %>% nrow()
-active_ligand_target_links %>% head()
+active_ligand_target_links %>% dim()
+active_ligand_target_links[1:5, 1:5]
 ```
 
 
 ```{r}
 order_ligands <- intersect(best_upstream_ligands, colnames(active_ligand_target_links)) %>% rev()
 order_targets <- active_ligand_target_links_df$target %>% unique()
+
 vis_ligand_target <- active_ligand_target_links[order_targets, order_ligands] %>% t()
+
 p_ligand_target_network <- vis_ligand_target %>% 
   make_heatmap_ggplot(y_name = "Prioritized CAF-ligands", 
                       x_name = 'p-EMT genes in malignant cells', 
@@ -237,6 +253,37 @@ p_ligand_target_network <- vis_ligand_target %>%
 p_ligand_target_network
 ```
 
+```{r}
+cols <- colorRampPalette(colors = c("white", "purple"))
+
+pos <- pheatmap::pheatmap(mat = active_ligand_target_links, 
+                   cluster_cols = F, 
+                   cluster_rows = F,
+                   color = cols(30), 
+                   border_color = "grey99", 
+                   angle_col = 45, 
+                   xpd = T, 
+                   cex = 0.9, 
+                   cellwidth = 20)
+```
+
+```{r}
+active_ligand_target_links %>% as.data.frame() %>% 
+  mutate(to = rownames(active_ligand_target_links)) %>% 
+  gather(key = "from", value = "weight", -to) %>% 
+  select(from, to, weight) %>% 
+  ggplot(aes(reorder(from, -weight), reorder(to, -weight))) +
+  geom_tile(aes(fill = weight)) +
+  scale_fill_gradient(low = "white", high = "purple") +
+  theme(legend.position = "right", 
+        axis.ticks.length = unit(x = 0, units = "cm"), 
+        axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_x_discrete(name = "ligands", expand = c(0, 0)) +
+  scale_y_discrete(name = "targets", expand = c(0, 0)) +
+  coord_flip()
+```
+
+
 Note that the choice of these cutoffs for visualization is quite arbitrary. We recommend users to test several cutoff values.  
 
 If you would consider more than the top 250 targets based on prior information, you will infer more, but less confident, ligand-target links; by considering less than 250 targets, you will be more stringent.  
@@ -246,7 +293,6 @@ If you would consider more than the top 250 targets based on prior information, 
 One type of follow-up analysis is looking at which receptors of the receiver cell population (here: malignant cells) can potentially bind to the prioritized ligands from the sender cell population (here: CAFs).  
 
 So, we will now infer the predicted ligand-receptor interactions of the top-ranked ligands and visualize these in a heatmap.  
-
 ```{r}
 # get the ligand-receptor network of the top-ranked ligands  
 lr_network_top <- lr_network %>% 
@@ -257,8 +303,9 @@ best_upstream_receptors <- lr_network_top %>%
   pull(to) %>% 
   unique()
 
-# get the weights of the ligand-receptor interactions as used in th e NicheNet modle
-weighted_networks <- readRDS(file = "data/weighted_networks.rds")
+# get the weights of the ligand-receptor interactions as used in th e NicheNet model
+weighted_networks <- readRDS(file = "../../../Data/NicheNet/data/weighted_networks.rds")
+
 lr_network_top_df <- weighted_networks$lr_sig %>% 
   filter(from %in% best_upstream_ligands & to %in% best_upstream_receptors)
 
@@ -292,14 +339,188 @@ p_ligand_receptor_network <- vis_ligand_receptor_network %>%
                       color = "mediumvioletred", 
                       x_axis_position = "top",
                       legend_title = "Prior interaction potential")
+
 p_ligand_receptor_network
 ```
 
 
 ## Follow-up analysis 2: Visualize expression of top-predicted ligands and their target genes in a combined heatmap  
+NicheNet only considers expressed ligands of sender cells, but does not take into account their expression for ranking the ligands. The ranking is purely based on the potential that a ligand might regulate the gene set of interest, given prior knowledge. Because it is also useful to further look into expression of ligands and their target genes, we demonstrate here how you could make a combined figure showing ligand activity, ligand expression, target gene expression and ligand-target regulatory potential.  
+
+**Load additional packages required for the visualization**:  
+```{r, message=FALSE}
+library(RColorBrewer)
+library(cowplot)
+library(ggpubr)
+```
 
 
+**Prepare the ligand activity matrix**:  
+```{r}
+ligand_pearson_matrix <- ligand_activities %>% 
+  select(pearson) %>% 
+  as.matrix() %>% 
+  magrittr::set_rownames(ligand_activities$test_ligand)
 
+vis_ligand_pearson <- ligand_pearson_matrix[order_ligands, ] %>% 
+  as.matrix(ncol = 1) %>% 
+  magrittr::set_colnames("Pearson")
+```
+
+```{r}
+p_ligand_pearson <- vis_ligand_pearson %>% 
+  make_heatmap_ggplot(y_name = "Prioritized CAF-ligands", 
+                      x_name = "Ligand activity", 
+                      color = "darkorange", 
+                      legend_position = "top",
+                      legend_title = "Pearson correlation coefficient\ntarget gene prediction ability")
+```
+
+```{r}
+vis_ligand_pearson %>%
+  as.data.frame() %>% 
+  mutate(genes = rownames(vis_ligand_pearson)) %>% 
+  top_n(n = 20, w = Pearson) %>% 
+  ggplot(aes(x = reorder(genes, Pearson), y = Pearson)) +
+  geom_col(aes(fill = Pearson), position = "fill") +
+  scale_y_continuous(name = "", expand = c(0, 0), labels = NULL) +
+  scale_x_discrete(name = "Prioritized CAF-ligands", expand = c(0, 0)) +
+  scale_fill_gradient(name = "Pearson correlation \ncoefficient target gene\n prediction activity", 
+                      low = "white", high = "darkorange") +
+  coord_flip() +
+  theme(axis.ticks.length = unit(x = 0, units = "cm"), 
+        legend.position = "top")
+```
+
+
+**Prepare expression of ligands in fibroblast per tumor**:  
+```{r}
+expression_df_CAF <- expression[CAF_ids, order_ligands] %>% 
+  data.frame() %>%  
+  rownames_to_column("cell") %>% 
+  tbl_df() %>% 
+  inner_join(sample_info %>% select(cell, tumor), by = "cell")
+```
+
+```{r}
+aggregated_expression_CAF <- expression_df_CAF %>% 
+  group_by(tumor) %>% 
+  select(-cell) %>% 
+  summarise_all(mean)
+```
+
+```{r}
+aggregated_expression_df_CAF <- aggregated_expression_CAF %>% 
+  select(-tumor) %>% 
+  t() %>% 
+  magrittr::set_colnames(aggregated_expression_CAF$tumor) %>% 
+  data.frame() %>% 
+  rownames_to_column("ligand") %>% 
+  tbl_df()
+```
+
+```{r}
+aggregated_expression_matrix_CAF <- aggregated_expression_df_CAF %>% 
+  select(-ligand) %>% 
+  as.matrix() %>% 
+  magrittr::set_rownames(aggregated_expression_df_CAF$ligand)
+```
+
+```{r}
+order_tumors = c("HN6","HN20","HN26","HN28","HN22","HN25","HN5","HN18","HN17","HN16") # this order was determined based on the paper from Puram et al. Tumors are ordered according to p-EMT score.
+vis_ligand_tumor_expression = aggregated_expression_matrix_CAF[order_ligands,order_tumors]
+```
+
+
+```{r}
+library(RColorBrewer)
+color <- colorRampPalette(colors = rev(brewer.pal(n = 7, name = "RdYlBu")))(100)
+p_ligand_tumor_expression <- vis_ligand_tumor_expression %>% 
+  make_heatmap_ggplot(y_name = "Prioritized CAF-ligands", x_name = "tumor", 
+                      color = color[100], 
+                      legend_position = "top", 
+                      legend_title = "Expression\n(averaged over\nsingle cells)") +
+  theme(axis.text.y = element_text(face = "italic"))
+```
+
+**Prepare expression of target genes in malignant cells per tumor**  
+```{r}
+expression_df_target = expression[maligant_ids, geneset_oi] %>% 
+  data.frame() %>% 
+  rownames_to_column("cell") %>% 
+  tbl_df() %>% 
+  inner_join(sample_info %>% 
+  select(cell,tumor), by =  "cell") 
+
+aggregated_expression_target = expression_df_target %>% 
+  group_by(tumor) %>% 
+  select(-cell) %>% 
+  summarise_all(mean)
+
+aggregated_expression_df_target = aggregated_expression_target %>% 
+  select(-tumor) %>% 
+  t() %>% 
+  magrittr::set_colnames(aggregated_expression_target$tumor) %>% 
+  data.frame() %>% 
+  rownames_to_column("target") %>% 
+  tbl_df() 
+
+aggregated_expression_matrix_target = aggregated_expression_df_target %>%
+  select(-target) %>% 
+  as.matrix() %>% 
+  magrittr::set_rownames(aggregated_expression_df_target$target)
+
+vis_target_tumor_expression_scaled = aggregated_expression_matrix_target %>% 
+  t() %>% 
+  scale_quantile() %>% 
+  .[order_tumors,order_targets]
+```
+
+```{r}
+p_target_tumor_scaled_expression = vis_target_tumor_expression_scaled %>% 
+  make_threecolor_heatmap_ggplot(y_name = "Tumor",
+                                 x_name = "Target", 
+                                 low_color = color[1], 
+                                 mid_color = color[50], 
+                                 mid = 0.5, 
+                                 high_color = color[100], 
+                                 legend_position = "top", 
+                                 x_axis_position = "top" , 
+                                 legend_title = "Scaled expression\n(averaged over\nsingle cells)") + 
+  theme(axis.text.x = element_text(face = "italic"))
+
+p_target_tumor_scaled_expression
+```
+
+**Combine the different heatmaps in one overvire figure**  
+```{r}
+figures_without_legend = plot_grid(
+  p_ligand_pearson + theme(legend.position = "none", axis.ticks = element_blank()) + theme(axis.title.x = element_text()),
+  p_ligand_tumor_expression + theme(legend.position = "none", axis.ticks = element_blank()) + theme(axis.title.x = element_text()) + ylab(""),
+  p_ligand_target_network + theme(legend.position = "none", axis.ticks = element_blank()) + ylab(""), 
+  NULL,
+  NULL,
+  p_target_tumor_scaled_expression + theme(legend.position = "none", axis.ticks = element_blank()) + xlab(""), 
+  align = "hv",
+  nrow = 2,
+  rel_widths = c(ncol(vis_ligand_pearson)+ 4.5, ncol(vis_ligand_tumor_expression), ncol(vis_ligand_target)) -2,
+  rel_heights = c(nrow(vis_ligand_pearson), nrow(vis_target_tumor_expression_scaled) + 3)) 
+
+legends = plot_grid(
+  as_ggplot(get_legend(p_ligand_pearson)),
+  as_ggplot(get_legend(p_ligand_tumor_expression)),
+  as_ggplot(get_legend(p_ligand_target_network)),
+  as_ggplot(get_legend(p_target_tumor_scaled_expression)),
+  nrow = 2,
+  align = "h")
+
+plot_grid(figures_without_legend, 
+          #legends, 
+          rel_heights = c(10, 2), 
+          rel_widths = c(5, 8),
+          nrow = 2,
+          align = "hv")
+```
 
 
 
