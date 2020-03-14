@@ -1,0 +1,92 @@
+---
+title: "Inferring_ligand-target_singnal_paths"
+author: "yincy"
+date: "2/29/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Inferring signaling paths between ligand(s) and target(s) of interest  
+To determine signaling paths between a ligand and target of interest, we look at which transcription factors are best regulating the target genes and are most closely downstream of the ligand (based on the weights of the edges in the integrated ligand-signaling and gene regulatory networks). Then, the shortest paths between these transcription factors and the ligand of interests are determined and genes forming part in this path are considered as important signaling mediators. Finally, we look in our collected data source networks for all interactions between the ligand, signaling mediators, transcription factors and target genes. This allows to both prioritize signaling mediators and check which of all collected data sources support the ligand-target predictions of interest.  
+
+
+For this analysis, you need to define:  
+
+- one or more ligands of interest  
+
+- one or more target genes of interest  
+
+**The core function is `get_ligand_signaling_path`** 
+
+```{r}
+library(nichenetr)
+library(tidyverse)
+```
+
+
+```{r}
+weighted_network <- readRDS(file = "../../../Data/NicheNet/data/weighted_networks.rds")
+ligand_tf_matrix <- readRDS(file = "../../../Data/NicheNet/data/ligand_tf_matrix.rds")
+
+lr_network <- readRDS(file = "../../../Data/NicheNet/data/lr_network.rds")
+sig_network <- readRDS(file = "../../../Data/NicheNet/data/signaling_network.rds")
+gr_network <- readRDS(file = "../../../Data/NicheNet/data/gr_network.rds")
+```
+
+infer signaling paths between the CAF-ligand TGFB3 and its top-predicted p-EMT target genes TGFBl, LAMC2 and TNC.  
+```{r}
+ligands_all <- "TGFB3"
+targets_all <- c("TGFBI", "LAMC2", "TNC")
+
+active_signaling_network <- get_ligand_signaling_path(ligand_tf_matrix = ligand_tf_matrix, 
+                                                      ligands_all = ligands_all, 
+                                                      targets_all = targets_all, 
+                                                      weighted_networks = weighted_network)
+
+# nromalize weight for better visualization  
+active_signaling_network_min_max <- active_signaling_network
+
+active_signaling_network_min_max$sig <- active_signaling_network_min_max$sig %>% 
+    mutate(weight = ((weight - min(weight))/(max(weight) - min(weight))))
+
+active_signaling_network_min_max$gr <- active_signaling_network_min_max$gr %>% 
+    mutate(weight = ((weight - min(weight)) / (max(weight) - min(weight))))
+```
+
+>sig: weighted ligand-receptor and signaling interactions  
+gr: weighted gene regulatory interactions.  
+
+
+
+```{r}
+library(igraph)
+```
+
+
+```{r}
+e <- active_signaling_network_min_max$gr
+p <- graph_from_data_frame(d = e, 
+                           directed = T)
+l <- layout.lgl(p)
+plot(p, 
+     edge.width = e$weight, 
+     vertex.size = 10, 
+     layout = l,
+     vertex.laebl.size = 2, 
+     edge.arrow.size = 0.5, 
+     edge.color = "grey20", 
+     vertex.label.dist = 1.5)
+```
+
+
+
+
+
+
+
+
+
+
