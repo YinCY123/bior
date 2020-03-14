@@ -28,12 +28,13 @@ The follwoing tutorial is designed to give you an overview of the kinds of compa
 ```{r, message=FALSE, warning=FALSE, error=FALSE}
 library(Seurat)
 library(cowplot)
+library(biomaRt)
 ```
-
 
 ```{r}
-
+InstallData("ifnb")
 ```
+
 
 
 ## Perform integration  
@@ -42,7 +43,6 @@ Identify anchors using the `FindIntegrationAnchors` function, which takes a list
 immune.anchors <- FindIntegrationAnchors(object.list = ifnb.list, dims = 1:20)
 immune.comnined <- IntegrateData(anchorset = immune.anchors, dims = 1:20)
 ```
-
 
 
 ## Perform an integrated analysis  
@@ -74,7 +74,6 @@ To visualize the two conditions side-by-side, we can use the `split.by` argument
 ```{r}
 DimPlot(object = immune.comnined, reduction = "umap", split.by = "stim")
 ```
-
 
 
 ## Identify conserved cell type markers  
@@ -136,7 +135,6 @@ DotPlot(object = immune.comnined,
 
 
 
-    
 
 
 
