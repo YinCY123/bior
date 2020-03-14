@@ -1,0 +1,100 @@
+---
+title: "retina"
+author: "yincy"
+date: "3/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, message=FALSE}
+library(DBI)
+library(GEOmetadb)
+library(tidyverse)
+```
+
+
+```{r}
+con <- dbConnect(drv = SQLite(), dbname = "/home/yincy/git/Data/GEOmetadb.sqlite")
+```
+
+```{r column definition}
+dbReadTable(con, name = "geodb_column_desc")[, 2:3]
+```
+
+```{r list tables in this database}
+dbListTables(con)
+```
+
+```{r}
+dbListFields(con, "gsm")
+```
+
+```{r}
+dbReadTable(con, name = "gsm") %>%
+    pull(source_name_ch1) %>%  
+    table() %>% 
+    as_tibble() %>% 
+    arrange(-n)
+```
+
+**Interested fields**  
+gse:  
+- 
+
+gsm:  
+- 
+
+```{r}
+dbReadTable(con, name = "gpl") %>% 
+    pull(technology) %>% 
+    table() %>% 
+    as.data.frame() %>% 
+    magrittr::set_colnames(value = c("technology", "Freq")) %>% 
+    arrange(-Freq)
+```
+
+```{r}
+sql <- paste(
+    "select gse.gse, gse.title, gse.summary, 
+    gse.pubmed_id, gsm.organism_ch1, 
+    gpl.gpl, gsm.type, gsm.source_name_ch1,
+    gsm.molecule_ch1, gsm.description",
+    "from", 
+    "gse_gpl join gse on gse.gse=gse_gpl.gse",
+    "join gpl on gse_gpl.gpl=gpl.gpl",
+    "join gse_gsm on gse.gse=gse_gsm.gse",
+    "join gsm on gse_gsm.gsm=gsm.gsm", 
+    "where", 
+    "gse.type like '%Non-coding RNA profiling by high throughput sequencing%' and", 
+    "gsm.organism_ch1 like 'Homo sapiens' and
+    gse.summary like '%retina%'", 
+    sep = " "
+)
+
+hsa_retina_ngs <- dbGetQuery(conn = con, statement = sql)
+hsa_retina_ngs %>% 
+    distinct(gse, pubmed_id, .keep_all = T)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

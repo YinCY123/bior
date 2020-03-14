@@ -1,0 +1,13 @@
+---
+title: "SQL-1"
+author: "yincy"
+date: "3/14/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+[This note is completely from this site](https://blog.jooq.org/2016/03/17/10-easy-steps-to-a-complete-understanding-of-sql/)  
+
