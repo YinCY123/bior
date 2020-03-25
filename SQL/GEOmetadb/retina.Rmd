@@ -21,6 +21,11 @@ library(tidyverse)
 con <- dbConnect(drv = SQLite(), dbname = "/home/yincy/git/Data/GEOmetadb.sqlite")
 ```
 
+```{r}
+knitr::include_graphics(path = "/home/yincy/git/Bioconductor/SQL/GEOmetadb/figures/GEOmetadb.png")
+```
+
+
 ```{r column definition}
 dbReadTable(con, name = "geodb_column_desc")[, 2:3]
 ```
@@ -34,22 +39,22 @@ dbListFields(con, "gsm")
 ```
 
 ```{r}
-dbReadTable(con, name = "gsm") %>%
-    pull(source_name_ch1) %>%  
-    table() %>% 
-    as_tibble() %>% 
-    arrange(-n)
+dbReadTable(con, "sMatrix")
 ```
 
-**Interested fields**  
-gse:  
-- 
+```{r}
+dbReadTable(con, name = "gsm") %>%
+    filter(organism_ch1 == "Homo sapiens") %>% 
+    select(gsm, source_name_ch1, molecule_ch1) %>% 
+    group_by(molecule_ch1) %>% 
+    mutate(n = n()) %>% 
+    distinct(source_name_ch1, molecule_ch1, .keep_all = T) %>% 
+    filter(grepl("retina", source_name_ch1, ignore.case = T))
+```
 
-gsm:  
-- 
 
 ```{r}
-dbReadTable(con, name = "gpl") %>% 
+dbReadTable(con, name = "gsm") %>% 
     pull(technology) %>% 
     table() %>% 
     as.data.frame() %>% 
