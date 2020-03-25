@@ -1,0 +1,238 @@
+---
+title: "MotifDb"
+author: "yincy"
+date: "3/24/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Abstract  
+Many kinds of biological activity are regulated by the binding of proteins to their cognate substrates. Of particular interest is the sequence-specific binding of transcription factors to DNA, often in regulatory regions just upstream of the transcription start site of a gene. These binding events play a pivotal role in regulating gene expression.   
+
+Sequence specificity among closely related binding sites is nearly always incomplete: some variety in the DNA sequence is routinely observed. For this reason, these inexact binding sequence patterns are commonly described as motifs represented numerically as frequency matrices, and visualized as sequence logos.   
+
+Despite their importance in current research, there has been until now no single, annotated, comprehensive collection of publicly available motifs.   
+
+The current package provides such a collection, offering more than two thousand annotated matrices from multiple organisms, within the context of the Bioconductor project. The matrices can be filtered and selected on the basis of their metadata, used with other Bioconductor packages (MotIV for motif comparison, seqLogo for visualization) or easily exported for use with standard software and websites such as those provided by the MEME Suite.    
+
+## Basic Operations 
+```{r, message=FALSE, warning=FALSE}
+library(MotifDb)
+library(MotIV)
+library(seqLogo)
+library(magrittr)
+```
+
+There are more than two thousand matrices, from five sources  
+```{r}
+length(MotifDb)
+```
+
+```{r}
+values(MotifDb)$dataSource %>% table() %>% sort()
+```
+
+22 organisims  
+```{r}
+values(MotifDb)$organism %>% table() %>% sort(decreasing = T) %>% head()
+```
+
+metadata  
+```{r}
+values(MotifDb) %>% colnames()
+```
+
+```{r}
+MotifDb %>% class()
+```
+
+```{r}
+methods(class = "MotifList")
+```
+
+```{r}
+slotNames(MotifDb)
+```
+
+## Selection  
+There are three ways to extract subsets of interest from the MotifDb collection. All three operate upon the MotifDb metadata,
+matching values in one or more of those fifteen attributes (listed just above), and returning the subset of MotifDb which
+meet the specified criteria. The three techniques: `query`, `subset` and `grep`  
+
+### query  
+This is the simplest technique to use, and will suffice in many circumstances. For example, if you want all of the human matrices.  
+```{r}
+query(MotifDb, andStrings = "hsapiens")
+```
+
+get all matrices associated with **Sox** transcription factors, regardless of dataSources or organism  
+```{r}
+query(MotifDb, andStrings = "sox")
+```
+
+all yeast transcription factors with a homeo domain  
+```{r}
+query(MotifDb, andStrings = "cerevisiae") %>% query(andStrings = "homeo")
+```
+
+The last example may inspire more confidence in the precision of the result than is justified, and for a couple of reasons. First, the assignment of protein binding domains to specific categories is, as of 2012, an ad hoc and incomplete process. Second, the query commands matches the supplied character string to all metadata columns. In this case, ’homeo’ appears both in the bindingDomain column and the tfFamily column, and the above query will return matches from both. Searching and filtering should always be accompanined by close scrutiny of the data, such as these commands illustrate:  
+```{r}
+grep("homeo", values(MotifDb)$bindingDomain, ignore.case = T, value = T) %>% unique()
+```
+
+```{r}
+grep("homeo", values(MotifDb)$tfFamily, ignore.case = T, value = T) %>% unique()
+```
+
+### grep  
+This selection method (and the next, subset) require that you address metadata columns explicitly. This is a little more work, but the requisite direct engagement with the metadata is worthwhile. Repeating the ’query’ examples from above, you can see how more knowedge of MotifDb metadata is required.  
+
+```{r}
+mdb.human <- MotifDb[grep('Hsapiens', values(MotifDb)$organism)]
+mdb.sox <- MotifDb[grep("sox", values(MotifDb)$geneSymbol, ignore.case = T)]
+
+yeast.indices <- grepl('scere', values(MotifDb)$organism, ignore.case = T)
+homeo.indices.domain <- grepl('homeo', values(MotifDb)$bindingDomain, ignore.case = T)
+homeo.indices.family <- grepl("homeo", values(MotifDb)$tfFamily, ignore.case = T)
+yeast.homeo.indices <- yeast.indices & (homeo.indices.domain | homeo.indices.family)
+yeast.homeo.indices %>% table()
+yeast.homeoDb <- MotifDb[yeast.homeo.indices]
+```
+
+```{r}
+yeast.homeo.indices <- with(data = values(MotifDb), 
+                            grepl("scere", organism, ignore.case = T) &
+                              (grepl('homeo', bindingDomain, ignore.case = T) |
+                                 grepl("homeo", tfFamily, ignore.case = T)))
+
+table(yeast.homeo.indices)
+```
+
+
+### subset  
+MotifDb::subset emulates the R base data.frame subset command, which is not unlike an SQL select function. Unfortunately – and just like the R base subset function – this MotifDb method cannot be used reliably within a script: It is only reliable when called interactively. Here, with mixed success (as you will see) , we use MotifDb::subset to reproduce the query and grep selections shown above.  
+```{r}
+if(interactive()){
+  subset(MotifDb, tolower(geneSymbol) == "sox4")
+}
+```
+
+```{r}
+if(interactive()){
+  subset(MotifDb, organism == "Hsapiens")
+}
+```
+
+```{r}
+if(interactive()){
+  subset(MotifDb, organism == "Scerevisiae" & bindingDomain == "Homeo")
+}
+```
+
+
+## Case Study  
+We now do a simple geneSymbol search, followed by an examination of the sub-MotifDb the search returns. We are looking for all matrices associated with the well-known and highly conserved zinc-finger transcription factor, Egr1. There are two of these in MotifDb, both from mouse, and each from a different data source.  
+
+```{r}
+if(interactive()){
+  as.list(subset(MotifDb, tolower(geneSymbol) == 'egr1'))
+}
+```
+
+```{r}
+indices <- grep("egr1", values(MotifDb)$geneSymbol, ignore.case = T)
+length(indices)
+```
+
+```{r}
+MotifDb[indices]
+```
+
+```{r}
+as.list(MotifDb[indices]) %>% .[[1]]
+```
+
+metadata associated with these matrices  
+```{r}
+values(MotifDb[indices]) %>% as.data.frame() %>% .[1, ] %>% t() 
+```
+
+```{r}
+geneSymbol.rows <- grep("Egr1", values(MotifDb)$geneSymbol, ignore.case = T)
+organism.rows <- grep("Mmusculus", values(MotifDb)$organism, ignore.case = T)
+source.rows <- grep("JASPAR", values(MotifDb)$dataSource, ignore.case = T)
+
+egr1.mouse.jaspar.rows <- intersect(geneSymbol.rows, intersect(organism.rows, source.rows))
+```
+
+```{r}
+egr1.motif <- MotifDb[egr1.mouse.jaspar.rows]
+```
+
+```{r}
+if(interactive()){
+  egr1.motif <- subset(MotifDb, organism == "Mmusculus" &
+                         dataSource == "JASPAR_CORE" &
+                         geneSymbol == "Egr1")
+}
+```
+
+```{r}
+egr1.motif %>% as.list() %>% .[[1]]
+```
+ 
+```{r}
+seqLogo(egr1.motif %>% as.list() %>% .[[1]])
+```
+
+
+## Motif Matching  
+We will look for the ten position frequency matrices which are the best match to JASPAR’s mouse EGR1, using the MotIV package. We actually request the top eleven hits from the entire MotifDb, since the first hit should be the target matrix itself, since that is of necessity found in the full MotifDb.  
+```{r}
+egr1.hits <- motifMatch(inputPWM = as.list(egr1.motif)[1], 
+                        database = as.list(MotifDb), 
+                        top = 11)
+```
+
+```{r}
+egr1.hits %>% as.data.frame()
+```
+
+
+```{r}
+??MotIV.toTable
+```
+
+
+```{r}
+if(interactive()){
+  noquote(t(as.data.frame(subset(values(MotifDb), geneId == "13653"))))
+}
+```
+
+```{r}
+library(MotIV)
+help(package = "MotIV")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
