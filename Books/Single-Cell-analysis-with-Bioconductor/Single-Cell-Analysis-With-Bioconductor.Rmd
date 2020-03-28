@@ -17,5 +17,250 @@ library(uwot)
 library(Rtsne)
 ```
 
+[From this web site](https://osca.bioconductor.org/)  
+
+```{r}
+library(SingleCellExperiment)
+library(scater)
+library(scran)
+```
+
+
+# Chapter 4 Data Structure  
+```{r}
+knitr::include_graphics(path = "figures/SingleCellExperiment-strucutre.PNG")
+```
+
+
+## 4.2 Storing primary experimental data  
+```{r}
+count_matrix <- data.frame(
+    cell_1 = rpois(n = 10, 10), 
+    cell_2 = rpois(n = 10, 10), 
+    cell_3 = rpois(n = 10, 30)
+)
+
+rownames(count_matrix) <- paste("gene_", 1:10, sep = "")
+count_matrix <- as.matrix(count_matrix)
+```
+
+The SingleCellExperiment class inherits from the SummarizedExperiment class with several additional slots.  
+
+- reducedDims: A SimpleList containing matrices of cell coordinates.  
+- int_elementMetadata: A DataFrame containing internal row metadata (for each genomic features).  
+- int_colData: A DataFrame containing internal column metadata (for each cell).  
+- int_metadata: A list containing internal experiment metadata.  
+
+The additional reducedDims slot allows storage of results from multiple dimensionality reduction methods, e.g., PCA or t-SNE. Each element of the SimpleList should be a matrix of coordinates for all cells from one reduction method. The number of rows of each matrix should be equal to the number of cells in the SingleCellExperiment object.  
+
+```{r}
+sce <- SingleCellExperiment(
+    assays = list(counts = count_matrix)
+)
+```
+
+```{r}
+sce
+```
+
+```{r}
+assay(sce, 1)
+# or assay(sce, "counts")
+```
+
+```{r}
+sce <- normalize(sce, exprs_values = "counts")
+```
+
+```{r}
+assays(sce)
+```
+
+```{r}
+assay(sce, "logcounts")
+```
+
+
+```{r}
+logcounts(sce)
+```
+
+```{r}
+counts_100 <- counts(sce) + 100
+assay(sce, "counts_100") <- counts_100
+
+assays(sce)
+assay(sce, "counts_100")
+```
+
+```{r}
+cell_metadata <- data.frame(batch = c(1, 1, 2))
+rownames(cell_metadata) <- paste("cell_", 1:3, sep = "")
+```
+
+
+```{r}
+sce <- SingleCellExperiment(assays = list(counts = count_matrix), 
+                            colData = cell_metadata)
+```
+
+```{r}
+colData(sce)
+```
+
+```{r}
+sce$batch
+```
+
+```{r}
+sce <- scater::calculateQCMetrics(sce)
+colData(sce)
+```
+
+```{r}
+sce$more_stuff <- runif(ncol(sce))
+colData(sce)
+```
+
+A common operation with colData is to use its values for subsetting.  
+```{r}
+sce[, sce$batch == 1]
+```
+
+
+```{r}
+rowRanges(sce) # to store GRanges or GRangesList object
+```
+
+```{r}
+rowqc <- data.frame(
+    mean = apply(assay(sce, "counts"), 1, mean, na.rm = T), 
+    detected = apply(assay(sce, "counts"), 1, function(x)mean(x > 0) * 100)
+)
+
+rowqc
+```
+
+```{r}
+rowData(sce) <- rowqc
+```
+
+```{r}
+sce
+```
+
+```{r}
+sce[c("gene_1", "gene_3"), ]
+```
+
+```{r}
+sce[c(1, 3),] # same as above
+```
+
+
+Some other meta data do not directly related to cells or samples can be stored in `metadata` slot.  
+```{r}
+my_genes <- c("gene_1", "gene_5")
+metadata(sce) <- list(favorite_genes = my_genes)
+metadata(sce)
+```
+
+```{r}
+your_geen <- c("gene_4", "gene_8")
+metadata(sce)$your_gene <- your_geen
+
+metadata(sce)
+```
+
+The reducedDims slot is specially designed to store reduced dimensionality representations of the primary data obtained by methods such as PCA and t-SNE (see Chapter 9 for more details). This slot contains a list of numeric matrices of low-reduced representations of the primary data, where the rows represent the columns of the primary data (i.e., cells), and columns represent the dimensions.  
+
+```{r}
+sce <- normalize(sce)
+sce <- runPCA(sce)
+
+reducedDim(sce, "PCA")
+```
+
+```{r}
+sce <- runTSNE(sce, perplexity = 0.1)
+
+reducedDim(sce, "TSNE")
+```
+
+```{r}
+u <- uwot::umap(t(logcounts(sce)), n_neighbors = 2)
+reducedDim(sce, "UMAP") <- u
+reducedDims(sce)
+```
+
+```{r}
+reducedDim(sce, "UMAP")
+```
+
+
+```{r}
+sce <- scran::computeSumFactors(sce)
+```
+
+
+# Chapter 5 Overview  
+```{r, fig.cap="scRNA-seq analysis workflow"}
+knitr::include_graphics(path = "figures/SingeCellExperiment-analysis-flow.PNG")
+```
+
+## 5.2 Experimental Design  
+**Sequencing technology**:  
+
+- Droplet-based: 10X Genomics, inDrop, Drop-seq  
+
+- Plate-based with unique molecular identifers (UMIs): CEL-seq, MARS-seq  
+
+- Plate-base with reads: Smart-seq2  
+
+- Other: sci-RNA-seq, Seq-Well  
+
+
+## Obtaining a count matrix  
+- For 10X Genomics data, the CellRanger software suite provides a custom pipeline to obtain a count matrix. This uses STAR to align reads to the reference genome and then counts the number of unique UMIs mapped to each gene.  
+
+- Pseudo-alignment methods such as alevin can be used to obtain a count matrix from the same data with greater efficiency. This avoids the need for explicit alignment, which reduces the compute time and memory usage.  
+
+- For other highly multiplexed protocols, the `scPipe` package provides a more general pipeline for processing scRNA-seq data. This uses the `Rsubread` aligner to align reads and then counts UMIs per gene.  
+
+- For CEL-seq or CEL-seq2 data, the `scruff` package provides a dedicated pipeline for quantification.  
+
+- For read-based protocols, we can generally re-use the same pipelines for processing bulk RNA-seq data.  
+
+- For any data involving spike-in transcripts, the spike-in sequences should be included as part of the reference genome during alignment and quantification.  
+
+After quantification, we import the count matrix into R and create a SingleCellExperiment object. This can be done with base methods (e.g., read.table()) followed by applying the SingleCellExperiment() constructor. Alternatively, for specific file formats, we can use dedicated methods from the `DropletUtils` (for 10X data) or `tximport`/`tximeta` packages (for pseudo-alignment methods).  
+
+
+## Data processing and downstream analysis  
+In the simplest case, the workflow has the following form:  
+
+1. We compute quality control metrics to remove low-quality cells that would interfere with downstream analyses. These cells may have been damaged during processing or may not have been fully captured by the sequencing protocol. Common metrics includes the total counts per cell, the proportion of spike-in or mitochondrial reads and the number of detected features.  
+
+2. We convert the counts into normalized expression values to eliminate cell-specific biases (e.g., in capture efficiency). This allows us to perform explicit comparisons across cells in downstream steps like clustering. We also apply a transformation, typically log, to adjust for the mean-variance relationship.  
+
+3. We perform feature selection to pick a subset of interesting features for downstream analysis. This is done by modelling the variance across cells for each gene and retaining genes that are highly variable. The aim is to reduce computational overhead and noise from uninteresting genes.  
+
+4. We apply dimensionality reduction to compact the data and further reduce noise. Principal components analysis is typically used to obtain an initial low-rank representation for more computational work, followed by more aggressive methods like t-stochastic neighbor embedding for visualization purposes.  
+
+5. We cluster cells into groups according to similarities in their (normalized) expression profiles. This aims to obtain groupings that serve as empirical proxies for distinct biological states. We typically interpret these groupings by identifying differentially expressed marker genes between clusters.  
+
+
+# Chapter 6 Quality Control  
+
+
+
+
+
+
+
+
+
+
+
 
 
