@@ -203,7 +203,9 @@ Now that the data's all loaded up, we need to pre-process it. This step is where
 
 ```{r}
 cds <- preprocess_cds(cds = cds, 
-                      num_dim = 100)
+                      num_dim = 100, # the number of dimentions you want to return
+                      method = "PCA", 
+                      norm_method = "log") # normalization methods prior to reducing dimentionality
 ```
 
 It's a good idea to check that you're using enough PCs to capture most of the variation in gene expression across all the cells in the data set. You can look at the fraction of variation explained by each PC using `plot_pc_variance_explained()`.  
@@ -227,21 +229,25 @@ cds <- reduce_dimension(cds = cds,
 As you can see the cells form many groups, some with thousands of cells, some with only a few. Cao & Packer annotated each cell according to type manually by looking at which genes it expresses. We can color the cells in the UMAP plot by the authors' original annotations using the `color_cells_by` argument to `plot_cells()`.  
 ```{r, message=FALSE}
 plot_cells(cds = cds, 
-           color_cells_by = "cao_cell_type")
+           color_cells_by = "cao_cell_type", 
+           show_trajectory_graph = F, 
+           norm_method = "size_only")
 ```
  
 Except for a few cases described in a moment, `color_cells_by` can be the name of any column in `colData(cds)`. Note that when `color_cells_by` is a categorical variable, labels are added to the plot, with each label positioned roughly in the middle of all the cells that have that label.  
 
 ```{r}
 plot_cells(cds = cds,
-           genes = c("cpna-2", "egl-21", "ram-2", "inos-1"))
+           genes = c("cpna-2", "egl-21", "ram-2", "inos-1"), 
+           show_trajectory_graph = F)
 ```
 
 If you have a relatively large dataset (with >10,000 cells or more), you may want to take advantage of options that can accelerate UMAP. Passing `umap.fast_sgd=TRUE` to `reduce_dimension()` will use a fast stochastic gradient descent method inside of UMAP. If your computer has multiple cores, you can use the cores argument to make UMAP multithreaded. However, invoking `reduce_dimension()` with either of these options will make it produce slighly different output each time you run it. If this is acceptable to you, you could see signifant reductions in the running time of `reduction_dimension()`.  
 
 ```{r}
 cds <- reduce_dimension(cds = cds, 
-                        reduction_method = "tSNE")
+                        reduction_method = "tSNE", 
+                        preprocess_method = "PCA")
 
 plot_cells(cds = cds, 
            reduction_method = "tSNE", 
@@ -265,7 +271,8 @@ Dramatic batch effects are not evident in this data. If the data contained more 
 cds <- align_cds(
     cds = cds, 
     num_dim = 100, 
-    alignment_group = "plate"
+    alignment_group = "plate", 
+    preprocess_method = "PCA"
 )
 
 cds <- reduce_dimension(cds = cds, 
@@ -285,18 +292,17 @@ Grouping cells into clusters is an important step in identifying the cell types 
 ```{r}
 cds <- cluster_cells(
     cds = cds, 
-    resolution = 1e-5, 
+    k = 10, 
     reduction_method = "UMAP"
 )
-
-plot_cells(cds = cds)
 ```
 
 Once you run `cluster_cells()`, the `plot_cells()` function will label each cluster of cells is labeled separately according to how you want to color the cells. For example, the call below colors the cells according to their cell type annotation, and each cluster is labeled according the most common annotation within it.  
 
 ```{r}
 plot_cells(cds = cds, 
-           color_cells_by = "cao_cell_type")
+           color_cells_by = "partition", 
+           label_cell_groups = F)
 ```
 
 You can choose to label whole partitions instead of clusters by passing `group_cells_by="partition"`. You can also plot the top 2 labels per cluster by passing `labels_per_group=2` to `plot_cells()`. Finally, you can disable this labeling policy, making `plot_cells()` behave like it did before we called `cluster_cells()`.  

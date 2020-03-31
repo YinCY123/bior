@@ -49,10 +49,9 @@ gsm_table %>%
   filter(submission_date >= '2010-01-01', grepl("illumina", label_protocol_ch1, ignore.case = T))
 ```
 
-
 ```{r}
 hsa_retina_ngs <- dbGetQuery(conn = con, 
-           statement = "select gse.gse, gse.title, gse.summary, 
+           statement = "select gse.gse, gsm.title, gse.summary, 
            gse.pubmed_id, gpl.gpl, gpl.technology, gsm.gsm, 
            gsm.source_name_ch1, gsm.organism_ch1, gsm.molecule_ch1
            from gsm 
@@ -61,23 +60,17 @@ hsa_retina_ngs <- dbGetQuery(conn = con,
            join gse_gpl on gse_gpl.gse=gse.gse 
            join gpl on gse_gpl.gpl=gpl.gpl 
            where gsm.organism_ch1 = 'Homo sapiens' 
-           and gpl.technology='high-throughput sequencing' 
-           and gse.summary like '%retina%'")
+           and gpl.technology='high-throughput sequencing'")
 ```
 
 
 ```{r}
 hsa_retina_ngs %>% 
-    distinct(gse, gsm, .keep_all = T) %>% 
-    filter(grepl("Fetal", source_name_ch1)) %>% 
-    select(gse, title, molecule_ch1)
+    filter((grepl("retina", title) | grepl("retina", summary) | grepl("retina", source_name_ch1)) & technology == "high-throughput sequencing") %>% 
+    filter(grepl("(AMD)|(Age-related macular degeneration)|(Age related macular degeneration)", summary)) %>% 
+    pull(gse) %>% 
+    unique()
 ```
-
-
-
-
-
-
 
 
 
