@@ -1,0 +1,55 @@
+---
+title: "MotIV"
+author: "yincy"
+date: "3/31/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Introduction  
+One of the most challenging part of the molecular biology is to understand the genetic regulation mechanisms. That's why is it important to work on the identifcation of the regulatory sequences such as transcription factors. It's in general short sequences located upstream the transcription initiation factor and recruiting proteic complex. Furthermore, this factors are themselves regulate by other proteic complex forming 'module' and adding a new level of complexity to the understanding of the genetic regulation system. This modules still are hard to detect because of the complexity of the current identifcation algorithms.  
+
+
+```{r}
+library(MotIV)
+path <- system.file(package = "MotIV")
+```
+
+
+```{r}
+jaspar <- readPWMfile(file = paste(path, "/extdata/jaspar2010.txt", sep = ""))
+```
+
+
+```{r}
+jaspar.scores <- generateDBScores(inputDB = jaspar, 
+                                  cc = "PCC", 
+                                  align = "SWU", 
+                                  nRand = 1000)
+```
+
+
+```{r}
+writeDBScores(x = jaspar.scores, 
+              file = paste(path, "/extdata/jaspar_PCC_SWU.scores", sep = ""))
+```
+
+```{r}
+jaspar.scores <- readDBScores(file = paste(path, "/extdata/jaspar2010_PCC_SWU.scores", sep = ""))
+```
+
+
+now that you have construct the database and the database scores, you have to load the PWM motifs you want to analysis.  
+
+From a gadem object  
+```{r}
+load(paste(path, "/data/FOXA1_rGADEM.rda", sep = ""))
+motifs <- getPWM(gadem)
+```
+
+
+
