@@ -63,7 +63,7 @@ assay(sce, 1)
 ```
 
 ```{r}
-sce <- logNormCounts(x = sce, exprs_values = "counts")
+sce <- scater::normalizeSCE(sce)
 ```
 
 ```{r}
