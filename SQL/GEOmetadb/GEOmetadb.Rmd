@@ -19,11 +19,34 @@ library(tidyverse)
 
 
 ```{r}
-con <- dbConnect(drv = RSQLite::SQLite(), "git/Data/GEOmetadb.sqlite")
+con <- dbConnect(drv = RSQLite::SQLite(), "/home/yincy/git/Data/GEOmetadb.sqlite")
 ```
 
 ```{r}
 dbListFields(con, "gsm")
+```
+
+```{r}
+dbReadTable(con, 'gsm')
+```
+
+```{r}
+tissue_organ <- c("spleen", "brain", "liver", "serum", "blood", 
+                  "cortex", "PBMC", "Psoriasis", "melanoma", "Bone marrow", 
+                  "Hippocampus", "Hippocampus", "striatum", "retina", "lymphoblast", 
+                  "astrocytoma", "Head and neck cancer single cell", "colon", "dendritic cell", "thymus", 
+                  "embryonic", "fetal", "prostate", "testis", "skin", 
+                  "vascular", "lymph node", "muscle", "breast", "renal")
+```
+
+
+```{r}
+gsm_table <- dbReadTable(con, "gsm") %>% 
+  filter(grepl(str_c(tissue_organ, collapse = "|"), source_name_ch1, ignore.case = T)) %>% 
+  type_convert()
+
+gsm_table %>% 
+  filter(submission_date >= '2010-01-01', grepl("illumina", label_protocol_ch1, ignore.case = T))
 ```
 
 

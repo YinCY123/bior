@@ -25,76 +25,49 @@ con <- dbConnect(drv = SQLite(), dbname = "/home/yincy/git/Data/GEOmetadb.sqlite
 knitr::include_graphics(path = "/home/yincy/git/Bioconductor/SQL/GEOmetadb/figures/GEOmetadb.png")
 ```
 
-
-```{r column definition}
-dbReadTable(con, name = "geodb_column_desc")[, 2:3]
-```
-
-```{r list tables in this database}
-dbListTables(con)
+```{r}
+sql <- paste("select gse.gse, gse.title, gse.summary, 
+             gsm.description,  
+             gpl.gpl, gsm.molecule_ch1, 
+             gse.pubmed_id",  
+        "from gse", 
+        "join gsm on gsm.gsm=gse_gsm.gsm", 
+        "join gse_gsm on gse_gsm.gse=gse.gse",
+        "join gpl on gpl.gpl=gds.gpl", 
+        "join gds on gds.gse=gse.gse", 
+        "where gsm.organism_ch1 = 'Homo sapiens'",
+        "and gsm.molecule_ch1 in ('total RNA', 'genomic DNA', 'polyA RNA')",
+        "and gpl.technology='high-throughput sequencing'",
+        sep = " ")
 ```
 
 ```{r}
-dbListFields(con, "gsm")
+dbReadTable(con, "gpl") %>% pull(technology) %>% table() %>% sort(decreasing = T)
 ```
 
 ```{r}
-dbReadTable(con, "sMatrix")
-```
-
-```{r}
-dbReadTable(con, name = "gsm") %>%
-    filter(organism_ch1 == "Homo sapiens") %>% 
-    select(gsm, source_name_ch1, molecule_ch1) %>% 
-    group_by(molecule_ch1) %>% 
-    mutate(n = n()) %>% 
-    distinct(source_name_ch1, molecule_ch1, .keep_all = T) %>% 
-    filter(grepl("retina", source_name_ch1, ignore.case = T))
+dbReadTable(con, "gsm") %>% 
+    group_by(molecule_ch1, organism_ch1) %>% 
+    mutate(n = n())%>% 
+    select(molecule_ch1, organism_ch1, n) %>% 
+    filter(molecule_ch1 %in% c("total RNA", "genomic DNA", "polyA RNA", "nuclear RNA"), organism_ch1 == "Homo sapiens") %>% 
+    distinct(molecule_ch1, organism_ch1, .keep_all = T)
 ```
 
 
 ```{r}
-dbReadTable(con, name = "gsm") %>% 
-    pull(technology) %>% 
-    table() %>% 
-    as.data.frame() %>% 
-    magrittr::set_colnames(value = c("technology", "Freq")) %>% 
-    arrange(-Freq)
-```
-
-```{r}
-sql <- paste(
-    "select gse.gse, gse.title, gse.summary, 
-    gse.pubmed_id, gsm.organism_ch1, 
-    gpl.gpl, gsm.type, gsm.source_name_ch1,
-    gsm.molecule_ch1, gsm.description",
-    "from", 
-    "gse_gpl join gse on gse.gse=gse_gpl.gse",
-    "join gpl on gse_gpl.gpl=gpl.gpl",
-    "join gse_gsm on gse.gse=gse_gsm.gse",
-    "join gsm on gse_gsm.gsm=gsm.gsm", 
-    "where", 
-    "gse.type like '%Non-coding RNA profiling by high throughput sequencing%' and", 
-    "gsm.organism_ch1 like 'Homo sapiens' and
-    gse.summary like '%retina%'", 
-    sep = " "
-)
-
 hsa_retina_ngs <- dbGetQuery(conn = con, statement = sql)
-hsa_retina_ngs %>% 
-    distinct(gse, pubmed_id, .keep_all = T)
+
+colnames(hsa_retina_ngs)
+f1 <- hsa_retina_ngs %>% 
+    filter(molecule_ch1 %in% c("total RNA", "genomic DNA", "polyA RNA"), 
+           technology == "high-throughput sequencing")
+f1[grepl("retina", f1$summary, ignore.case = T), ]
 ```
 
-
-
-
-
-
-
-
-
-
-
+```{r}
+str_split(sql, pattern = " ")
+```
 
 
 
