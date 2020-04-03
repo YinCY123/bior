@@ -27,7 +27,32 @@ dbListFields(con, "gsm")
 ```
 
 ```{r}
-dbReadTable(con, 'gsm')
+sample_sources <- dbReadTable(con, 'gsm') %>% 
+    group_by(organism_ch1, source_name_ch1) %>% 
+    summarise(n = n())
+
+sample_sources <- sample_sources %>% arrange(-n)
+
+
+
+sample_sources %>% 
+    fct_collapse(
+        .f = source_name_ch1, 
+        pbmc = grep("blood|pbmc|plasma", sample_sources %>% pull(source_name_ch1), value = T), 
+        brain = grep("cortex|brain|hippocampus|striatum|hypothalamus", sample_sources %>% pull(source_name_ch1), value = T), 
+        tumor = grep("tumor|cancer", sample_sources %>% pull(source_name_ch1), value = T), 
+        ipsc = grep("ipsc", sample_sources %>% pull(source_name_ch1), value = T),
+        spleen = grep("spleen", sample_sources %>% pull(source_name_ch1), value = T), 
+        psoriasis = grep("psoriasis", sample_sources %>% pull(source_name_ch1), value = T), 
+        retina = grep("retina|eye", sample_sources %>% pull(source_name_ch1), value = T), 
+        `bone marrow` = grep("bone marrow", sample_sources %>% pull(source_name_ch1), value = T), 
+        `T cell` = grep("T cell", sample_sources %>% pull(source_name_ch1), value = T), 
+        embryonic = grep("embryonic", sample_sources %>% pull(source_name_ch1), value = T), 
+        liver = grep("liver", sample_sources %>% pull(source_name_ch1), value = T), 
+        lung = grep("lung", sample_sources %>% pull(source_name_ch1), value = T), 
+        breast = grep("breast", sample_sources %>% pull(source_name_ch1), value = T), 
+        kidney = grep("kidney", sample_sources %>% pull(source_name_ch1), value = T), 
+        leukemia = grep("leukemia", sample_sources %>% pull(source_name_ch1), value = T))
 ```
 
 ```{r}
@@ -66,10 +91,16 @@ hsa_retina_ngs <- dbGetQuery(conn = con,
 
 ```{r}
 hsa_retina_ngs %>% 
-    filter((grepl("retina", title) | grepl("retina", summary) | grepl("retina", source_name_ch1)) & technology == "high-throughput sequencing")
+    filter((grepl("", title) | grepl("retina", summary) | grepl("retina", source_name_ch1)) & technology == "high-throughput sequencing")
 ```
 
 
+```{r}
+hsa_retina_ngs %>% 
+    filter((grepl("pbmc|`whole blood`", title) | grepl("pbmc|`whole blood`", summary) | grepl("pbmc|`whole blood`", source_name_ch1)) & technology == "high-throughput sequencing") %>% 
+    pull(summary) %>% 
+    unique()
+```
 
 
 
