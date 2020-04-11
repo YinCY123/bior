@@ -19,7 +19,7 @@ library(tidyverse)
 
 
 ```{r}
-con <- dbConnect(drv = RSQLite::SQLite(), "f:/git/Data/GEOmetadb.sqlite")
+con <- dbConnect(drv = RSQLite::SQLite(), "/home/yincy/git/Data/GEOmetadb.sqlite")
 ```
 
 ```{r}
@@ -27,7 +27,11 @@ dbListFields(con, "gsm")
 ```
 
 ```{r}
-dbReadTable(con, 'gsm')
+dbReadTable(con, 'gsm') %>% 
+  filter(grepl("retina|retinal|eye", source_name_ch1)) %>% 
+  pull(treatment_protocol_ch1) %>% 
+  unique() %>% 
+  table()
 ```
 
 ```{r}
@@ -38,6 +42,21 @@ tissue_organ <- c("spleen", "brain", "liver", "serum", "blood",
                   "embryonic", "fetal", "prostate", "testis", "skin", 
                   "vascular", "lymph node", "muscle", "breast", "renal")
 ```
+
+
+```{r}
+sample_type <- dbReadTable(con, "gsm") %>% 
+  filter(organism_ch1 %in% c("Homo sapiens", "Mus musculus")) %>% 
+  select(source_name_ch1, organism_ch1, molecule_ch1) %>% 
+  group_by(organism_ch1, source_name_ch1, molecule_ch1) %>% 
+  mutate(n = n()) %>% 
+  arrange(-n) %>% 
+  distinct(source_name_ch1, organism_ch1, molecule_ch1, n, .keep_all = T)
+
+sample_type %>% 
+  filter(grepl("retina", source_name_ch1))
+```
+
 
 
 ```{r}
@@ -68,6 +87,7 @@ hsa_retina_ngs <- dbGetQuery(conn = con,
 hsa_retina_ngs %>% 
     filter((grepl("retina", title) | grepl("retina", summary) | grepl("retina", source_name_ch1)) & technology == "high-throughput sequencing")
 ```
+
 
 
 
