@@ -62,7 +62,8 @@ P-Value cutoff: The P-Value cutoff controls the number of binding site in a moti
 E-Value cutoff: The E-Value cutoff controls the number of motifs to be identified.  
 ```{r}
 gadem <- GADEM(Sequences = Sequences, 
-               genome = Hsapiens, verbose = 1)
+               genome = Hsapiens, 
+               verbose = 1)
 ```
 
 
@@ -78,7 +79,8 @@ path <- system.file("extdata/jaspar2009.txt", package = "rGADEM")
 seededPWM <- readPWMfile(path)
 STAT1.PWM <- seededPWM[grepl("STAT1", names(seededPWM))]
 ```
- 
+
+
 ```{r}
 gadem <- GADEM(Sequences = Sequences, 
                verbose = 1, 
