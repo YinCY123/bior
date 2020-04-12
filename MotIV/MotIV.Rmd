@@ -38,6 +38,7 @@ writeDBScores(x = jaspar.scores,
               file = paste(path, "/extdata/jaspar_PCC_SWU.scores", sep = ""))
 ```
 
+
 ```{r}
 jaspar.scores <- readDBScores(file = paste(path, "/extdata/jaspar2010_PCC_SWU.scores", sep = ""))
 ```
