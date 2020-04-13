@@ -129,7 +129,10 @@ hsa_retina_amd <- hsa_retina_ngs %>%
   filter(grepl(stringr::str_c(pat, collapse = "|"), summary, ignore.case = F))
 
 hsa_retina_amd %>% 
-  dplyr::filter(grepl("AMD", summary, ignore.case = F))
+  dplyr::filter(grepl("AMD", summary, ignore.case = F)) %>% 
+  select(gse, title, source_name_ch1, molecule_ch1) %>% 
+  pull(gse) %>% 
+  table()
 ```
 
 
