@@ -1,0 +1,88 @@
+---
+title: "fgsea"
+author: "yincy"
+date: "4/18/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+fgsea is an R-package for fast preranked gene set enrichment analysis (GSEA). The performance is achieved by using an algorithm for cumulative GSEA-statistic calculation. This allows to reuse samples between different gene set sizes.  
+
+
+## Loading necessary libraries  
+```{r}
+library(fgsea)
+library(tidyverse)
+data(examplePathways) # a list 
+data(exampleRanks)
+```
+
+
+```{r}
+examplePathways[[1]]
+exampleRanks %>% head()
+```
+
+
+```{r}
+fgseaRes <- fgsea(pathways = examplePathways, 
+                  stats = exampleRanks, 
+                  minSize = 15, 
+                  maxSize = 500,
+                  nperm = 10000)
+```
+
+
+```{r}
+fgseaRes %>% 
+    arrange(pval)
+```
+
+
+```{r}
+sum(fgseaRes[, padj < 0.01])
+```
+
+
+```{r}
+plotEnrichment(pathway = examplePathways[["5991130_Programmed_Cell_Death"]], 
+               stats = exampleRanks) +
+    labs(title = "Programmed Cell Death")
+```
+
+
+```{r}
+topPathwaysUp <- fgseaRes[ES > 0][head(order(pval), n=10), pathway]
+topPathwaysDown <- fgseaRes[ES < 0][head(order(pval), n=10), pathway]
+topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
+plotGseaTable(pathways = examplePathways[topPathways], 
+              stats = exampleRanks, 
+              fgseaRes = fgseaRes,
+              gseaParam = 0.5)
+```
+
+
+From the plot above one can see that there are very similar pathways in the table (for example 5991502_Mitotic_Metaphase_and_Anaphase and 5991600_Mitotic_Anaphase). To select only independent pathways one can use collapsePathways function:  
+
+```{r}
+collaspsedPathways <- collapsePathways(fgseaRes = fgseaRes[order(pval)][padj < 0.01], 
+                                       examplePathways, 
+                                       exampleRanks)
+
+mainPathways <- fgseaRes[pathway %in% collaspsedPathways$mainPathways, ][order(-NES), pathway]
+plotGseaTable(examplePathways[mainPathways], exampleRanks, 
+              fgseaRes = fgseaRes, 
+              gseaParam = 0.5)
+```
+
+
+
+
+
+
+
+
