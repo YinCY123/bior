@@ -14,7 +14,7 @@ fgsea is an R-package for fast preranked gene set enrichment analysis (GSEA). Th
 
 
 ## Loading necessary libraries  
-```{r}
+```{r, message=F, warning=FALSE}
 library(fgsea)
 library(tidyverse)
 data(examplePathways) # a list 
@@ -27,9 +27,13 @@ examplePathways[[1]]
 exampleRanks %>% head()
 ```
 
+```{r}
+sapply(examplePathways, length) %>% sort(decreasing = F) %>% quantile(probs = seq(0, 1, 0.1))
+```
+
 
 ```{r}
-fgseaRes <- fgsea(pathways = examplePathways, 
+fgseaRes <- fgsea(pathways = examplePathways, # list of gene set to check 
                   stats = exampleRanks, 
                   minSize = 15, 
                   maxSize = 500,
@@ -49,15 +53,17 @@ sum(fgseaRes[, padj < 0.01])
 
 
 ```{r}
-plotEnrichment(pathway = examplePathways[["5991130_Programmed_Cell_Death"]], 
-               stats = exampleRanks) +
-    labs(title = "Programmed Cell Death")
+plotEnrichment(pathway = examplePathways[["5990980_Cell_Cycle"]], 
+               stats = exampleRanks, 
+               ticksSize = 0.2) +
+    labs(title = "Programmed Cell Death") +
+    geom_vline(xintercept = 2000)
 ```
 
 
 ```{r}
-topPathwaysUp <- fgseaRes[ES > 0][head(order(pval), n=10), pathway]
-topPathwaysDown <- fgseaRes[ES < 0][head(order(pval), n=10), pathway]
+topPathwaysUp <- fgseaRes[ES > 0, ][head(order(pval), n=10), pathway]
+topPathwaysDown <- fgseaRes[ES < 0, ][head(order(pval), n=10), pathway]
 topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
 plotGseaTable(pathways = examplePathways[topPathways], 
               stats = exampleRanks, 
@@ -67,11 +73,11 @@ plotGseaTable(pathways = examplePathways[topPathways],
 
 
 From the plot above one can see that there are very similar pathways in the table (for example 5991502_Mitotic_Metaphase_and_Anaphase and 5991600_Mitotic_Anaphase). To select only independent pathways one can use collapsePathways function:  
-
 ```{r}
-collaspsedPathways <- collapsePathways(fgseaRes = fgseaRes[order(pval)][padj < 0.01], 
-                                       examplePathways, 
-                                       exampleRanks)
+collaspsedPathways <- collapsePathways(fgseaRes = fgseaRes[order(pval), ][padj < 0.01, ], 
+                                       pathways = examplePathways, 
+                                       stats = exampleRanks, 
+                                       nperm = 1000)
 
 mainPathways <- fgseaRes[pathway %in% collaspsedPathways$mainPathways, ][order(-NES), pathway]
 plotGseaTable(examplePathways[mainPathways], exampleRanks, 
@@ -80,6 +86,24 @@ plotGseaTable(examplePathways[mainPathways], exampleRanks,
 ```
 
 
+
+## Using Reactome pathways  
+For convenience there is reactomePathways function that obtains pathways from Reactome for given set of genes. Package reactome.db is required to be installed.  
+
+```{r}
+pathways <- reactomePathways(genes = exampleRanks %>% names())
+pathways %>% length()
+
+sapply(pathways, length) %>% sort() %>% quantile(probs = seq(0, 1, 0.1))
+
+fgseaRes <- fgsea(pathways = pathways, 
+                  stats = exampleRanks, 
+                  nperm = 1000, 
+                  maxSize = 500, 
+                  minSize = 10)
+
+fgseaRes %>% arrange(padj) %>% head()
+```
 
 
 
