@@ -53,12 +53,16 @@ log(y~i~) = β~0~ + β~t~x~t~
 where y~i~ is a random variable corresponding to the expression values of gene i, x~t~ is the time each cell was collected (in minutes), and the β~t~ capture the effect of time on expression, and β~0~ is an intercept term. We can identify genes that vary over time by fitting this model to each one, and then testing whether it's β~t~ is significantly different from zero. To do so, we firt call the `fit_models()` function.  
 ```{r}
 gene_fits <- fit_models(cds = cds_subset, 
-                        model_formula_str = "~embryo.time")
+                        model_formula_str = "~embryo.time", 
+                        expression_family = "quasipoisson", 
+                        reduction_method = "UMAP", 
+                        clean_model = T, 
+                        verbose = T)
 ```
 
 `gene_fits` is a tibble that contains a row for each gene. The `model` column contains generalized linear model objects, each of which aims to explain the expression of a gene across the cells using the equation above.   
 
-The parameter `model_formula_str` should be a string specifying the model formula. The model formulae you use in your tests can include any term that exists as a column in the colData table, including those columns that are added by Monocle in other analysis steps. For example, if you use cluster_cells, you can test for genes that differ between clusters and partitions by using` ~cluster` or `~partition` (respectively) as your model formula. You can also include multiple variables, for example `~embryo.time + batch`, which can be very helpful for subtracting unwanted effects.  
+The parameter `model_formula_str` should be a string specifying the model formula. The model formula you use in your tests can include any term that exists as a column in the `colData` table, including those columns that are added by Monocle in other analysis steps. For example, if you use `cluster_cells`, you can test for genes that differ between clusters and partitions by using` ~cluster` or `~partition` (respectively) as your model formula. You can also include multiple variables, for example `~embryo.time + batch`, which can be very helpful for subtracting unwanted effects.  
 
 Now let's see which of these genes have time-dependent expression. First, we extract a table of coefficients from each model using the `coefficient_table()` function.  
 ```{r}
@@ -127,7 +131,7 @@ As we can see, **all of the gene's likelihood ratio tests are significant**, ind
 
 
 ### Choosing a distribution for modeling gene expression  
-Monocle uses generalized linear models to capture how a gene's expression depends on each variable in the experiment. These models require you to specify a distribution that describes gene expression values. Most studies that use this approach to analyze their gene expression data use the negative binomial distribution, which is often appropriate for sequencing read or UMI count data. The negative binomial is at the core of many packages for RNA-seq analysis, such as DESeq2.  
+Monocle uses generalized linear models to capture how a gene's expression depends on each variable in the experiment. These models require you to specify a distribution that describes gene expression values. Most studies that use this approach to analyze their gene expression data use the negative binomial distribution, which is often appropriate for sequencing read or UMI count data. The negative binomial is at the core of many packages for RNA-seq analysis, such as `DESeq2`.  
 
 Monocle's `fit_models()` supports the negative binomial distribution and several others listed in the table below. The default is the "quasipoisson", which is very similar to the negative binomial. Quasipoisson is a a bit less accurate than the negative binomial but much faster to fit, making it well suited to datasets with thousands of cells.  
 
@@ -148,6 +152,7 @@ The quasi-position distribution doesn't have a real likelihood function, so some
 ### Graph-autocorrelation analysis for comparing clusters  
 In the L2 worm data, we identified a number of clusters that were very distinct as neurons.  
 ```{r}
+# reload the data
 expression_matrix <- readRDS(file = "f:/git/Data/monocle3/cao_l2_expression.rds")
 cell_metadata <- readRDS(file = "f:/git/Data/monocle3/cao_l2_colData.rds")
 gene_metadata <- readRDS(file = "f:/git/Data/monocle3/cao_l2_rowData.rds")
@@ -161,29 +166,28 @@ cds <- new_cell_data_set(
 neurons_cds <- cds[, grepl("neurons", colData(cds)$cao_cell_type, ignore.case = T)]
 
 neurons_cds <- preprocess_cds(cds = neurons_cds, 
-                      num_dim = 50, 
-                      method = "PCA", 
-                      norm_method = "log")
+                              method = "PCA", 
+                              num_dim = 100, 
+                              norm_method = "log")
 
 neurons_cds <- align_cds(cds = neurons_cds, 
-                 preprocess_method = "PCA", 
-                 alignment_group = "plate")
+                         preprocess_method = "PCA", 
+                         alignment_group = "plate")
 
 neurons_cds <- reduce_dimension(cds = neurons_cds, 
-                        max_components = 2, 
-                        reduction_method = "UMAP", 
-                        preprocess_method = "PCA")
+                                max_components = 2, 
+                                reduction_method = "UMAP", 
+                                preprocess_method = "PCA")
 
 neurons_cds <- cluster_cells(cds = neurons_cds, 
                              reduction_method = "UMAP", 
                              k = 20)
 
-plot_cells(cds = neurons_cds, 
-           reduction_method = "UMAP", 
+plot_cells(cds = neurons_cds,  
            color_cells_by = "partition")
 ```
 
-There are many subtypes of neurons, so perhaps the different neuron clusters correspond to different subtypes. To investigate which genes are expressed differentially across the clusters, we could use the regression analysis tools discussed above. However, Monocle provides an alternative way of finding genes that vary between groups of cells in UMAP or t-SNE space. The function graph_test() uses a statistic from spatial autocorrelation analysis called Moran's I, which Cao & Spielmann et al showed to be effective in finding genes that vary in single-cell RNA-seq datasets.  
+There are many subtypes of neurons, so perhaps the different neuron clusters correspond to different subtypes. To investigate which genes are expressed differentially across the clusters, we could use the regression analysis tools discussed above. However, Monocle provides an alternative way of finding genes that vary between groups of cells in UMAP or t-SNE space. The function `graph_test()` uses a statistic from spatial autocorrelation analysis called Moran's I, which Cao & Spielmann et al showed to be effective in finding genes that vary in single-cell RNA-seq datasets.  
 
 run `graph_test()`  
 ```{r}
@@ -200,32 +204,171 @@ Positive values indicate a gene is expressed in a focal region of the UMAP space
 
 
 ### Finding modules of co-regulated genes  
+Once you have a set of genes that vary in some interesting way across the clusters, Monocle provides a means of grouping them into modules. You can call find_gene_modules(), which essentially runs UMAP on the genes (as opposed to the cells) and then groups them into modules using Louvain community analysis  
+```{r}
+gene_module_df <- find_gene_modules(cds = neurons_cds[pr_deg_ids, ], resolution = 1e-2)
+```
+
+The data frame `gene_module_df` contains a row for each gene and identifies the module it belongs to. To see which modules are expressed in which clusters or partitions you can use two different approaches for visualization. The first is just to make a simple table that shows the aggregate expression of all genes in each module across all the clusters. Monocle provides a simple utility function called `aggregate_gene_expression` for this purpose.  
+
+```{r}
+cell_group_df <- tibble::tibble(cell = row.names(colData(neurons_cds)), 
+                                cell_group = partitions(neurons_cds)[colnames(neurons_cds)])
+
+agg_mat <- aggregate_gene_expression(neurons_cds, 
+                                     gene_group_df = gene_module_df, 
+                                     cell_group_df = cell_group_df)
+
+row.names(agg_mat) <- stringr::str_c("Module ", row.names(agg_mat))
+colnames(agg_mat) <- stringr::str_c("Partition ", colnames(agg_mat))
+
+```
+
+
+```{r}
+pdf(file = "module.pdf")
+pheatmap::pheatmap(agg_mat, 
+                   cluster_rows = T, 
+                   cluster_cols = T, 
+                   scale = "column", 
+                   clustering_method = "ward.D2", 
+                   fontsize = 4, 
+                   cellheight = 4)
+dev.off()
+```
 
 
 
+Some modules are highly specific to certain paritions of cells, while others are shared across multiple partitions. Note that `aggregate_gene_expression` can work with arbitrary groupings of cells and genes. You're not limited to looking at modules from `find_gene_modules()`, `clusters()`, and `partitions()`.    
+
+The second way of looking at modules and their expression is to pass `gene_module_df` directly to `plot_cells()`. If there are many modules, it can be hard to see where each one is expressed, so we'll just look at a subset of them.  
+
+```{r}
+plot_cells(cds = neurons_cds, 
+           genes = gene_module_df %>% filter(module %in% c(4, 13,32, 38)), 
+           group_cells_by = "partition", 
+           color_cells_by = "partition", 
+           show_trajectory_graph = F)
+```
+
+
+### Finding genes that changes as a function of pseudotime  
+Identifying the genes that change as cells progress along a trajectory is a core objective of this type of analysis. Knowing the order in which genes go on and off can inform new models of development. For example, Sharon and Chawla et al recently analyzed pseudotime-dependent genes to arrive a whole new model of how islets form in the pancreas.  
+```{r}
+plot_cells(cds = cds, 
+           color_cells_by = "cell.type", 
+           label_groups_by_cluster = F, 
+           label_leaves = F, 
+           label_branch_points = F)
+```
+
+How do we find the genes that are differentially expressed on the different paths through the trajectory? How do we find the ones that are restricted to the beginning of the trajectory? Or excluded from it?  
+
+Once again, we turn to graph_test(), this time passing it neighbor_graph="principal_graph", which tells it to test whether cells at similar positions on the trajectory have correlated expression.  
+
+```{r}
+ciliated_cds_pr_test_res <- graph_test(
+    cds = cds, 
+    neighbor_graph = "principal_graph"
+)
+
+pr_deg_ids <- row.names(subset(ciliated_cds_pr_test_res, q_value < 0.05))
+```
+
+Here are a couple of interesting genes that score as highly significant according to `graph_test()`.  
+```{r}
+plot_cells(cds = cds, 
+           genes = c("hlh-4", "gcy-8", "dac-1", "oig-8"), 
+           show_trajectory_graph = F, 
+           label_cell_groups = F, 
+           label_leaves = F)
+```
+
+As before, we can collect the trajectory-variable genes into modules  
+```{r}
+gene_module_df <- find_gene_modules(
+    cds = cds[pr_deg_ids, ], 
+    resolution = c(0, 10^seq(-6, -1))
+)
+```
+
+plot the aggregated module scores within each group of cell types as annotated by Parker & Zhu et al. 
+```{r}
+cell_group_df <- tibble::tibble(cell = row.names(colData(cds)), 
+                                cell_group = colData(cds)$cell.type)
+
+agg_mat <- aggregate_gene_expression(cds = cds, 
+                                     gene_module_df, 
+                                     cell_group_df = cell_group_df)
+
+pheatmap::pheatmap(agg_mat, 
+                   scale = "column", 
+                   clustering_method = "ward.D2")
+```
+
+
+```{r}
+plot_cells(cds = cds, 
+           genes = gene_module_df %>% filter(module %in% c(27, 10, 7, 30)), 
+           label_cell_groups = F, 
+           show_trajectory_graph = F, 
+           min_expr = 4)
+```
+
+
+Monocle offers another plotting function that can sometimes give a clearer view of a gene's dynamics along a single path. You can select a path with `choose_cells()` or by subsetting the cell data set by cluster, cell type, or other annotation that's restricted to the path. Let's pick one such path, the AFD cells.  
+```{r}
+AFD_genes <- c("gcy-8", "dac-1", "oig-8")
+AFD_lineage_cds <- cds[rowData(cds)$gene_short_name %in% AFD_genes, 
+                       colData(cds)$cell.type %in% c("AFD")]
+```
+
+
+The function `plot_genes_in_pseudotime()` takes a small set of genes and shows you their dynamics as a function of pseudotime.  
+```{r}
+plot_genes_in_pseudotime(cds_subset = AFD_lineage_cds, 
+                         color_cells_by = "embryo.time.bin", 
+                         min_expr = 0.5) +
+    scale_colour_brewer(type = "seq", palette = "YlGn")
+```
 
 
 
+### Analyzing branches in single-cell trajectories  
+Analyzing the genes that are regulated around trajectory branch points often provides insights into the genetic circuits that control cell fate decisions. Monocle can help you drill into a branch point that corresponds to a fate decision in your system. Doing so is as simple as selecting the cells (and branch point) of interest with `choose_cells()`.  
+```{r}
+cds_subset <- choose_cells(cds)
+```
+
+And then calling `graph_test()` on the subset. This will identify genes with interesting patterns of expression that fall only within the region of the trajectory you selected, giving you a more refined and relevant set of genes.  
+
+```{r}
+subset_pr_test_res <- graph_test(cds = cds_subset, 
+                                 neighbor_graph = "principal_graph")
+
+pr_deg_ids <- row.names(subset(subset_pr_test_res, q_value < 0.05))
+```
 
 
+Grouping these genes into modules can reveal fate specific genes or those that are activate immediate prior to or following the branch point.  
+```{r}
+gene_module_df <- find_gene_modules(cds_subset[pr_deg_ids, ], resolution = 0.001)
+```
 
+We will organize the modules by their similarity over the trajectory so it's a litte easier to see which one come out before other  
+```{r}
+agg_mat <- aggregate_gene_expression(cds_subset, 
+                                     gene_module_df)
 
+module_dendro <- hclust(dist(agg_mat))
 
+gene_module_df$module <- factor(gene_module_df$module, levels = row.names(agg_mat)[module_dendro$order])
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+plot_cells(cds_subset, 
+           genes = gene_module_df, 
+           show_trajectory_graph = F, 
+           min_expr = 10)
+```
 
 
 

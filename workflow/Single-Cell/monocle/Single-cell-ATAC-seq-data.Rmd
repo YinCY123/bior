@@ -1,0 +1,72 @@
+---
+title: "Single-cell ATAC-seq data"
+author: "yincy"
+date: "4/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+For users who would like to analyze single-cell ATAC-seq data, we have a companion R package called Cicero. Cicero adapts the analyses of Monocle 3 and also allows the prediction of cis-regulatory interactions from single-cell chromatin accessibility.  
+
+Cicero has been updated to work with Monocle 3! With Monocle 3, Cicero can use improved dimensionality reduction, and work better with large datasets. Most of the Cicero functionality remains unchanged, but there are some key differences, most of which derive from Monocle 3's new cell_data_set object.  
+
+
+# Abstract  
+Cicero is an R package that provides tools for analyzing single-cell chromatin accessibility experiments. The main function of Cicero is to use single-cell chromatin accessibility data to predict cis-regulatory interactions (such as those between enhancers and promoters) in the genome by examining co-accessibility. In addition, Cicero extends Monocle 3 to allow clustering, ordering, and differential accessibility analysis of single cells using chromatin accessibility.  
+
+# Introduction  
+The main purpose of Cicero is to use single-cell chromatin accessibility data to predict regions of the genome that are more likely to be in physical proximity in the nucleus. This can be used to identify putative enhancer-promoter pairs, and to get a sense of the overall stucture of the cis-architecture of a genomic region.  
+
+Because of the sparsity of single-cell data, cell must be aggregated by similarity to allow robust correction for various technical factors in the data.  
+
+Ultimately, Cicero provides a "Cicero co-accessibility" score between -1 and 1 between each pair of accessibile peaks within a user defined distance where a higher number indicates higher co-accessibility.  
+
+In addition, the Cicero package provides an extension toolkit for analyzing single-cell ATAC-seq experiments using the framework provided by Monocle 3. This vignette provides an overview of a single-cell ATAC-Seq analysis workflow with Cicero.  
+
+Cicero can help you perform two main types of analysis:  
+
+- **Constructing and analysing cis-regulatory networks**. Cicero analyzes co-accessibility to identify putative cis-regulatory interactions, and uses various techniques to visualize and analyze them.  
+
+- **General single-cell chromatin accessibility analysis**. Cicero also extends the software package `Monocle 3` to allow for identification of differential accessibility, clustering, visualization, and trajectory reconstruction using single-cell chromatin accessibility data.  
+
+
+# Loading your data  
+## The cell_data_set class  
+```{r}
+library(cicero)
+```
+
+Cicero holds data in objects of the cell_data_set (CDS) class. The class is derived from the Bioconductor SingleCellExperiment class, which provides a common interface familiar to those who have analyzed single-cell experiments with Bioconductor.  
+
+To modify the CDS object to hold chromatin accessibility rather than expression data, Cicero uses peaks as its feature data fData rather than genes or transcripts. Specifically, many Cicero functions require peak information in the form chr1_10390134_10391134. For example, an input fData table might look like this.  
+
+
+## Loading data from a simple sparse matrix format   
+You can access an example dataset derived from the [Mouse sci-ATAC-seq Atlas](http://atlas.gs.washington.edu/mouse-atac/) kidney data.  
+```{r}
+## read in the data
+cicero_data <- read.table(file = "f:/git/Data/monocle3/kidney_data.txt.gz")
+```
+
+For convenience, Cicero includes a function called `make_atac_cds`. This function takes as input a `data.frame` or a path to a file in a sparse matrix format. Specifically, this file should be a tab-delimited text file with three columns. The first column is the peak coordinates in the form "chr10_100013372_100013596", the second column is the cell name, and the third column is an integer that represents the number of reads from that cell overlapping that peak. The file should not have a header line.  
+
+The output of `make_atac_cds` is a valid CDS object ready to be input into downstream Cicero functions.  
+
+```{r}
+input_cds <- make_atac_cds(cicero_data, binarize = TRUE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
