@@ -20,9 +20,8 @@ This tutorial is about bulk RNA-seq data analysis, data is from this paper PMID:
 
 This study examines the expression profiles of basal stem-cell enriched cells (B) and committed luminal cells (L) in mammary gland of virgin, pregnant and lactating mice. Six group are present, with one for each combination of cell type and mouse status. Each group contains two biological replications.  
 
-
 ## Reading data into R
-```{r, echo = FALSE}
+```{r, echo = FALSE, message=FALSE, warning=FALSE}
 library(edgeR)
 library(limma)
 library(gplots)
@@ -83,7 +82,7 @@ count_keep <- countdata[keep, ]
 
 A CPM of 0.5 is used as it corresponds to a count of 10-15 for the library sizes in this data set. If the count is any smaller, it is considered to be very low, indicating that the associated gene is not expressed in that sample.   
 
-A reqiurement for expression in two or more libraries is ued as each group contains two replicates. This ensures that a gene will be retained if it is only expressed in one group. Smaller CPM thresholds are usually appropriate for large libraries. **As a general rule, a good threshold can be chosen by identifying the CPM that corresponds to a count of 10**, which in this case is about 0.5.    
+A reqiurement for expression in two or more libraries is ued as each group contains two replicates. This ensures that a gene will be retained if it is only expressed in one group. Smaller CPM thresholds are usually appropriate for large libraries. **As a general rule, a good threshold can be chosen by identifying the CPM that corresponds to a count of 10**, which in this case is about 0.5.  
 
 You should filter with CPMs rather than filtering on the counts directly, as the latter does not account for difference in library size between samples.  
 ```{r}
@@ -99,7 +98,6 @@ names(y)
 y$counts %>% head()
 y$samples
 ```
-
 
 
 ## Quality Control  
@@ -130,7 +128,7 @@ col_status <- brewer.pal(n = 3, name = "Set1")[as.factor(sampleinfo$Status)]
 ```
 
 ```{r}
-plotMDS(y, col = col_status, pch = c(1, 4)[as.factor(sampleinfo$CellType)],cex = 1.5)
+plotMDS(y, col = col_status, pch = c(1, 4)[as.factor(sampleinfo$CellType)], cex = 1.5)
 legend("topleft", fill = brewer.pal(n = 3, name = "Set1"), legend = unique(sampleinfo$Status))
 legend("topright", legend = as.factor(unique(sampleinfo$CellType)), pch = c(1,4))
 title("Cell Types & Status")
@@ -168,7 +166,7 @@ The normalization factors multiply to unity across all libraries. A normalizatio
 
 The last two samples seems abnormal  
 ```{r}
-par(mfrow = c(2,2))
+par(mfrow = c(2,2)) # row wise layout
 
 # unnormalized data
 plotMD(logcounts, column = 7)
@@ -198,14 +196,12 @@ colnames(design) <- gsub("group", "", colnames(design))
 Once we have our design matrix ready to go, we can perform our voom transformation. Voom will automatically adjust the library sizes using the `norm.factors` already calculated.   
 
 The `voom` functions, which transforms the read counts into logCPMs while taking into account the mean-variance relationship in the data.  
-
 The `voom` transformation uses the experiment design matrix, and produces an `EList` object. We can add `plot=TRUE` to generate a plot of the mean-variance trend. This plot can also tell us if there are any genes that look really variable in our data, and if we’ve filtered the low counts adequately.   
-
 ```{r}
 v <- voom(y, design = design, plot = T)
 ```
 
-Compare lo2CPM before and after lib.size normalization  
+Compare log2CPM before and after lib.size normalization  
 ```{r}
 par(mfrow = c(1, 2))
 boxplot(logcounts, xlab = NULL, ylab = "Logs counts per million", las = 2, main = "Unnormalised logCPM")
@@ -326,10 +322,9 @@ There are two kinds of tests: self-contained and competitive gene set tests.
 
 
 ### Gene ontology testing with goana  
-First, we will perform a gene ontology (GO) enrichment analysis using the goana function in limma. There are approximately 20,000 GO terms, and they are split into three categories: BP (biological process), MF (molecular function) and CC (cellular component). goana uses annotation from the appropriate Bioconductor package and can be used for any of the five species specified (Hs, Mm, Rn, Dm or Pt). goana has an advantage over other methods, such as DAVID, in that there is the option to take into account the gene length bias inherent in RNA-Seq data.  
+First, we will perform a gene ontology (GO) enrichment analysis using the `goana` function in limma. There are approximately 20,000 GO terms, and they are split into three categories: BP (biological process), MF (molecular function) and CC (cellular component). `goana` uses annotation from the appropriate Bioconductor package and can be used for any of the five species specified (Hs, Mm, Rn, Dm or Pt). `goana` has an advantage over other methods, such as DAVID, in that there is the option to take into account the gene length bias inherent in RNA-Seq data.  
 
-Suppose we want to identify GO terms that are over-represented in the basal lactating group compared to the basal pregnancy group. This can be achieved by applying the goana function to the differential expression results of that comparison. goana takes the fit.cont object, the coefficient of interest and the species. The top set of most enriched GO terms can be viewed with the topGO function.  
-
+Suppose we want to identify GO terms that are over-represented in the basal lactating group compared to the basal pregnancy group. This can be achieved by applying the `goana` function to the differential expression results of that comparison. `goana` takes the fit.cont object, the coefficient of interest and the species. The top set of most enriched GO terms can be viewed with the `topGO` function.  
 ```{r}
 go <- limma::goana(de = fit_cont, coef = "B.PregVsLac", species = "Mm")
 topGO(go, n = 10)
@@ -343,18 +338,12 @@ First, we will perform a gene ontology (GO) enrichment analysis using the `goana
 goana has an advantage over other methods, such as DAVID, in that there is the option to take into account the gene length bias inherent in RNA-Seq data.  
     
 Suppose we want to identify GO terms that are over-represented in the basal lactating group compared to the basal pregnancy group. This can be achieved by applying the `goana` function to the differential expression results of that comparison. `goana` takes the fit.cont object, the coefficient of interest and the species.  
-
-
 ```{r}
 m <- match(rownames(fit_cont), seqdata$EntrezGeneID)
 gene_length <- seqdata$Length[m]
 go_length <- goana(fit_cont, coef = "B.PregVsLac", species = "Mm", covariate = gene_length)
 topGO(go_length)
 ```
-
-
-
-
 
 
 
