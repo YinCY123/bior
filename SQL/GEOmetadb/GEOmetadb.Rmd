@@ -23,79 +23,17 @@ con <- dbConnect(drv = RSQLite::SQLite(), "/home/yincy/git/Data/GEOmetadb.sqlite
 ```
 
 ```{r}
-dbListFields(con, "gsm")
+dbListFields(con, "gse")
 ```
 
 ```{r}
 dbReadTable(con, 'gsm') %>% 
-  filter(grepl("retina|retinal|eye", source_name_ch1)) %>% 
-  pull(treatment_protocol_ch1) %>% 
-  unique() %>% 
-  table()
-sample_sources <- dbReadTable(con, 'gsm') %>% 
-    group_by(organism_ch1, source_name_ch1) %>% 
-    summarise(n = n())
-
-sample_sources <- sample_sources %>% arrange(-n)
-
-
-
-sample_sources %>% 
-    fct_collapse(
-        .f = source_name_ch1, 
-        pbmc = grep("blood|pbmc|plasma", sample_sources %>% pull(source_name_ch1), value = T), 
-        brain = grep("cortex|brain|hippocampus|striatum|hypothalamus", sample_sources %>% pull(source_name_ch1), value = T), 
-        tumor = grep("tumor|cancer", sample_sources %>% pull(source_name_ch1), value = T), 
-        ipsc = grep("ipsc", sample_sources %>% pull(source_name_ch1), value = T),
-        spleen = grep("spleen", sample_sources %>% pull(source_name_ch1), value = T), 
-        psoriasis = grep("psoriasis", sample_sources %>% pull(source_name_ch1), value = T), 
-        retina = grep("retina|eye", sample_sources %>% pull(source_name_ch1), value = T), 
-        `bone marrow` = grep("bone marrow", sample_sources %>% pull(source_name_ch1), value = T), 
-        `T cell` = grep("T cell", sample_sources %>% pull(source_name_ch1), value = T), 
-        embryonic = grep("embryonic", sample_sources %>% pull(source_name_ch1), value = T), 
-        liver = grep("liver", sample_sources %>% pull(source_name_ch1), value = T), 
-        lung = grep("lung", sample_sources %>% pull(source_name_ch1), value = T), 
-        breast = grep("breast", sample_sources %>% pull(source_name_ch1), value = T), 
-        kidney = grep("kidney", sample_sources %>% pull(source_name_ch1), value = T), 
-        leukemia = grep("leukemia", sample_sources %>% pull(source_name_ch1), value = T))
-```
-
-```{r}
-tissue_organ <- c("spleen", "brain", "liver", "serum", "blood", 
-                  "cortex", "PBMC", "Psoriasis", "melanoma", "Bone marrow", 
-                  "Hippocampus", "Hippocampus", "striatum", "retina", "lymphoblast", 
-                  "astrocytoma", "Head and neck cancer single cell", "colon", "dendritic cell", "thymus", 
-                  "embryonic", "fetal", "prostate", "testis", "skin", 
-                  "vascular", "lymph node", "muscle", "breast", "renal")
+  filter()
 ```
 
 
 ```{r}
-sample_type <- dbReadTable(con, "gsm") %>% 
-  filter(organism_ch1 %in% c("Homo sapiens", "Mus musculus")) %>% 
-  select(source_name_ch1, organism_ch1, molecule_ch1) %>% 
-  group_by(organism_ch1, source_name_ch1, molecule_ch1) %>% 
-  mutate(n = n()) %>% 
-  arrange(-n) %>% 
-  distinct(source_name_ch1, organism_ch1, molecule_ch1, n, .keep_all = T)
-
-sample_type %>% 
-  filter(grepl("retina", source_name_ch1))
-```
-
-
-
-```{r}
-gsm_table <- dbReadTable(con, "gsm") %>% 
-  filter(grepl(str_c(tissue_organ, collapse = "|"), source_name_ch1, ignore.case = T)) %>% 
-  type_convert()
-
-gsm_table %>% 
-  filter(submission_date >= '2010-01-01', grepl("illumina", label_protocol_ch1, ignore.case = T))
-```
-
-```{r}
-hsa_retina_ngs <- dbGetQuery(conn = con, 
+hsa_ngs <- dbGetQuery(conn = con, 
            statement = "select gse.gse, gsm.title, gse.summary, 
            gse.pubmed_id, gpl.gpl, gpl.technology, gsm.gsm, 
            gsm.source_name_ch1, gsm.organism_ch1, gsm.molecule_ch1
@@ -110,8 +48,8 @@ hsa_retina_ngs <- dbGetQuery(conn = con,
 
 
 ```{r}
-hsa_retina_ngs %>% 
-    filter((grepl("", title) | grepl("retina", summary) | grepl("retina", source_name_ch1)) & technology == "high-throughput sequencing")
+hsa_ngs %>% 
+  filter(grepl("AMD", summary, ignore.case = F), grepl("RCS", source_name_ch1, ignore.case = F))
 ```
 
 
@@ -137,6 +75,13 @@ hsa_retina_amd %>%
 
 
 
+```{r}
+gsm4037987 <- read.table(file = "/home/yincy/git/R-codes/Retina/retina-amd/GSM4037987/GSM4037987_macula_donor_4_enriched_expression.tsv.gz", 
+                         sep = " ", 
+                         header = T)
+gsm4037987 %>% dim()
+gsm4037987 %>% filter(final_cluster_labels == 7)
+```
 
 
 
