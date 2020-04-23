@@ -19,7 +19,7 @@ library(tidyverse)
 
 
 ```{r}
-con <- dbConnect(drv = RSQLite::SQLite(), "/home/yincy/git/Data/GEOmetadb.sqlite")
+con <- dbConnect(drv = RSQLite::SQLite(), "f:/git/Data/GEOmetadb.sqlite")
 ```
 
 ```{r}
@@ -111,7 +111,7 @@ hsa_retina_ngs <- dbGetQuery(conn = con,
 
 ```{r}
 hsa_retina_ngs %>% 
-    filter((grepl("", title) | grepl("retina", summary) | grepl("retina", source_name_ch1)) & technology == "high-throughput sequencing")
+    dplyr::filter(grepl("AMD", title, ignore.case = F) | grepl("AMD", summary, ignore.case = F))
 ```
 
 
