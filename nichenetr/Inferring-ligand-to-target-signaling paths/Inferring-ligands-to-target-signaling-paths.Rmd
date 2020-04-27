@@ -81,7 +81,6 @@ DiagrammeR::render_graph(graph_min_max, layout = "tree")
 ```
 
 
-
 ```{r visualization with igraph, message=FALSE}
 path_to_vis <- bind_rows(active_signaling_network_min_max$sig, active_signaling_network_min_max$gr)
 ```
@@ -105,10 +104,10 @@ par(mar = c(0, 0, 0, 0), bg = "black")
 plot(net, 
      vertex.color = vcol, 
      layout = l * 1.8, 
-     edge.width = E(net)$x * 2, 
+     edge.width = E(net)$weight * 2, 
      edge.arrow.size = 0.8, 
      vertex.label.dist = 0, 
-     vertex.size = 25, 
+     vertex.size = 30, 
      vertex.label.cex = 0.5, 
      vertex.shape = "circle", 
      rescale = F, 
