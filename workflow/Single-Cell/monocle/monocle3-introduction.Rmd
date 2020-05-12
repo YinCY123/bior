@@ -44,34 +44,50 @@ cds <- new_cell_data_set(expression_matrix,
                          cell_metadata, 
                          gene_metadata)
 
-# normalize and pre-process 
-cds <- preprocess_cds(cds, num_dim = 100)
+# normalize and pre-process, remove linear batch effects with residual_model_formula_str parameter  
+# and non linear batch effect with alignment_group parameter 
+cds <- preprocess_cds(cds = cds, num_dim = 100)
 ```
 
 #### remove batch effects  
 You can subtracted unwatched batch effects or align cells from similar (but not exactly) the same conditions using several different methods in Monocle 3.  
 ```{r}
-# remove batch effects with cell alignment  
-cds <- align_cds(cds, alignment_group = "batch")
+# remove continuous or discrete batch effects 
+cds <- align_cds(cds = cds, alignment_group = "batch")
 ```
 
 #### Cluster cells  
 ```{r}
 # reduce the dimensions using UMAP  
-cds <- reduce_dimension(cds)
+cds <- reduce_dimension(cds = cds, 
+                        max_components = 2, 
+                        reduction_method = "UMAP")
 
 # cluster cells  
-cds <- cluster_cells(cds)
+cds <- cluster_cells(cds = cds, 
+                     reduction_method = "UMAP", 
+                     k = 20, 
+                     num_iter = 1000)
 ```
 
 #### Order cells in pseudotime along a trajectory (optional)  
 Now, put your cells in order by how much progress they've made through whatever process you're studying, such as differentiation, reprogramming, or an immune response.  
 ```{r}
 # learn a graph  
-cds <- lean_graph(cds)
+cds <- lean_graph(cds = cds, 
+                  use_partition = TRUE, 
+                  close_loop = TRUE, 
+                  learn_graph_control = NULL, 
+                  verbose = F)
 
 # order cells
-cds <- order_cells(cds)
+cds <- order_cells(cds = cds, 
+                   reduction_method = "UMAP", 
+                   root_pr_nodes = NULL, 
+                   # a vector of starting principal points
+                   # pseudotime will start at these graph nodes
+                   root_cells = NULL, 
+                   verbose = F)
 
 plot_cells(cds)
 ```
@@ -81,14 +97,25 @@ plot_cells(cds)
 Compare groups of cells in myriad ways to find differentially expressed genes, controlling for batch effects and treatments as you like:  
 ```{r}
 # with regression  
-gene_fits <- fit_models(cds, model_formula_str = "~ embryo.time")
+gene_fits <- fit_models(cds = cds, 
+                        model_formula_str = "~ embryo.time", 
+                        expression_family = "negbinomial", 
+                        reduction_method = "UMAP")
+
 fit_coefs <- coefficient_table(gene_fits)
 emb_time_terms <- fit_coefs %>% filter(term == "embryo.time")
 emb_time_terms <- emb_time_terms %>% mutate(q_value = p.adjust(p_value))
 sig_genes <- emb_time_terms %>% filter(q_value < 0.05) %>% pull(gene_short_name)
 
 # with graph autocorrelation  
-pr_test_res <- graph_test(cds, neighbor_graph = "principal_graph", cores = 4)
+pr_test_res <- graph_test(cds = cds, 
+                          neighbor_graph = "principal_graph", 
+                          reduction_method = "UMAP", 
+                          k = 25, 
+                          method = c("Moran_I"), 
+                          alternative = "greater", 
+                          expression_family = "negbinomial")
+
 pr_deg <- ids <- row.names(subset(pr_test_res, q_value < 0.05))
 ```
 
@@ -164,9 +191,9 @@ cds <- new_cell_data_set(
 )
 ```
 
-The output from a number of RNA-Seq pipelines, including Cell Ranger, is already in a sparseMatrix format (e.g. MTX). If so, you should just pass it directly to new_cell_data_set without first converting it to a dense matrix (via as.matrix(), because that may exceed your available memeory.  
+The output from a number of RNA-Seq pipelines, including Cell Ranger, is already in a sparseMatrix format (e.g. MTX). If so, you should just pass it directly to `new_cell_data_set` without first converting it to a dense matrix (via `as.matrix()`, because that may exceed your available memeory.  
 
-Monocle's sparse matrix support is provided by the Matrix package. Other sparse matrix packages, such as slam or SparseM are not supported.  
+Monocle's sparse matrix support is provided by the Matrix package. Other sparse matrix packages, such as `slam` or `SparseM` are not supported.  
 
 
 #### Combining CDS objects  

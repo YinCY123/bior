@@ -17,9 +17,9 @@ Monocle3 uses techniques to do this that are widely accepted in single-cell RNA-
 In this section, you will learn how to cluster cells using Monocle 3. We will demonstrate the main functions used for clustering with the C. elegans data from Cao & Packer et al. This study described how to do single-cell RNA-seq with combinatorial indexing in a protocol called "sci-RNA-seq". Cao & Packer et al. used sci-RNA-seq to produce the first single-cell RNA-seq analysis of a whole animal, so there are many cell types represented in the data.  
 
 ```{r}
-expression_matrix <- readRDS(file = "/home/yincy/git/Data/monocle/cao_l2_expression.rds")
-cell_metadata <- readRDS(file = "/home/yincy/git/Data/monocle/cao_l2_colData.rds")
-gene_metadata <- readRDS(file = "/home/yincy/git/Data/monocle/cao_l2_rowData.rds")
+expression_matrix <- readRDS(file = "f:/git/Data/monocle/cao_l2_expression.rds")
+cell_metadata <- readRDS(file = "f:/git/Data/monocle/cao_l2_colData.rds")
+gene_metadata <- readRDS(file = "f:/git/Data/monocle/cao_l2_rowData.rds")
 
 cds <- new_cell_data_set(
     expression_data = expression_matrix, 
@@ -63,12 +63,10 @@ plot_cells(cds = cds,
            color_cells_by = "cao_cell_type", 
            group_cells_by = "partition",
            show_trajectory_graph = F, 
-           norm_method = "size_only", 
-           cell_size = 0.35, 
-           rasterize = T)
+           label_cell_groups = T)
 ```
  
-Except for a few cases described in a moment, `color_cells_by` can be the name of any column in `colData(cds)`. Note that when `color_cells_by` is a categorical variable, labels are added to the plot, with each label positioned roughly in the middle of all the cells that have that label.  
+Except for a few cases described in a moment, `color_cells_by` can be the name of any column in `colData(cds)`. Note that **when `color_cells_by` is a categorical variable, labels are added to the plot, with each label positioned roughly in the middle of all the cells that have that label**.  
 ```{r}
 plot_cells(cds = cds,
            genes = c("cpna-2", "egl-21", "ram-2", "inos-1"), 
@@ -125,17 +123,17 @@ Grouping cells into clusters is an important step in identifying the cell types 
 ```{r}
 cds <- cluster_cells(
     cds = cds, 
-    k = 10, 
-    reduction_method = "UMAP"
+    k = 20, 
+    reduction_method = "UMAP",
+    num_iter = 1000
 )
 ```
 
 Once you run `cluster_cells()`, the `plot_cells()` function will label each cluster of cells is labeled separately according to how you want to color the cells. For example, the call below colors the cells according to their cell type annotation, and each cluster is labeled according the most common annotation within it.  
-
 ```{r}
 plot_cells(cds = cds, 
            color_cells_by = "partition", 
-           label_cell_groups = F)
+           label_cell_groups = T)
 ```
 
 You can choose to label whole partitions instead of clusters by passing `group_cells_by="partition"`. You can also plot the top 2 labels per cluster by passing `labels_per_group=2` to `plot_cells()`. Finally, you can disable this labeling policy, making `plot_cells()` behave like it did before we called `cluster_cells()`.  
@@ -143,23 +141,26 @@ You can choose to label whole partitions instead of clusters by passing `group_c
 ```{r}
 plot_cells(
     cds = cds, 
+    group_cells_by = "partition", 
     color_cells_by = "cao_cell_type", 
-    label_groups_by_cluster = F
+    label_groups_by_cluster = T, 
+    labels_per_group = 1
 )
 ```
 
 
-### FInd marker genes expressed by each cluster  
+### Find marker genes expressed by each cluster  
 Once cells have been clustered, we can ask what genes makes them different from one another. To do that, start by calling the top_markers() function.  
 ```{r}
 marker_test_res <- top_markers(cds = cds,
                                group_cells_by = "partition", 
                                reference_cells = 1000, 
-                               cores = 6)
+                               marker_sig_test = T, 
+                               reduction_method = "UMAP", 
+                               genes_to_test_per_group = 25)
 ```
 
-The data frame `marker_test_res` contains a number of metrics for how specifically expressed each gene is in each partition. We could group the cells according to cluster, partition, or any categorical variable in colData(cds). You can rank the table according to one or more of the specificity metrics and take the top gene for each cluster.  
-
+The data frame `marker_test_res` contains a number of metrics for how specifically expressed each gene is in each partition. We could group the cells according to cluster, partition, or any categorical variable in `colData(cds)`. You can rank the table according to one or more of the specificity metrics and take the top gene for each cluster.  
 ```{r}
 top_specific_markers <- marker_test_res %>% 
     filter(fraction_expressing >= 0.1) %>% 
@@ -168,17 +169,18 @@ top_specific_markers <- marker_test_res %>%
 
 top_specific_markers %>% 
     pull(gene_short_name) %>% 
-    duplicated() %>% table()
+    duplicated() %>% 
+    table()
 
 top_specific_marker_ids <- top_specific_markers %>% 
-    pull(gene_id) %>% 
+    pull(gene_short_name) %>% 
     unique()
 
 plot_genes_by_group(cds = cds, 
                     markers = top_specific_marker_ids, 
                     group_cells_by = "partition", 
                     ordering_type = "maximal_on_diag", 
-                    max.size = 3)
+                    max.size = 5)
 ```
 
 plot more marker genes  
@@ -261,7 +263,6 @@ plot_cells(cds = cds,
 ```
 
 Partition 7 has some substructure, and it's not obvious just from looking at the output of top_markers() what cell type or types it corresponds to. So we can isolate it with the choose_cells() function for further analysis.  
-
 ```{r}
 cds_subset <- choose_cells(cds = cds)
 ```
