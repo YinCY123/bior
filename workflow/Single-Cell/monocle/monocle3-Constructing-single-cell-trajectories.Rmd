@@ -19,9 +19,9 @@ If there are multiple outcomes for the process, Monocle will reconstruct a "bran
 The workflow for reconstructing trajectories is very similar to the workflow for clustering, but it has a few additional steps. To illustrate the workflow, we will use another C. elegans data set, this one from Packer & Zhu et al. Their study includes a time series analysis of whole developing embyros. We will examine a small subset of the data which includes most of the neurons.  
 
 ```{r}
-expression_matrix <- readRDS(file = "f:/git/Data/monocle3/packer_embryo_expression.rds")
-cell_metadata <- readRDS(file = "f:/git/Data/monocle3/packer_embryo_colData.rds")
-gene_metadata <- readRDS(file = "f:/git/Data/monocle3/packer_embryo_rowData.rds")
+expression_matrix <- readRDS(file = "f:/git/Data/monocle/packer_embryo_expression.rds")
+cell_metadata <- readRDS(file = "f:/git/Data/monocle/packer_embryo_colData.rds")
+gene_metadata <- readRDS(file = "f:/git/Data/monocle/packer_embryo_rowData.rds")
 
 cds <- new_cell_data_set(
     expression_data = expression_matrix, 
@@ -52,7 +52,9 @@ Note that in addition to using the `alignment_group` argument to `align_cds()`, 
 ### Reduce dimensionality and visualize the results  
 Next, we reduce the dimensionality of the data. However, unlike clustering, which works well with both UMAP and t-SNE, here we strongly urge you to use UMAP, the default method.  
 ```{r}
-cds <- reduce_dimension(cds = cds)
+cds <- reduce_dimension(cds = cds, 
+                        max_components = 2, 
+                        reduction_method = "UMAP")
 
 plot_cells(cds = cds, 
            label_groups_by_cluster = F, 
@@ -101,6 +103,8 @@ plot_cells(cds = cds,
            label_branch_points = F)
 ```
 
+This graph will be used in many downstream steps, such as branch analysis and differential expression.  
+
 
 ### Order the cells in pseudotime  
 Once we've learned a graph, we are ready to order the cells according to their progress through the development program. Monocle mearsures this progress in pseudotime.  
@@ -110,20 +114,21 @@ Pseudotime is a measure of how much progress an individual cell has made through
 
 In many biological processes, cells do not progress in perfect synchrony. In single-cell expression studies of processes such as cell differentiation, captured cells might be widely distributed in terms of progress. That is, in a population of cells captured at exactly the same time, some cells might be far along, while others might not yet even have begun the process. This asynchrony creates major problems when you want to understand the sequence of regulatory changes that occur as cells transition from one state to the next. Tracking the expression across cells captured at the same time produces a very compressed sense of a gene's kinetics, and the apparent variability of that gene's expression will be very high.  
 
-By ordering each cell according to its progress along a learned trajectory, Monocle alleviates the problems that arise due to asynchrony. Instead of tracking changes in expression as a function of time, Monocle tracks changes as a function of progress along the trajectory, which we term "pseudotime". Pseudotime is an abstract unit of progress: it's simply the distance between a cell and the start of the trajectory, measured along the shortest path. The trajectory's total length is defined in terms of the total amount of transcriptional change that a cell undergoes as it moves from the starting state to the end state.  
+By ordering each cell according to its progress along a learned trajectory, Monocle alleviates the problems that arise due to asynchrony. Instead of tracking changes in expression as a function of time, Monocle tracks changes as a function of progress along the trajectory, which we term "pseudotime". Pseudotime is an abstract unit of progress: **it's simply the distance between a cell and the start of the trajectory, measured along the shortest path. The trajectory's total length is defined in terms of the total amount of transcriptional change that a cell undergoes as it moves from the starting state to the end state**.  
 
 In order to place the cells in order, we need to tell Monocle where the "beginning" of the biological process is. We do so by choosing regions of the graph that we mark as "roots" of the trajectory. In time series experiments, this can usually be accomplished by finding spots in the UMAP space that are occupied by cells from early time point.  
 ```{r}
 plot_cells(
-    cds, 
+    cds = cds, 
     color_cells_by = "embryo.time.bin", 
     label_cell_groups = F, 
     label_branch_points = T, 
-    graph_label_size = 3
+    graph_label_size = 3, 
+    trajectory_graph_segment_size = 0.3
 )
 ```
 
-The black lines show the structure of the graph. Note that the graph is not fully connected: cells in different partitions are in distinct components of the graph. The circles with numbers in them denote special points within the graph. Each leaf, denoted by light gray circles, corresponds to a different outcome (i.e. cell fate) of the trajectory. Black circles indicate branch nodes, in which cells can travel to one of several outcomes. You can control whether or not these are shown in the plot with the `label_leaves` and `label_branch_points` arguments to `plot_cells`.  
+The black lines show the structure of the graph. Note that the graph is not fully connected: cells in different partitions are in distinct components of the graph. The circles with numbers in them denote special points within the graph. **Each leaf, denoted by light gray circles, corresponds to a different outcome (i.e. cell fate) of the trajectory**. **Black circles indicate branch nodes, in which cells can travel to one of several outcomes**. You can control whether or not these are shown in the plot with the `label_leaves` and `label_branch_points` arguments to `plot_cells`.  
 
 Now that we have a sense of where the early cells fall, we can call `order_cells()`, which will calculate where each cell falls in pseudotime. In order to do so `order_cells()` needs you to specify the root nodes of the trajectory graph. If you don't provide them as an argument, it will launch a graphical user interface for selecting one or more root nodes.  
 
@@ -142,7 +147,7 @@ plot_cells(
 )
 ```
 
-Note that some of the cells are gray. This means they have infinite pseudotime, because they were not reachable from the root nodes that were picked. In general, any cell on a parition that lacks a root node will be assigned an infinite pseudotime. In general, you should choose at least one root per partition.  
+Note that some of the cells are gray. This means they have infinite pseudotime, because they were not reachable from the root nodes that were picked. In general, any cell on a parition that lacks a root node will be assigned an infinite pseudotime. **In general, you should choose at least one root per partition**.  
 
 It's often desirable to specify the root of the trajectory programmatically, rather than manually picking it. The function below does so by first grouping the cells according to which trajectory graph node they are nearest to. Then, it calcuates what fraction of the cells at each node come from the earliest time point. Then it picks the node that is most heavily occupied by early cells and returns that as the root.  
 ```{r}

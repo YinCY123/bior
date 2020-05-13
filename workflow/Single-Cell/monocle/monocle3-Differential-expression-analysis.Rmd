@@ -30,10 +30,7 @@ In this section, we'll explore how to use Monocle to find genes that are differe
 Let's begin with a small set of genes that we know are important in ciliated neurons to demonstrate Monocle's capabilities.  
 
 
-
 ```{r}
-load(file = "monocle3-Constructing-single-cell-trajectorie.RData")
-
 ciliated_genes <- c(
     "che-1", 
     "hlh-17", 

@@ -1,0 +1,47 @@
+---
+title: "AnnotationDbi"
+author: "yincy"
+date: "5/8/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+knitr::include_graphics(path = "figure/AnnotationDbi.PNG")
+```
+
+Gene centric AnnotationDbi packages include:  
+
++ Organism level: org.Mm.eg.db ...  
++ Platform level: hgu133plus2.db ...  
++ Homology leve: hom.Dm.inp.db ...  
++ System-biology level: Go.db ...  
+
+
+Genome centric GenomicFeatures package include  
+
++ Transcriptome level: TxDb.Hsapiens.UCSC.hg19.knownGene ...  
++ Generic genome features: Can generate via GenomicFeatures  
+
+
+One web-based resource access biomart, via the biomaRt package:  
+
++ Query web-based 'biomart' resource for genes, sequence, SNPs, and etc.  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
