@@ -19,7 +19,7 @@ library(tidyverse)
 
 
 ```{r}
-con <- dbConnect(drv = RSQLite::SQLite(), "f:/git/Data/GEOmetadb.sqlite")
+con <- dbConnect(drv = RSQLite::SQLite(), "/home/yincy/git/Data/GEOmetadb.sqlite")
 ```
 
 ```{r}
@@ -48,8 +48,8 @@ hsa_ngs <- dbGetQuery(conn = con,
 
 
 ```{r}
-hsa_retina_ngs %>% 
-    dplyr::filter(grepl("AMD", title, ignore.case = F) | grepl("AMD", summary, ignore.case = F))
+hsa_ngs %>% 
+    dplyr::filter(grepl("AMD", summary, ignore.case = F))
 
 hsa_ngs %>% 
   filter(grepl("AMD", summary, ignore.case = F), grepl("RCS", source_name_ch1, ignore.case = F))
@@ -64,27 +64,10 @@ hsa_retina_ngs %>%
 ```
 
 
-```{r}
-pat <- c("AMD", "RPE")
-hsa_retina_amd <- hsa_retina_ngs %>% 
-  filter(grepl(stringr::str_c(pat, collapse = "|"), summary, ignore.case = F))
-
-hsa_retina_amd %>% 
-  dplyr::filter(grepl("AMD", summary, ignore.case = F)) %>% 
-  select(gse, title, source_name_ch1, molecule_ch1) %>% 
-  pull(gse) %>% 
-  table()
-```
+AMD GSE99248, GSE135092
 
 
 
-```{r}
-gsm4037987 <- read.table(file = "/home/yincy/git/R-codes/Retina/retina-amd/GSM4037987/GSM4037987_macula_donor_4_enriched_expression.tsv.gz", 
-                         sep = " ", 
-                         header = T)
-gsm4037987 %>% dim()
-gsm4037987 %>% filter(final_cluster_labels == 7)
-```
 
 
 
