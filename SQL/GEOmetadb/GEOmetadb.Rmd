@@ -69,9 +69,7 @@ AMD datasets:
 + GSE29801: expression by array, RPEChoroid, retina  
 + SRP107997: ATAC-seq of AMD RPE show decresed chromation accessibility  
 
-```{r}
-GSE125564
-```
+
 
 
 
