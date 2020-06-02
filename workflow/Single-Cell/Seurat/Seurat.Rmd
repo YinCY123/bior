@@ -19,10 +19,6 @@ library(Seurat)
 library(magrittr)
 ```
 
-```{r, echo=FALSE}
-load(file = "/home/yincy/git/Data/Seurat/cluster-tutorial/pbmc.filter.RData")
-```
-
 
 # Object Overview  
 The Seurat object is a class allowing for the storage and manipulation of single-cell data. Previous version of the Seurat object were designed primarily with scRNA-seq data in mind. However, with the development of new technologies allowing for multiple modes of data to be collected from the same set of cells, we have redesigned the Seurat 3.0 object to allow for greater flexibility to work with all these data types in a cohesive framework.  
@@ -81,7 +77,7 @@ GetAssayData(object = pbmc, slot = "data") %>% .[1:5, 1:5]
 
 Cell-level meta data can be accessed with the single `[` extract operator or using the $ sigil.   
 
-Pulling with the `$` sigil means only one bit of meta data can be pulled at a time, though tab-autocompletion has been enabled for it, making it ideal for interactive use.   
+Pulling with the `$` sign means only one bit of meta data can be pulled at a time, though tab-autocompletion has been enabled for it, making it ideal for interactive use.   
 
 Adding cell-level meta data can be set using the single `[` extract operator as well, or by using `AddMetaData`.  
 
@@ -413,7 +409,7 @@ Loadings(object = pbmc, reduction = "pca", projected = TRUE)
 
 ```{r}
 # FetchData can pull anything from expression matrices, cell embeddings, or metadata
-FetchData(object = pbmc, vars = c("PC_1", "percent.mito", "MS4A1"))
+FetchData(object = pbmc, vars = c("PC_1", "percent.mt", "MS4A1"))
 ```
 
 
@@ -432,16 +428,26 @@ FeatureScatter(object = pbmc, feature1 = "MS4A1", feature2 = "PC_1")
 FeatureScatter(object = pbmc, feature1 = "MS4A1", feature2 = "CD3D")
 
 # Scatter plot across individual features, repleaces CellPlot
-CellScatter(object = pbmc, cell1 = "AGTCTACTAGGGTG", cell2 = "CACAGATGGTTTCT")
+CellScatter(object = pbmc, 
+            cell1 = colnames(pbmc) %>% sample(size = 1), 
+            cell2 = colnames(pbmc) %>% sample(size = 1))
 
 VariableFeaturePlot(object = pbmc)
 
 # Violin and Ridge plots
-VlnPlot(object = pbmc, features = c("LYZ", "CCL5", "IL32"))
-RidgePlot(object = pbmc, feature = c("LYZ", "CCL5", "IL32"))
+VlnPlot(object = pbmc, 
+        features = c("LYZ", "CCL5", "IL32"))
+
+RidgePlot(object = pbmc, 
+          feature = c("LYZ", "CCL5", "IL32"), #anything can be retreived by FetchData
+          idents = Idents(pbmc)[0:3])
 
 # Heatmaps
-DoHeatmap(object = pbmc, features = heatmap_markers)
+## single cell feature expression heatmap 
+DoHeatmap(object = pbmc, 
+          features = VariableFeatures(pbmc) %>% sample(size = 10))
+
+## Dimensional reduction heatmap
 DimHeatmap(object = pbmc, reduction = "pca", cells = 200)
 
 # New things to try!  Note that plotting functions now return ggplot2 objects, so you can add themes, titles, and options

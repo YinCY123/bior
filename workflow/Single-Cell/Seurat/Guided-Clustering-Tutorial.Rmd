@@ -17,8 +17,8 @@ library(tidyverse)
 
 ## Setup the Seurat Object  
 ```{r}
-pbmc.data <- Read10X(data.dir = "/home/yincy/git/Data/Seurat/filtered_gene_bc_matrices/hg19/")
-pbmc <- CreateSeuratObject(counts = pbmc.data, project = "pbmc3k", min.cells = 3, min.features = 200)
+data("pbmc3k")
+pbmc <- pbmc3k
 ```
 
 
@@ -51,7 +51,7 @@ VlnPlot(pbmc, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3
 ```
 
 
-FeatureScatter is typically used to visualize feature-feature relationships, but can be used for anything calculated by the object  
+FeatureScatter is typically used to *visualize feature-feature relationships*, but can be used for anything calculated by the object  
 ```{r}
 plot1 <- FeatureScatter(object = pbmc, feature1 = "nCount_RNA", feature2 = "percent.mt")
 plot2 <- FeatureScatter(object = pbmc, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
@@ -68,13 +68,17 @@ pbmc <- subset(pbmc, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent
 After removing unwanted cells from the dataset, the next step is to normalize the data. By default, we employ a global-scaling normalization method “LogNormalize” that normalizes the feature expression measurements for each cell by the total expression, multiplies this by a scale factor (10,000 by default), and log-transforms the result.  
 
 ```{r}
-pbmc <- NormalizeData(object = pbmc, normalization.method = "LogNormalize", scale.factor = 10000)
+pbmc <- NormalizeData(object = pbmc, 
+                      normalization.method = "LogNormalize", 
+                      scale.factor = 10000)
 ```
 
 
 ### Identification of highly variable features (feature selection)  
 ```{r}
-pbmc <- FindVariableFeatures(object = pbmc, selection.method = "vst", nfeatures = 2000)
+pbmc <- FindVariableFeatures(object = pbmc, 
+                             selection.method = "vst", 
+                             nfeatures = 2000)
 ```
 
 
@@ -117,7 +121,8 @@ pbmc <- ScaleData(pbmc, features = all.genes)
 Next we perform PCA on the scaled data. By default, only the previously determined variable features are used as input, but can be defined using features argument if you wish to choose a different subset.  
 
 ```{r}
-pbmc <- RunPCA(object = pbmc, features = VariableFeatures(object = pbmc))
+pbmc <- RunPCA(object = pbmc, 
+               features = VariableFeatures(object = pbmc))
 ```
 
 
@@ -154,7 +159,12 @@ ElbowPlot(object = pbmc, ndims = 20)
 ```
 
 
-Identifying the true dimensionality of a dataset – can be challenging/uncertain for the user. We therefore suggest these three approaches to consider. The first is more supervised, exploring PCs to determine relevant sources of heterogeneity, and could be used in conjunction with GSEA for example. The second implements a statistical test based on a random null model, but is time-consuming for large datasets, and may not return a clear PC cutoff. The third is a heuristic that is commonly used, and can be calculated instantly. In this example, all three approaches yielded similar results, but we might have been justified in choosing anything between PC 7-12 as a cutoff.  
+
+Identifying the true dimensionality of a dataset – can be challenging/uncertain for the user. We therefore suggest these three approaches to consider. The first is more supervised, exploring PCs to determine relevant sources of heterogeneity, and could be used in conjunction with GSEA for example.  
+
+The second implements a statistical test based on a random null model, but is time-consuming for large datasets, and may not return a clear PC cutoff.   
+
+The third is a heuristic that is commonly used, and can be calculated instantly. In this example, all three approaches yielded similar results, but we might have been justified in choosing anything between PC 7-12 as a cutoff.  
 
 
 We chose 10 here, but encourage users to consider the following:  
@@ -164,7 +174,6 @@ We chose 10 here, but encourage users to consider the following:
 - We encourage users to repeat downstream analyses with a different number of PCs (10, 15, or even 50!). As you will observe, the results often do not differ dramatically.  
 
 - We advise users to err on the higher side when choosing this parameter. For example, performing downstream analyses with only 5 PCs does signifcanltly and adversely affect results.  
-
 
 ### Cluster the cells  
 ```{r}
