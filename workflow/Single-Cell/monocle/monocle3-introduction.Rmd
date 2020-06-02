@@ -39,7 +39,7 @@ knitr::include_graphics(path = "figures/monocle-workflow.png")
 
 # quik workflow  
 #### store data into monocle 3's main class `cell_data_set`  
-```{r}
+```
 cds <- new_cell_data_set(expression_matrix, 
                          cell_metadata, 
                          gene_metadata)
@@ -51,13 +51,13 @@ cds <- preprocess_cds(cds = cds, num_dim = 100)
 
 #### remove batch effects  
 You can subtracted unwatched batch effects or align cells from similar (but not exactly) the same conditions using several different methods in Monocle 3.  
-```{r}
+```
 # remove continuous or discrete batch effects 
 cds <- align_cds(cds = cds, alignment_group = "batch")
 ```
 
 #### Cluster cells  
-```{r}
+```
 # reduce the dimensions using UMAP  
 cds <- reduce_dimension(cds = cds, 
                         max_components = 2, 
@@ -72,7 +72,7 @@ cds <- cluster_cells(cds = cds,
 
 #### Order cells in pseudotime along a trajectory (optional)  
 Now, put your cells in order by how much progress they've made through whatever process you're studying, such as differentiation, reprogramming, or an immune response.  
-```{r}
+```
 # learn a graph  
 cds <- lean_graph(cds = cds, 
                   use_partition = TRUE, 
@@ -95,7 +95,7 @@ plot_cells(cds)
 
 #### Perform differential expression analysis (optional)  
 Compare groups of cells in myriad ways to find differentially expressed genes, controlling for batch effects and treatments as you like:  
-```{r}
+```
 # with regression  
 gene_fits <- fit_models(cds = cds, 
                         model_formula_str = "~ embryo.time", 
