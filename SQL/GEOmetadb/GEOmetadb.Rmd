@@ -19,11 +19,11 @@ library(tidyverse)
 
 
 ```{r}
-con <- dbConnect(drv = RSQLite::SQLite(), "/home/yincy/git/Data/GEOmetadb.sqlite")
+con <- dbConnect(drv = RSQLite::SQLite(), "f:/git/Data/GEOmetadb.sqlite")
 ```
 
 ```{r}
-dbListFields(con, "gse")
+dbListFields(con, "gpl")
 ```
 
 ```{r}
@@ -43,16 +43,13 @@ hsa_ngs <- dbGetQuery(conn = con,
            join gse_gpl on gse_gpl.gse=gse.gse 
            join gpl on gse_gpl.gpl=gpl.gpl 
            where gsm.organism_ch1 = 'Homo sapiens' 
-           and gpl.technology='high-throughput sequencing'")
-```
+           and technology = 'high-throughput sequencing'")
+``` 
 
 
 ```{r}
 hsa_ngs %>% 
-    dplyr::filter(grepl("AMD", summary, ignore.case = F))
-
-hsa_ngs %>% 
-  filter(grepl("AMD", summary, ignore.case = F), grepl("RCS", source_name_ch1, ignore.case = F))
+    dplyr::filter(grepl("(AMD)", summary, ignore.case = F))
 ```
 
 
@@ -64,10 +61,17 @@ hsa_retina_ngs %>%
 ```
 
 
-AMD GSE99248, GSE135092
+AMD datasets: 
++ GSE99248: 
++ GSE135092: late stage of amd is not specified  
++ GSE12556: RPE expression by array   
++ GSE146887: neovascular membrane in AMD patients (newly generated invision vascular)  
++ GSE29801: expression by array, RPEChoroid, retina  
++ SRP107997: ATAC-seq of AMD RPE show decresed chromation accessibility  
 
-
-
+```{r}
+GSE125564
+```
 
 
 
