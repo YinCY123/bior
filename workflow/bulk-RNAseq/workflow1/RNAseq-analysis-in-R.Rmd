@@ -224,7 +224,7 @@ Since we are interested in differences between groups, we need to specify which 
 
 Here, we are interested in knowing which genes are differentially expressed between the pregnant and lactating group in the basal cells. This is done by defining the null hypothesis as basal.pregnant - basal.lactate = 0 for each gene.   
 
->Note that the group names must exactly match the column names of the design matrix.  
+> Note that the group names must exactly match the column names of the design matrix.  
 
 ```{r}
 colnames(design)
