@@ -62,14 +62,45 @@ hsa_retina_ngs %>%
 
 
 AMD datasets: 
-+ GSE99248: 
++ GSE99248: RPE-Choriod
 + GSE135092: late stage of amd is not specified  
-+ GSE12556: RPE expression by array   
++ GSE125564: RPE expression by array   
 + GSE146887: neovascular membrane in AMD patients (newly generated invision vascular)  
 + GSE29801: expression by array, RPEChoroid, retina  
-+ SRP107997: ATAC-seq of AMD RPE show decresed chromation accessibility  
++ SRP107997 (GSE99287): ATAC-seq of AMD RPE show decresed chromation accessibility  
 
 
+```{r}
+GSE99248_sens <- read.table(file = "/home/yincy/git/Data/AMD-related/GSE99248/GSE99248_master_list_of_gene_counts_MIN.sense.AMD_RNASeq.txt.gz", 
+                            sep = "\t", 
+                            header = T)
+
+GSE99248_anti <- read.table(file = "/home/yincy/git/Data/AMD-related/GSE99248/GSE99248_master_list_of_gene_counts_MIN.antisense.AMD_RNASeq.txt.gz", 
+                            sep = "\t", 
+                            header = T)
+
+GSE99248_sens %>% dim()
+GSE99248_sens %>% .[1:5, 1:5]
+GSE99248_anti %>% 
+  select(id, geneSymbol, geneCoordinate, TR.18, TR.20, TR.32, TR02, TR06, TR08, TR10, TR12, TR14, TR16) %>% 
+  filter(geneSymbol %in% amd)
+```
+
+```{r}
+GSE99248_sens %>% 
+  select(id, geneSymbol, geneCoordinate, TR.18, TR.20, TR.32, TR02, TR06, TR08, TR10, TR12, TR14, TR16) %>% 
+  filter(geneSymbol %in% amd)
+```
+
+
+```{r}
+library(GEOquery)
+GSE99248_meta <- getGEO(GEO = "GSE99248")
+
+RPE <- GSE99248_meta[[1]] %>% as.data.frame() %>% 
+  dplyr::filter(grepl("Normal|Early", eye.histological.phenotype.ch1), grepl("RPE", source_name_ch1)) %>% 
+  dplyr::pull(title)
+```
 
 
 
