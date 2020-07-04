@@ -21,19 +21,42 @@ The main purpose of the Rsamtools package is to import BAM files into R. Rsamtoo
 
 
 ## Input  
+The essential capabiblity provided by `Rsamtools` is `BAM` input. This is accomplished with the `scanBam` function. `scanBam` takes as input the name of the BAM file to be parsed. In addition, the param argument determines which genomic coordinates of the BAM file, and what components of each record, will be input.  
+
+Rparam is an instance of the ScanBamParam class. To create a param object, call `ScanBamParam`.  
+
+Here we create a param object to extract reads aligned to three distinct ranges (one on seq1, two on seq2). From each of read in those ranges, we specify that we would like to extract the reference name (rname, e.g., seq1), strand, alignment position, query width, and query sequence.  
+
 ```{r}
 which <- IRangesList(seq1 = IRanges(start = 1000, end = 2000),
                      seq2 = IRanges(start = c(100, 1000), end =  c(1000, 2000)))
 
+flag <- scanBamFlag(isPaired = T, 
+                    isProperPair = T, 
+                    isUnmappedQuery = F, 
+                    hasUnmappedMate = T, 
+                    isMinusStrand = NA, 
+                    isMateMinusStrand = NA, 
+                    isFirstMateRead = NA, 
+                    isSecondMateRead = NA, 
+                    isNotPrimaryRead = F, 
+                    isDuplicate = F, 
+                    isNotPassingQualityControls = F, 
+                    isSupplementaryAlignment = F)
+
+scanBamWhat() #what fields is available 
+# help page on scanBam(), describe of each field
 what <- c("rname", "strand", "pos", "qwidth", "seq")
-param <- ScanBamParam(which = which, what = what)
+param <- ScanBamParam(which = which, 
+                      what = what, 
+                      simpleCigar = F, 
+                      reverseComplement = F)
 ```
 
 ```{r}
 bamFile <- system.file("extdata", "ex1.bam", package = "Rsamtools")
 bam <- scanBam(file = bamFile, param = param)
 ```
-
 Like `scan` , `scanBam` returns a list of values. Each element of the list corresponds to a range specified by the which argument to `ScanBamParam.`  
 
 ```{r}
@@ -57,6 +80,20 @@ names(bam[[1]])
 ```{r}
 sapply(bam[[1]], class)
 ```
+
+```{r}
+bam_unlist <- mapply(c, bam[[1]], bam[[2]], bam[[3]])
+sapply(bam_unlist, class)
+
+DataFrame(bam_unlist)
+```
+
+
+
+```{r}
+lapply(bam, FUN = function(x)lapply(x, c))
+```
+
 
 A paradigm for collapsing the list-of-lists into a single list is  
 ```{r}
