@@ -11,6 +11,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r load package, message=FALSE}
 library(Biostrings)
+library(BSgenome)
+library(BSgenome.Hsapiens.UCSC.hg38)
 ```
 
 
@@ -159,13 +161,6 @@ consensusMatrix(x = dna2, as.prob = TRUE)
 
 
 # Matching  
-```{r}
-library(Biostrings)
-library(BSgenome)
-library(BSgenome.Scerevisiae.UCSC.sacCer2)
-```
-
-
 ## Pattern matching  
 We often want to find patterns in (long) sequences. `Biostrings` have a number of functions for doing so  
 
@@ -182,16 +177,20 @@ In many ways, these functions are similar to using short read aligners like Bowt
 ```{r}
 dnaseq <- DNAString(x = "CCACACCC")
 matchPattern(pattern = dnaseq, 
-             subject = Scerevisiae$chrI,
+             subject = BSgenome.Hsapiens.UCSC.hg38$chrY,
              max.mismatch = 1)
 ```
 note how the return object of matchPattern looks like an IRanges but is really something called a Views.  
 
+```{r}
+for(i in seq_along(kozak)){
+    BSgenome.Hsapiens.UCSC.hg38$chrY[start(kozak)[i]:(start(kozak)[i] + 10)] %>% print
+}
+```
 
 ```{r}
-countPattern(pattern = dnaseq, 
-             subject = Scerevisiae$chrI,
-             max.mismatch = 1)
+countPattern(pattern = "GCCACCATGG", 
+             subject = BSgenome.Hsapiens.UCSC.hg38$chrY)
 ```
 
 
@@ -200,7 +199,7 @@ vmatchPattern(pattern = dnaseq, subject = Scerevisiae)
 ```
 
 ```{r}
-vcountPattern(pattern = dnaseq, subject = Scerevisiae)
+vcountPattern(pattern = dnaseq, subject = BSgenome.Hsapiens.UCSC.hg38)
 ```
 
 First, note how the return object of `vmatchPattern` is a `GRanges` given the exact information of where the string matches.  
@@ -404,7 +403,10 @@ The pairwise sequence alignment types, substitution scoring schemes, and gap pen
 - **Pairwise Sequence Alignment Types**:  The type of pairwise sequence alignment determines the substring ranges to apply the substitution scoring and gap penalty schemes.  
 
 For the three primary (global, local, overlap) and two derivative (subject overlap, pattern overlap) pairwise sequence alignment types, **the resulting substring ranges** are as follows.  
-[](./alignment_type.PNG)
+```{r}
+knitr::include_graphics("alignment_type.PNG")
+```
+   
 
 - **Substitution Scoring Schemes**:  The substitution scoring scheme sets the values for the aligned character pairings within the substring ranges determined by the type of pairwise sequence alignment. This scoring scheme can be fixed for character pairings or quality-dependent for character pairings.  
 
@@ -477,6 +479,18 @@ pairwiseAlignment(pattern = "syzygy",
 pairwiseAlignment(pattern = "syzygy",
                   subject = "zyzzyx",
                   type = "overlap")
+```
+
+```{r}
+pairwiseAlignment(pattern = "syzygy",
+                  subject = "zyzzyx",
+                  type = "global-local")
+```
+
+```{r}
+pairwiseAlignment(pattern = "syzygy",
+                  subject = "zyzzyx",
+                  type = "local-global")
 ```
 
 
