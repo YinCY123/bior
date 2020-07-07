@@ -53,6 +53,7 @@ param <- ScanBamParam(which = which,
                       reverseComplement = F)
 ```
 
+
 ```{r}
 bamFile <- system.file("extdata", "ex1.bam", package = "Rsamtools")
 bam <- scanBam(file = bamFile, param = param)
