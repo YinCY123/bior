@@ -1,0 +1,117 @@
+---
+title: "rtracklayer"
+author: "yincy"
+date: "11/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, load packages, message=FALSE}
+library(rtracklayer)
+library(AnnotationHub)
+library(Rsamtools)
+```
+
+
+## Overview  
+The `rtracklayer` package interfaces to UCSC Genome Browser. It contains functions for importing and exporting data to this browser. This includes functionality for parsing file formats associated the UCSC Genome Browser such as BED, Wig, BigBed and BigWig.  
+
+
+## The Import function  
+The function to parse data formats is `import`. This function has a `format` argument taking values such as `BED` or `BigWig`.  
+
+Note that there is a help page for the general `import` function, but there are also file format specific help pages. The easiest way to get to these help pages is to look for `XXFile` with `XX` bing the format.  
+```{r}
+?import
+?BigWigFile
+```
+
+
+## BED files  
+Most BED files are small and can be read as a single object. The output of `import(format = "BED)` is a `GRanges`.  
+
+You cna specify `genome` (for example `hg19`) and the function will try to make an effort to populated the `seqinfo` of the `GRanges`.  
+
+You can also use the `which` argument to selectively parse a subset of the file which overlaps a `GRanges`. This becomes much more efficient if the file has been tabix-indexed.  
+
+
+## BigWig files  
+BigWig files typically store whole-genome coverage vectors (or at least whole-genome data). For this reason, the R representation of a BigWig file is usually quite big, so it might be necessary to read it into R in small chunks.
+
+As for BED files, `import(format="BigWig")` supports a `which` argument which is a `GRanges`. It output data type is a `GRanges` per default, but using the `as` agurment you can have `as="Rle"` and a few other options.  
+
+The `import(format = "BigWig")` does not support a `genome` argument.  
+
+
+## Other file formats  
+- GFF  
+- TwoBit  
+- Wig  
+- bedGRaph  
+
+
+## Example  
+```{r}
+ahub <- AnnotationHub()
+table(ahub$rdataclass)
+```
+
+
+```{r}
+ahub.gr <- subset(ahub, rdataclass == "GRanges" & species == "Homo sapiens")
+gr <- ahub.gr[[1]]
+```
+
+```{r}
+seqinfo(gr)
+```
+
+
+
+```{r}
+ahub.bw <- subset(ahub, rdataclass == "BigWigFile" & species == "Homo sapiens")
+```
+
+```{r}
+bw <- ahub.bw[[1]]
+```
+
+This returns us a file name, ready for use by `import`  
+```{r}
+gr1 <- gr[1:3]
+```
+
+
+
+## LiftOver  
+LiftOver is a popular tool from UCSC Genome Browser for converting between different genome versions. The `rtracklayer` package also exposes this function through the `liftOver`. To use `liftOver` you need a so-called 'chain' file describing to convert from one genome to another. This can be obtained by hand from UCSC, or directly from `AnnotationHub`.  
+
+```{r}
+ahub.chain <- subset(ahub, rdataclass == "ChainFile" & species == "Homo sapiens")
+query(x = ahub.chain, pattern = c("hg18", "hg19"))
+```
+
+
+
+
+
+
+## Importing directly from UCSC  
+Using `rtracklayer` you can import tables and tracks directly from the UCSC Genome Browser. However, it is now possible to get a lot (all?) of this data from `AnnotationHub` and this later package seems friendlier.  
+
+It is possible that not all tracks / tables and/or all information from the different track / tables from UCSC are exposed in `AnnotationHub`.  
+
+
+## Tabix indexing  
+
+
+
+
+
+
+
+
+
