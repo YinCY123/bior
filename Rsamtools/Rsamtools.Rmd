@@ -21,19 +21,42 @@ The main purpose of the Rsamtools package is to import BAM files into R. Rsamtoo
 
 
 ## Input  
+The essential capabiblity provided by `Rsamtools` is `BAM` input. This is accomplished with the `scanBam` function. `scanBam` takes as input the name of the BAM file to be parsed. In addition, the param argument determines which genomic coordinates of the BAM file, and what components of each record, will be input.  
+
+Rparam is an instance of the ScanBamParam class. To create a param object, call `ScanBamParam`.  
+
+Here we create a param object to extract reads aligned to three distinct ranges (one on seq1, two on seq2). From each of read in those ranges, we specify that we would like to extract the reference name (rname, e.g., seq1), strand, alignment position, query width, and query sequence.  
+
 ```{r}
 which <- IRangesList(seq1 = IRanges(start = 1000, end = 2000),
                      seq2 = IRanges(start = c(100, 1000), end =  c(1000, 2000)))
 
+flag <- scanBamFlag(isPaired = T, 
+                    isProperPair = T, 
+                    isUnmappedQuery = F, 
+                    hasUnmappedMate = T, 
+                    isMinusStrand = NA, 
+                    isMateMinusStrand = NA, 
+                    isFirstMateRead = NA, 
+                    isSecondMateRead = NA, 
+                    isNotPrimaryRead = F, 
+                    isDuplicate = F, 
+                    isNotPassingQualityControls = F, 
+                    isSupplementaryAlignment = F)
+
+scanBamWhat() #what fields is available 
+# help page on scanBam(), describe of each field
 what <- c("rname", "strand", "pos", "qwidth", "seq")
-param <- ScanBamParam(which = which, what = what)
+param <- ScanBamParam(which = which, 
+                      what = what, 
+                      simpleCigar = F, 
+                      reverseComplement = F)
 ```
 
 ```{r}
 bamFile <- system.file("extdata", "ex1.bam", package = "Rsamtools")
 bam <- scanBam(file = bamFile, param = param)
 ```
-
 Like `scan` , `scanBam` returns a list of values. Each element of the list corresponds to a range specified by the which argument to `ScanBamParam.`  
 
 ```{r}
@@ -55,8 +78,30 @@ names(bam[[1]])
 ```
 
 ```{r}
-sapply(bam[[1]], class)
+sapply(bam[[1]], as.character) %>% head()
 ```
+
+
+```{r}
+bam_unlist <- rbind(sapply(bam[[1]], as.character), sapply(bam[[2]], as.character), sapply(bam[[3]], as.character))
+sapply(bam_unlist, class)
+```
+
+
+```{r}
+.unlist <- function(bam){
+  y <<- NULL
+  
+  for(i in length(bam)){
+    x <- sapply(bam[[i]], as.character)
+    y <- rbind(y, x)
+  }
+  return(y)
+}
+
+DataFrame(.unlist(bam)) %>% dim()
+```
+
 
 A paradigm for collapsing the list-of-lists into a single list is  
 ```{r}
@@ -85,7 +130,7 @@ list.files(path = dirname(bamFile), pattern = "ex1.bam(.bai)?")
 
 Indexing provides two significant benefits:  
 
-- First, an index allows a BAM file to be efficiently accessed by range. A corollary is that providing a which argument to ScanBamParam requires an index.   
+- First, an index allows a BAM file to be efficiently accessed by range. A corollary is that providing a which argument to `ScanBamParam` requires an index.   
 
 - Second, coordinates for extracting information from a BAM file can be derived from the index, so a portion of a remote BAM file can be retrieved with local access only to the index.  
 
@@ -123,6 +168,11 @@ cvg
 
 
 ## Views  
+```{r}
+library(KEGG.db)
+kid <- revmap(x = KEGGPATHID2NAME)[["Caffeine metabolism"]]
+egid <- KEGGPATHID2EXTID[[sprintf("hsa%s", kid)]]
+```
 
 
 
