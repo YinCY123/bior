@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(Biostrings)
 library(BSgenome)
 library(BSgenome.Hsapiens.UCSC.hg38)
+library(magrittr)
 ```
 
 
@@ -524,7 +525,8 @@ pa2 <- pairwiseAlignment(pattern = c("succeed", "precede"),
                          substitutionMatrix = submat,
                          gapOpening = 0, 
                          gapExtension = 1)
-class(pattern(pa2))
+class(pa2)
+pattern(pa2) %>% class()
 ```
 
 
@@ -572,7 +574,7 @@ aligned(pa2)
 ```
 
 ```{r}
-consensusMatrix(pa2)
+consensusMatrix(pa2, as.prob = T)
 ```
 
 ```{r}
@@ -598,6 +600,152 @@ subject(pa2)
 
 
 ## Edit Distances  
+```{r}
+pairwiseAlignment(pattern = "syzygy", 
+                  subject = "zyzzyx")
+```
+
+
+```{r}
+stringDist(x = c('a' = "zyzzyx", "b" = "syzygy", 'c' = "zyzzyx"), 
+           ignoreCase = T, 
+           diag = T, 
+           upper = F)
+```
+
+
+```{r}
+data("BLOSUM50")
+BLOSUM50 %>% .[1:5, 1:5]
+```
+
+```{r}
+nwdemo <- pairwiseAlignment(pattern = AAString(x = "PAWHEAE"), 
+                            subject = AAString("HEAGAWGHEE"),
+                            substitutionMatrix = BLOSUM50, 
+                            gapOpening = 0, 
+                            gapExtension = 8)
+
+nwdemo
+```
+
+`compareStrings` combines two equal-length strings that are assumed to be aligned to be aligned into a single characater string containing that replaces mismatches with '?', insertions with '+', and deletions with '-'.  
+```{r}
+compareStrings(nwdemo)
+```
+
+```{r}
+pid(nwdemo) # percent Sequence identity
+```
+
+```{r}
+data("BLOSUM62")
+pairwiseAlignment(pattern = AAString("PAWHEAE"), 
+                  subject = AAString("HEAGAWGHEE"), 
+                  substitutionMatrix = BLOSUM62, 
+                  gapOpening = 12, 
+                  gapExtension = 4)
+```
+
+
+## Removing Adapters from Sequence Reads  
+```{r}
+simulationReads <- function(N, adapter, experiment, substitutionRate = 0.01, gapRate = 0.001){
+    chars <- strsplit(x = as.character(adapter), split = "")[[1]]
+    sapply(seq_len(N), function(i, experiment, substitutionRate, gapRate){
+        width <- experiment[["width"]][i]
+        side <- experiment[["side"]][i]
+        randomLetters <- function(n){
+            sample(DNA_ALPHABET[1:4], n, replace = T)
+        }
+        randomLettersWithEmpty <- function(n){
+            sample(c("", DNA_ALPHABET[1:4]), n, replace = T, prob = c(1 - gapRate, rep(gapRate/4, 4)))
+        }
+        nChars <- length(chars)
+        
+        value <- paste(ifelse(rbinom(nChars, 1, substitutionRate), randomLetters(nChars), chars), 
+                       randomLettersWithEmpty(nChars), sep = "", collapse = "")
+        
+        if(side){
+            value <- paste(c(randomLetters(36 - width), substring(value, 1, width)), sep = "", collapse = "")
+        }else{
+            value <- paste(c(substring(value, 37 - width, 36), randomLetters(36 - width)), sep = "", collapse = "")
+        }
+        
+        value
+    }, 
+    experiment = experiment, substitutionRate = substitutionRate, gapRate = gapRate)
+}
+
+adapter <- DNAString("GATCGGAAGAGCTCGTATGCCGTCTTCTGCTTGAAA")
+
+set.seed(123)
+N <- 1000
+
+experiemnt <- list(side = rbinom(N, 1, 0.5), width = sample(0:36, N, replace = T))
+table(experiemnt[["side"]], experiemnt[["width"]])
+```
+
+```{r}
+adapterStrings <- simulationReads(N, adapter, experiemnt, substitutionRate = 0.01, gapRate = 0.001)
+adapterStrings <- DNAStringSet(adapterStrings)
+```
+
+```{r}
+M <- 5000
+randomStrings <- apply(matrix(sample(DNA_ALPHABET[1:4], 36*M, replace = T), 
+                              nrow = M), 
+                       MARGIN = 1, 
+                       FUN = paste, 
+                       collapse = "")
+
+randomStrings <- DNAStringSet(x = randomStrings)
+randomStrings
+```
+
+```{r}
+submat1 <- nucleotideSubstitutionMatrix(match = 0, mismatch = -1, baseOnly = TRUE)
+randomScores1 <- pairwiseAlignment(pattern = randomStrings, 
+                                   subject = adapter, 
+                                   substitutionMatrix = submat1, 
+                                   gapOpening = 0, 
+                                   gapExtension = 1, 
+                                   scoreOnly = T)
+
+randomScores1 %>% quantile(probs = seq(0.99, 1, 0.001))
+```
+
+
+
+```{r}
+submat2 <- nucleotideSubstitutionMatrix(match = 1, 
+                                        mismatch = -Inf, 
+                                        baseOnly = TRUE, 
+                                        type = "DNA")
+randomScores2 <- pairwiseAlignment(pattern = randomStrings, 
+                                   subject = adapter, 
+                                   substitutionMatrix = submat2, 
+                                   gapOpening = 0, 
+                                   gapExtension = -Inf, 
+                                   scoreOnly = TRUE, 
+                                   type = "local")
+
+randomScores2 %>% quantile(probs = seq(0.99, 1, 0.001))
+```
+
+```{r}
+adapterAligns2 <- pairwiseAlignment(pattern = adapterStrings, 
+                                    subject = adapter, 
+                                    substitutionMatrix = submat2, 
+                                    type = "local", 
+                                    gapOpening = 0, 
+                                    gapExtension = Inf)
+table(score(adapterAligns2) > quantile(randomScores2, 0.99), experiemnt[["width"]])
+```
+
+
+# Multiple Alignments  
+
 
 
 
