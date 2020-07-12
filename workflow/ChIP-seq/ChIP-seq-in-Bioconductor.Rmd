@@ -1,0 +1,34 @@
+---
+title: "Using Bioconductor to detect differential binding in ChIP-seq data"
+author: "yincy"
+date: "3/13/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

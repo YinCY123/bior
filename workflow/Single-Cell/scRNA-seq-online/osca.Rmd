@@ -1,0 +1,49 @@
+---
+title: "osca"
+author: "yincy"
+date: "2/28/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(SingleCellExperiment)
+library(scater)
+library(scran)
+library(uwot)
+library(Rtsne)
+```
+
+
+## The *SingleCellExperiment* Class  
+```{r}
+knitr::include_graphics(path = "figures/SingleCellExperiment.png")
+```
+
+
+### Primary Data: The `assays` Slot  
+```{r}
+counts_matrix <- data.frame(cell_1 = rpois(n = 10, lambda = 10), 
+                            cell_2 = rpois(n = 10, lambda = 10), 
+                            cell_3 = rpois(n = 10, lambda = 30))
+
+rownames(counts_matrix) <- paste0("gene_", 1:10)
+counts_matrix <- as.matrix(counts_matrix)
+```
+
+```{r}
+sce <- SingleCellExperiment(assays = list(counts = counts_matrix), 
+                            )
+```
+
+
+
+
+
+
+
+
