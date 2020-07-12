@@ -39,7 +39,7 @@ You can also use the `which` argument to selectively parse a subset of the file 
 
 
 ## BigWig files  
-BigWig files typically store whole-genome coverage vectors (or at least whole-genome data). For this reason, the R representation of a BigWig file is usually quite big, so it might be necessary to read it into R in small chunks.
+BigWig files typically store whole-genome coverage vectors (or at least whole-genome data). For this reason, the R representation of a BigWig file is usually quite big, so it might be necessary to read it into R in small chunks.  
 
 As for BED files, `import(format="BigWig")` supports a `which` argument which is a `GRanges`. It output data type is a `GRanges` per default, but using the `as` agurment you can have `as="Rle"` and a few other options.  
 
@@ -95,10 +95,6 @@ query(x = ahub.chain, pattern = c("hg18", "hg19"))
 ```
 
 
-
-
-
-
 ## Importing directly from UCSC  
 Using `rtracklayer` you can import tables and tracks directly from the UCSC Genome Browser. However, it is now possible to get a lot (all?) of this data from `AnnotationHub` and this later package seems friendlier.  
 
@@ -109,9 +105,112 @@ It is possible that not all tracks / tables and/or all information from the diff
 
 
 
+# rtracklayer vignette  
+```{r}
+library("humanStemCell")
+data(fhesc)
+library(genefilter)
+library(magrittr)
+library(limma)
+```
+
+```{r}
+design <- model.matrix(~ phenoData(fhesc)$Diff)
+hesclim <- lmFit(object = exprs(fhesc), design)
+hesceb <- eBayes(fit = hesclim)
+tab <- topTable(hesceb, coef = 2, adjust.method = "BH", n = 7676)
+tab2 <- tab[(tab$logFC > 1) & (tab$adj.P.Val < 0.01), ]
+
+affyIDs <- rownames(tab2)
+library(microRNA)
+data("hsTargets")
+library(hgu133plus2.db)
+
+entrezIDs <- mappedRkeys(x = hgu133plus2ENTREZID[affyIDs])
+library(org.Hs.eg.db)
+
+mappedEntrezIDs <- entrezIDs[entrezIDs %in% mappedkeys(org.Hs.egENSEMBLTRANS)]
+ensembleIDs <- mappedRkeys(org.Hs.egENSEMBLTRANS[mappedEntrezIDs])
+targetMatches <- match(ensembleIDs, hsTargets$target, 0)
+
+targets <- hsTargets[targetMatches, ]
+targets$chrom <- paste("chr", targets$chrom, sep = "")
+```
+
+
+```{r}
+library(rtracklayer)
+library(GenomicRanges)
+
+head(targets)
+```
+
+
+```{r}
+targetRanges <- IRanges(start = targets$start, 
+                        end = targets$end)
+
+targetTrack <- GRangesForUCSCGenome(genome = "hg18", 
+                                    chrom = targets$chrom, 
+                                    ranges = targetRanges, 
+                                    strand = targets$strand, 
+                                    name = targets$name, 
+                                    target = targets$target)
+```
+
+```{r}
+genome(targetTrack) %>% head()
+```
+
+
+```{r}
+seqlengths(targetTrack) %>% head()
+```
+
+```{r}
+seqnames(targetTrack) %>% head()
+```
+
+```{r}
+start(targetTrack) %>% head()
+```
+
+```{r}
+strand(targetTrack)
+```
+
+```{r}
+width(targetTrack)
+```
+
+```{r}
+targetTrack[1:10]
+```
+
+```{r}
+targetTrack[strand(targetTrack) == "-" & seqnames(targetTrack) == "chr2"]
+```
+
+
+```{r}
+session <- browserSession(object = "UCSC")
+genomeBrowsers()
+track(object = session, "targets") <- targetTrack
+
+subTargetsTrack <- targetTrack[1]
+view <- browserView(object = session, range = subTargetsTrack * -10, pack = "targets")
+```
+
+```{r}
+view <- browserView(object = session, 
+                    range = targetTrack[1] * -10, 
+                    pack = "targets")
+```
 
 
 
-
-
+### Downloading Tracks from Web Browser  
+```{r}
+subtrack <- track(session, "targets")
+```
 
