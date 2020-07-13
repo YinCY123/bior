@@ -38,14 +38,14 @@ knitr::include_graphics(path = "figures/monocle-workflow.png")
 ```
 
 # quik workflow  
-#### store data into monocle 3's main class `cell_data_set`  
+#### store data into monocle3's main class `cell_data_set`  
 ```
 cds <- new_cell_data_set(expression_matrix, 
                          cell_metadata, 
                          gene_metadata)
 
-# normalize and pre-process, remove linear batch effects with residual_model_formula_str parameter  
-# and non linear batch effect with alignment_group parameter 
+# `normalize` and `pre-process`, remove linear batch effects with `residual_model_formula_str` parameter  
+# and non linear batch effect with `alignment_group` parameter 
 cds <- preprocess_cds(cds = cds, num_dim = 100)
 ```
 
