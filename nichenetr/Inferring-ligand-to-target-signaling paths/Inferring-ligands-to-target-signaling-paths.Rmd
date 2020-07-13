@@ -83,9 +83,7 @@ DiagrammeR::render_graph(graph_min_max, layout = "tree")
 
 ```{r visualization with igraph, message=FALSE}
 path_to_vis <- bind_rows(active_signaling_network_min_max$sig, active_signaling_network_min_max$gr)
-```
 
-```{r}
 path_to_vis <- aggregate(path_to_vis[, 3], by = path_to_vis[, 1:2], sum)
 net <- graph_from_data_frame(d = path_to_vis)
 
@@ -126,6 +124,7 @@ data_source_network <- infer_supporting_datasources(
     gr_network = gr_network
 )
 ```
+
 
 
 
