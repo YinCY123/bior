@@ -20,6 +20,7 @@ library(scRNAseq)
 
 [From this web site](https://osca.bioconductor.org/)  
 
+
 # Chapter 4 Data Structure  
 ```{r}
 knitr::include_graphics(path = "figures/SingleCellExperiment-strucutre.PNG")
@@ -45,8 +46,7 @@ The SingleCellExperiment class inherits from the SummarizedExperiment class with
 - `int_colData`: A DataFrame containing internal column metadata (for each cell).  
 - `int_metadata`: A list containing internal experiment metadata.  
 
-The additional reducedDims slot allows storage of results from multiple dimensionality reduction methods, e.g., PCA or t-SNE. Each element of the SimpleList should be a matrix of coordinates for all cells from one reduction method. The number of rows of each matrix should be equal to the number of cells in the SingleCellExperiment object.  
-
+The additional `reducedDims` slot allows storage of results from multiple dimensionality reduction methods, e.g., PCA or t-SNE. Each element of the SimpleList should be a matrix of coordinates for all cells from one reduction method. The number of rows of each matrix should be equal to the number of cells in the `SingleCellExperiment` object.  
 ```{r}
 sce <- SingleCellExperiment(
     assays = list(counts = count_matrix)
