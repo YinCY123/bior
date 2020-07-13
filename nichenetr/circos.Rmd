@@ -269,12 +269,18 @@ gaps = c(
 Render the circos plot (all links same transparancy). Only the widths of the blocks that indicate each target gene is proportional the ligand-target regulatory potential (~prior knowledge supporting the regulatory interaction).  
 ```{r}
 circos.par(gap.degree = gaps)
-chordDiagram(links_circle, directional = 1, 
-             order=order, link.sort = TRUE, 
-             link.decreasing = FALSE, grid.col = grid_col, 
-             transparency = 0, diffHeight = 0.005, 
-             direction.type = c("diffHeight", "arrows"),link.arr.type = "big.arrow", 
-             link.visible = links_circle$weight >= cutoff_include_all_ligands,annotationTrack = "grid", 
+chordDiagram(links_circle, 
+             directional = 1, 
+             order=order, 
+             link.sort = TRUE, 
+             link.decreasing = FALSE, 
+             grid.col = grid_col, 
+             transparency = 0, 
+             diffHeight = 0.005, 
+             direction.type = c("diffHeight", "arrows"),
+             link.arr.type = "big.arrow", 
+             link.visible = links_circle$weight >= cutoff_include_all_ligands,
+             annotationTrack = "grid", 
              preAllocateTracks = list(track.height = 0.075))
 
 # we go back to the first track and customize sector labels
