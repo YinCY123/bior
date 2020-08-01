@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r load packages}
+```{r load packages, message=FALSE, warning=FALSE}
 library(Biobase)
 library(ALL)
 library(hgu95av2.db)
@@ -26,10 +26,10 @@ This class has inspired many other data containers in Bioconductor and can be co
 ## start  
 ```{r}
 data(ALL)
+ALL
 ```
 
 This is an experiment done on an Affymetrix HGU95av2 gene expression microarray; the authors profiled 128 samples.  
-
 ```{r}
 experimentData(ALL)
 ```
@@ -58,7 +58,6 @@ featureNames(ALL) %>% head()
 ```
 
 
-
 access individual columns of this `data.frame` by using the `$` operator.  
 ```{r}
 pData(ALL)$age %>% head()
@@ -71,7 +70,6 @@ ALL$age %>% head()
 
 ## Subsetting  
 Subsetting of this object is an important operation. The subsetting has two dimensions; the first dimension is genes and the second is samples. It keeps track of how the expression measures are matched to the pheno data.  
-
 ```{r}
 ALL[, 1:5]
 print("-----------")
@@ -80,7 +78,6 @@ ALL[1:5, ]
 
 ## featureData and annotation  
 You can think of `pData` as providing information on the columns (samples) of the measurement matrix. Similar to `pData`, we have `featureData` which is meant to provide information on the features (genes) of the array.  
-
 ```{r}
 featureData(ALL)
 ```
@@ -93,7 +90,6 @@ ids <- featureNames(ALL)
 as.list(hgu95av2ENTREZID[ids]) %>% head()
 ```
 
-
 This gives us the Entrez ID associated with the different measurements. There are a number of so-called “maps” like hgu95av2XX with XX having multiple values. This approach is very specific to Affymetrix chips. An alternative to using annotation packages is to use the biomaRt package to get the microarray annotation from Ensembl (an online database).  
 
 
@@ -101,7 +97,6 @@ This gives us the Entrez ID associated with the different measurements. There ar
 For this type of object, there is a difference between `phenoData` (an objects of class `AnnotatedDataFrame`) and `pData` (an object of class `data.frame`).  
 
 The idea behind `AnnotatedDataFrame` was to include additional information on what a `data.frame` contains, by having a list of descriptions called `varLabels`.   
-
 ```{r}
 pD <- phenoData(ALL)
 varLabels(pD)
@@ -227,7 +222,6 @@ exampleSet <- ExpressionSet(assayData = exprs,
 ```{r}
 exprs(exampleSet) %>% head()
 pData(exampleSet)
-
 ```
 
 
