@@ -23,8 +23,8 @@ con <- dbConnect(drv = RSQLite::SQLite(), "f:/git/Data/GEOmetadb.sqlite")
 ```
 
 ```{r}
-dbListFields(con, "gse")
-dbReadTable(conn = con, name = "gsm") %>% 
+dbListFields(con, "gsm")
+dbReadTable(conn = con, name = "gsm") %>% head()
   pull(organism_ch1) %>% 
   table() %>% 
   sort(decreasing = T)
