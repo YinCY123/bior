@@ -69,7 +69,25 @@ AMD datasets:
 + SRP107997 (GSE99287): ATAC-seq of AMD RPE show decresed chromation accessibility  
 
 
+```{r}
+dbListFields(conn = con, name = "gsm")
+```
 
+```{r}
+dbReadTable(conn = con, name = "gsm") %>% 
+    select(organism_ch1) %>% 
+    table(decreasing = T)
+```
+
+
+
+## kidney tumor single cell sequencing  
+```{r}
+con <- dbConnect(drv = RSQLite::SQLite(), "f:/git/Data/GEOmetadb.sqlite")
+
+mouse_kidney_tumor <- dbGetQuery(conn = con, 
+                                 statement = "")
+```
 
 
 
