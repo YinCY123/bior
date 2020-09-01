@@ -16,10 +16,10 @@ library(magrittr)
 
 
 ## Overview  
-The ShortRead package contains functionality for reading and examining raw sequence reads (typically in FASTQ format).  
+The `ShortRead` package contains functionality for reading and examining raw sequence reads (typically in FASTQ format).  
 
 ## ShortRead  
-The ShortRead package was one of the first Bioconductor packages to deal with low-level analysis of high-throughput sequencing data. Some of its functionality has now been superseded by other packages, but there is still relevant functionality left.  
+The `ShortRead` package was one of the first Bioconductor packages to deal with low-level analysis of high-throughput sequencing data. Some of its functionality has now been superseded by other packages, but there is still relevant functionality left.  
 
 
 ### Reading FASTQ files  
@@ -35,7 +35,7 @@ These files are read by `readFastq()` which produces an object of class `ShortRe
 ```{r}
 fastqDir <- system.file("extdata", "E-MTAB-1147", package = "ShortRead")
 fastqPath <- list.files(fastqDir, pattern = ".fastq.gz$", full = TRUE)[1]
-reads <- readFastq(fastqPath)
+reads <- readFastq(dirPath = fastqPath)
 ```
 
 Here we directly point the function to the file path. A paradigm which is often used in Bioconductor is to first put the file path into an object which represents a specific file type and then read it  
@@ -70,10 +70,10 @@ id(reads)
 ### A word on quality scores  
 convert quality scores to integer  
 ```{r}
-as(quality(reads), "matrix") %>% .[1:5, 1:5]
+quality(reads) %>% as(Class = "matrix") %>% .[1:5, 1:5]
 ```
 
-In this conversion, each letter is matched to an integer between 0 and 40. This matching is known as the “encoding” of the quality scores and there has been different ways to do this encoding. Unfortunately, it is not stored in the FASTQ file which encoding is used, so you have to know or guess the encoding. The ShortRead package does this for you.  
+In this conversion, each letter is matched to an integer between 0 and 40. This matching is known as the “encoding” of the quality scores and there has been different ways to do this encoding. Unfortunately, it is not stored in the FASTQ file which encoding is used, so you have to know or guess the encoding. The `ShortRead` package does this for you.  
 
 
 ### Reading alignment files  
