@@ -73,6 +73,7 @@ AMD datasets:
 dbListFields(conn = con, name = "gsm")
 ```
 
+
 ```{r}
 dbReadTable(conn = con, name = "gsm") %>% 
     select(organism_ch1) %>% 
