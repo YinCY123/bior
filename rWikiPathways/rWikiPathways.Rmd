@@ -203,7 +203,6 @@ library(RCy3)
 
 
 
-
 # Pathway Analysis  
 This vignette will cover a wide range of analytical and visualization techniques involved in a typical pathway analysis. The Overview section will go into more detail on the particulars, but note that this vignette is designed to be modular and carefully considered. Please do not simply run the entire script and expect to get anything meaningful from the final output.  
 
