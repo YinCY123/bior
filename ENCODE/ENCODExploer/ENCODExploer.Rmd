@@ -1,0 +1,223 @@
+---
+title: "ENCODExploer"
+author: "yincy"
+date: "12/14/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(ENCODExplorer)
+library(ENCODExplorerData)
+library(magrittr)
+```
+
+
+# Rationale  
+Rationale
+“The ENCODE (Encyclopedia of DNA Elements) Consortium is an international collaboration of research groups funded by the National Human Genome Research Institute (NHGRI). The goal of ENCODE is to build a comprehensive parts list of functional elements in the human genome, including elements that act at the protein and RNA levels, and regulatory elements that control cells and circumstances in which a gene is active” source: [ENCODE Projet Portal](https://www.encodeproject.org/).   
+
+However, retrieving and downloading data can be time consuming using the current web portal, especially when multiple files from different experiments are involved.  
+
+This package has been designed to facilitate access to ENCODE data by compiling the metadata associated with files, experiments, datasets, biosamples, and treatments.  
+
+We implemented time-saving features to select ENCODE files by querying their metadata, downloading them and validating that the file was correctly downloaded.  
+
+
+# Introduction  
+To use the functionalities of the ENCODExplorer package, you must first download the data.table containing all of the ENCODE metadata.  
+
+This `data.table` is available through the `AnnotationHub` package. For convenience, the latest available version at each release will be downloaded and used by default.  
+
+```{r}
+#encode_df <- get_encode_df()
+encode_df %>% dim()
+encode_df %>% head()
+```
+
+
+# Main functions  
+## Query  
+The `queryEncode` function allows the user to find the subset of files corresponding to a precise query defined according to the following criteria:  
+
+**Parameter**| **Description**  
+-------------|-------------------
+set_accession| The accession for the containing experiment or dataset.  
+dataset_accession| There is a subtle difference between the parameters **set_accession** and **dataset_accession**. In fact, some files can be part of an experiment, a dataset or both. When using **set_accession**, you will get all the files directly associated with this accession (experiment and/or dataset). While the usage of **dataset_accession** will get the files firectly associated to the requested **AND** those which are part of an experiment and indirectly linked to a dataset (reported as related files in the dataset and related_dataset in the experiment).  
+file_accession| The accession for one specific file.  
+biosample_name| The biosample name ('GM12878', 'kidney')  
+biosample_type| The biosample type ('tissue', 'cell line')
+assay| The assay type ('ChIP-seq', 'polyA plus RNA-seq')  
+file_format| The file format. Some currently available formats include *bam*, *bed*, *fastq*, *bigBed*, *bigWig*, *CEL*, *csfasta*, *csqual*, *fasta*, *gff*, *gtf*, *idat*, *rcc*, *sam*, *tagAlign*, *tar*, *tsv*, *vcf*, *wig*.  
+lab| The laboratory.  
+organism| The donor organism ("Homo sapiens", "Mus musculus")  
+target| The gene, protein or histone mark which was targeted by the assay (Immunoprecipitated protein in ChIP-seq, knock-down gene in CRISPR RNA-seq assays, etc)  
+treatment| The treatment related to the biosample  
+project| The project name/id  
+
+
+By default, the query function uses exact string matching to perform the selection of the relevant entries. This behavior can be changed by modifying the `fixed` or `fuzzy` parameters. Setting `fixed` to `FALSE` will perform case-insensitive regular expression matching. Setting `fuzzy` to `TRUE` will retrieve search results where the query string is a partial match.  
+
+The result set is a subset of the `encode_df_lite` table.  
+
+For example,  to select all fastq files originating from assays on the MCF-7 (human breast cancer) cell line.  
+
+```{r}
+query_results <- queryEncode(df = encode_df, 
+                             organism = "Homo sapiens", 
+                             biosample_name = "MCF-7", 
+                             file_format = "fastq", 
+                             fixed = TRUE)
+
+query_results
+```
+
+No results  
+```{r}
+query_results <- queryEncode(df = encode_df, 
+                             organism = "Homo sapiens", 
+                             biosample_name = "mcf7", 
+                             file_format = "fastq", 
+                             fixed = TRUE)
+```
+
+
+The same results  
+```{r}
+query_results <- queryEncode(df = encode_df, 
+                             organism = "Homo sapiens", 
+                             file_format = "fastq", 
+                             biosample_name = "mcf7", 
+                             fixed = F, 
+                             fuzzy = T)
+```
+
+
+matching through regular expression  
+```{r}
+query_results <- queryEncode(df = encode_df, 
+                             organism = "Homo sapiens", 
+                             file_format = "fastq", 
+                             biosample_name = "Hela-S3", 
+                             fixed = FALSE, 
+                             assay = ".*RNA-seq")
+```
+
+
+The `queryEncodeGeneric` function can be used to perform searches on columns which are not part of the `queryEncode` interface but are present within the encode_df_lite data.table.  
+
+```{r}
+querquery_results <- queryEncodeGeneric(df = encode_df, 
+                                        biosample_name = "Hela-S3", 
+                                        assay = "RNA-seq", 
+                                        submitted_by = "Diane Trout", 
+                                        fuzzy = TRUE)
+```
+
+
+## fuzzySearch  
+This function is a more user-friendly version of `queryEncode` that also perform searches on the `encode_df_lite` object. **The character vector or the list of characters specified by the user will be searched for in every column of the database**. The user can also constrain the query by selecting the specific columns in which to search for the query term by using the `filterVector` parameter.  
+
+The following request will produce a data.table with every files containing the term *brca*  
+```{r}
+fuzzy_results <- fuzzySearch(searchTerm = c("brca"))
+```
+
+```{r}
+fuzzy_results <- fuzzySearch(searchTerm = c("brca", "ZNF24"), 
+                             filterVector = c("target"), 
+                             multipleTerm = TRUE)
+```
+
+When searching for multiple terms, three type of input can be passed to the searchTerm parameter : - A single character where the various terms are separated by commas - A character vector - A list of characters.  
+
+## Search  
+This function simulates a keyword search performed through the ENCODE web portal.  
+
+The `searchEncode` function returns a `data frame` corresponding to the result page provided by the ENCODE portal. If a specific file or dataset isn’t available with `fuzzySearch` or `queryEncode` (i.e. within `get_encode_df()`), the user can access the latest data from the ENCODE database through the `searchEncode` function.  
+
+The `searchToquery` function convert the result of a search to a `data.table` with the same design as `get_encode_df()`. This format contains more metadata and allow the user to extract all files within the dataset. This format also allows the user to create a design using the `createDesign` function.  
+
+Here is the example of the following search: "a549 chip-seq homo sapiens".  
+
+```{r}
+search_results <- searchEncode(searchTerm = "a549 chip-seq homo sapiens", 
+                               limit = "all")
+```
+
+
+## createDesign  
+This function organizes the `data.table` created by `fuzzySearch`, `queryEncode` or `searchToquery`. It extracts the replicate and control files within a dataset.  
+
+It creates a `data.table` with the file accessions, the dataset accessions and numeric values associated with the nature of the file (1:replicate / 2:control) when the format parameter is set to `long`.  
+
+By setting the `format` parameter to `wide`, each dataset will have its own column as illustrated below.  
+
+
+## downloadEncode  
+`downloadEncode` allows a user to download a file or an entire dataset. Downloading files can be done by providing a vector of file accessions or dataset accessions (represented by the accession column in `get_encode_df()`) to the `file_acc` parameter. This parameter can also be the `data.table` created by `queryEncode`, `fuzzySearch`, `searchToquery` or `createDesign`.  
+
+If the accession doesn’t exist within the passed-in `get_encode_df()` database, `downloadEncode` will search for the accession directly within the ENCODE database. The path to the download directory can be specified (default: `/tmp`).  
+
+To ensure the integrity of each file, the md5 sum of each downloaded file is compared to the reported md5 sum in ENCODE.  
+
+Moreover, if the accession is a dataset accession, the function will download each file in this dataset. The format option, which is set by default to all, enables the downloading of a specific format.  
+
+```{r}
+query_results <- queryEncode(assay = "switchgear", 
+                             target = "elavl1", 
+                             fixed = FALSE)
+```
+
+its equivalent search  
+```{r}
+search_results <- searchEncode(searchTerm = "switchgear elavl1", 
+                               limit = "all")
+```
+
+To select a particular file format you can:  
+1. add filters to your query and then run the `downloadEncode` function.  
+```{r}
+query_results <- queryEncode(assay = "switchgear", 
+                             target = "elavl1", 
+                             file_format = "bed", 
+                             fixed = F)
+
+downloadEncode(query_results)
+```
+
+2. specify the format to the `downloadEncode` function.  
+```{r}
+downloadEncode(search_results, format = "deb")
+```
+
+
+## Conversion  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
