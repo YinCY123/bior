@@ -33,7 +33,7 @@ To use the functionalities of the ENCODExplorer package, you must first download
 This `data.table` is available through the `AnnotationHub` package. For convenience, the latest available version at each release will be downloaded and used by default.  
 
 ```{r}
-#encode_df <- get_encode_df()
+encode_df <- get_encode_df()
 encode_df %>% dim()
 encode_df %>% head()
 ```
@@ -45,18 +45,18 @@ The `queryEncode` function allows the user to find the subset of files correspon
 
 **Parameter**| **Description**  
 -------------|-------------------
-set_accession| The accession for the containing experiment or dataset.  
-dataset_accession| There is a subtle difference between the parameters **set_accession** and **dataset_accession**. In fact, some files can be part of an experiment, a dataset or both. When using **set_accession**, you will get all the files directly associated with this accession (experiment and/or dataset). While the usage of **dataset_accession** will get the files firectly associated to the requested **AND** those which are part of an experiment and indirectly linked to a dataset (reported as related files in the dataset and related_dataset in the experiment).  
-file_accession| The accession for one specific file.  
-biosample_name| The biosample name ('GM12878', 'kidney')  
-biosample_type| The biosample type ('tissue', 'cell line')
-assay| The assay type ('ChIP-seq', 'polyA plus RNA-seq')  
-file_format| The file format. Some currently available formats include *bam*, *bed*, *fastq*, *bigBed*, *bigWig*, *CEL*, *csfasta*, *csqual*, *fasta*, *gff*, *gtf*, *idat*, *rcc*, *sam*, *tagAlign*, *tar*, *tsv*, *vcf*, *wig*.  
-lab| The laboratory.  
-organism| The donor organism ("Homo sapiens", "Mus musculus")  
-target| The gene, protein or histone mark which was targeted by the assay (Immunoprecipitated protein in ChIP-seq, knock-down gene in CRISPR RNA-seq assays, etc)  
-treatment| The treatment related to the biosample  
-project| The project name/id  
+`set_accession`| The accession for the containing experiment or dataset.  
+`dataset_accession`| There is a subtle difference between the parameters **set_accession** and **dataset_accession**. In fact, some files can be part of an experiment, a dataset or both. When using **set_accession**, you will get all the files directly associated with this accession (experiment and/or dataset). While the usage of **dataset_accession** will get the files directly associated to the requested **AND** those which are part of an experiment and indirectly linked to a dataset (reported as related files in the dataset and related_dataset in the experiment).  
+`file_accession`| The accession for one specific file.  
+`biosample_name`| The biosample name ('GM12878', 'kidney')  
+`biosample_type`| The biosample type ('tissue', 'cell line')
+`assay`| The assay type ('ChIP-seq', 'polyA plus RNA-seq')  
+`file_format`| The file format. Some currently available formats include *bam*, *bed*, *fastq*, *bigBed*, *bigWig*, *CEL*, *csfasta*, *csqual*, *fasta*, *gff*, *gtf*, *idat*, *rcc*, *sam*, *tagAlign*, *tar*, *tsv*, *vcf*, *wig*.  
+`lab`| The laboratory.  
+`organism`| The donor organism ("Homo sapiens", "Mus musculus")  
+`target`| The gene, protein or histone mark which was targeted by the assay (Immunoprecipitated protein in ChIP-seq, knock-down gene in CRISPR RNA-seq assays, etc)  
+`treatment`| The treatment related to the biosample  
+`project`| The project name/id  
 
 
 By default, the query function uses exact string matching to perform the selection of the relevant entries. This behavior can be changed by modifying the `fixed` or `fuzzy` parameters. Setting `fixed` to `FALSE` will perform case-insensitive regular expression matching. Setting `fuzzy` to `TRUE` will retrieve search results where the query string is a partial match.  
@@ -132,12 +132,15 @@ fuzzy_results <- fuzzySearch(searchTerm = c("brca", "ZNF24"),
                              multipleTerm = TRUE)
 ```
 
-When searching for multiple terms, three type of input can be passed to the searchTerm parameter : - A single character where the various terms are separated by commas - A character vector - A list of characters.  
+When searching for multiple terms, three type of input can be passed to the searchTerm parameter :  
+- A single character where the various terms are separated by commas  
+- A character vector  
+- A list of characters.  
 
 ## Search  
 This function simulates a keyword search performed through the ENCODE web portal.  
 
-The `searchEncode` function returns a `data frame` corresponding to the result page provided by the ENCODE portal. If a specific file or dataset isn’t available with `fuzzySearch` or `queryEncode` (i.e. within `get_encode_df()`), the user can access the latest data from the ENCODE database through the `searchEncode` function.  
+The `searchEncode` function returns a `data frame` corresponding to the result page provided by the ENCODE portal. **If a specific file or dataset isn’t available with `fuzzySearch` or `queryEncode` (i.e. within `get_encode_df()`), the user can access the latest data from the ENCODE database through the `searchEncode` function**.  
 
 The `searchToquery` function convert the result of a search to a `data.table` with the same design as `get_encode_df()`. This format contains more metadata and allow the user to extract all files within the dataset. This format also allows the user to create a design using the `createDesign` function.  
 
@@ -146,15 +149,22 @@ Here is the example of the following search: "a549 chip-seq homo sapiens".
 ```{r}
 search_results <- searchEncode(searchTerm = "a549 chip-seq homo sapiens", 
                                limit = "all")
+
+searchToquery(searchResults = search_results)
 ```
 
 
 ## createDesign  
 This function organizes the `data.table` created by `fuzzySearch`, `queryEncode` or `searchToquery`. It extracts the replicate and control files within a dataset.  
 
-It creates a `data.table` with the file accessions, the dataset accessions and numeric values associated with the nature of the file (1:replicate / 2:control) when the format parameter is set to `long`.  
+It creates a `data.table` with the file accessions, the dataset accessions and numeric values associated with the nature of the file (**1:replicate / 2:control**) when the format parameter is set to `long`.  
 
 By setting the `format` parameter to `wide`, each dataset will have its own column as illustrated below.  
+
+```{r}
+createDesign(input = fuzzy_results) %>% 
+    dplyr::arrange(-Value)
+```
 
 
 ## downloadEncode  
@@ -186,36 +196,180 @@ query_results <- queryEncode(assay = "switchgear",
                              file_format = "bed", 
                              fixed = F)
 
-downloadEncode(query_results)
+downloadEncode(query_results, 
+               dir = "f:/git/Data/ENCODE/")
 ```
 
 2. specify the format to the `downloadEncode` function.  
 ```{r}
-downloadEncode(search_results, format = "deb")
+downloadEncode(search_results, 
+               dir = "f:/git/Data/ENCODE/", 
+               format = "deb")
 ```
 
 
 ## Conversion  
+The function searchToquery enables the conversion of the results of searchEncode to a queryEncode output based on the accession numbers. The user can then benefit from all the collected metadata and the createDesign function.  
+
+The structure of the result set is similar to the get_encode_df() structure.  
+
+1. search  
+```{r}
+search_results <- searchEncode(searchTerm = "switchgear elavl1", limit = "all")
+```
+
+2. convert  
+```{r}
+convert_results <- searchToquery(searchResults = search_results)
+```
+
+
+# Summarizing ENCODE data  
+While `queryEncode`, `searchEncode` and `downloadEncode` gives the user access to the ENCODE's raw files, EMCODExplorer also provides helper functions which load and summarize ENCODE data for common biological questions.  
+
+## Obtaining consensus peaks from ChIP-seq  
+The most common question in a ChIP-Seq assay is: “Where does the protein of interest bind the genome?” To answer this question, ENCODExplorer provides the `queryConsensusPeaks` method. `queryConsensusPeaks` finds all ChIP-seq peak files matching the given criteria, split them by treatment group, and builds a set of “consensus peaks”. The “consensus peaks” identified by ENCODExplorer are those that appear in all replicates of a given group. Two peaks are considered to belong to the same binding event if at least one of their nucleotides overlap.   
+
+```{r}
+# Obtain a summary of all peaks for ChIP-seq assays in the 22Rv1
+# (human prostate carcinoma) cell line.
+res <- queryConsensusPeaks(biosample_name = "22Rv1", 
+                           assembly = "GRCh38", 
+                           target = "CTCF")
+```
+
+
+The list of downloaded files is available through the `files()` method.  
+```{r}
+files(res)
+```
+
+
+The metadata for those file is available through the `file_metadata()` method. The file metadata are aplit according to treatment group.  
+
+```{r}
+f_meta <- file_metadata(res)
+```
+
+A data frame expalining how each treatment groups was split is available through the `metadata()` method.  
+
+```{r}
+metadata(res)
+```
+
+The list of all peaks identified in individual files are accessed through the `peaks()` method.  
+
+```{r}
+names(peaks(res))
+```
+
+
+Finally, the consensus peaks (those who are present in all individual replicates) are accessed through the `consensus()` method.  
+```{r}
+names(consensus(res))
+
+consensus(res)
+```
+
+## Fine-turnng a consensus peaks query  
+Certain versions of the ENCODE pipeline provide multiple calling algorithms. Also, sometimes multiple labs have performed ChIP-seq experiments on the same tissue and protein, and these results might not be directly comparable. ENCODExplorer uses heuristics to try and determine which set of files will provide the most informative results, but the results of these heuristics might prove unsatisfactory.
+
+In such cases, a user can provide his own set of ENCODE metadata and his own choice of splitting columns using the  `buildQueryConsensus` function. The user can also specify which proportion of individual replicates a peak must appear in to be included in the consensus peaks through the consensus_threshold parameter:
+
+```{r}
+query_results <- queryEncodeGeneric(biosample_name = "A549", 
+                                    assembly = "GRCh38", 
+                                    file_format = "^bed$", 
+                                    output_type = "^peaks$", 
+                                    treatment_duration_unit = "minute", 
+                                    treatment_duration = "(^5$|^10$)",
+                                    target = "NR3C1", 
+                                    fixed = F)
+
+res <- buildConsensusPeaks(query_results = query_results, 
+                           split_by = c("treatment_duration"), 
+                           consensus_threshold = 0.5)
+
+res
+```
+
+
+## Obtaining average gene expression  
+For RNA-Seq experiment, the most straightforward type of results is the expression level of all genes or transcripts. ENCODExplorer provides the `queryGeneExpression` and `queryTranscriptExpression` methods to summarize these results. ENCODExplorer finds all gene or transcript expression levels for a given biosample and calculates per-condition mean values.  
+
+Most biosamples in the ENCODE Project have RNA-seq experiments targeting different cell fractions, such as whole cells, cytoplasmic fractions, and nuclear fractions. Since it makes no biological sense to aggregate such results, ENCODExplorer automatically splits them by the dataset_description column, which details the cell fraction as well as other methodological or biological parameters which make samples unfit for aggregation.  
+
+```{r}
+# obtain a summary of all peaks for NR3C1 ChIP-seq assays in the A549 cell line.
+res <- queryGeneExpression(biosample_name = "bone marrow")
+```
+
+The `files()`, `file_metadata()` and `metadata()` methods behave the same way as they do for `queryConsensusPeaks`.  
+
+```{r}
+metadata(res)
+```
+
+You can see which expression metric ENCODExplorer extracted using the `metric()` method.  
+```{r}
+metric(res)
+```
+
+Per gene/transcript values for all metrics are available through the `metric_daat()` method.  
+```{r}
+metric_data(res) %>% head()
+```
+
+You can also get a list of the raw ENCODE files by calling the `raw_data()` method.  
+```{r}
+raw_data(res) %>% .[[1]] %>% .[[1]]
+```
 
 
 
+## Fine turning expression summaries  
+Just as it is the case for ChIP-seq assays, it can sometimes be easier for the user to perform filtering of the ENCODE results manually. For thse cases, ENCODExplorer provides the `buildExpressionSummary` method.  
+```{r}
+query_results <- queryEncodeGeneric(biosample_name = "neural tube", 
+                                    output_type = "gene quantifications", 
+                                    file_type = "tsv", 
+                                    assay = "polyA plus RNA-seq", 
+                                    assembly = "^mm10$", 
+                                    dataset_biosample_summary = "(15.5|13.5)", 
+                                    fixed = FALSE)
+
+buildExpressionSummary(query_results, split_by = "dataset_biosample_summary")
+```
 
 
 
+# Updateing the ENCODE file database  
+By default, `ENCODExplorer` retrieves the ENCODE metadata from its sister package, `ENCODExplorerData`. The version of the metadata provided by default will be updated with each Bioconductor release in the ENCODExplorer package. However, since all of ENCODExplorer’s function take an explicit `df` parameter, it is possible to use the `AnnotationHub` package to download a more recent version.  
+
+```{r}
+library(AnnotationHub)
+
+ah <- AnnotationHub()
+query(ah, "ENCODExplorerData")
+```
+
+
+Finally, it is also possible to use ENCODExplorerData functionalities to generate an up-to-date `data.table`, and pass it to `ENCODExplorer’s` functions.  
+
+```{r}
+encode_df %>% dplyr::pull(assay) %>% table() %>% sort(decreasing = T)
+```
 
 
 
+```{r}
+encode_kidney <- queryEncode(biosample_name = "kidney", 
+                             biosample_type = "tissue", 
+                             organism = "Mus musculus", 
+                             fixed = T)
 
-
-
-
-
-
-
-
-
-
-
+encode_kidney %>% dplyr::pull(assay) %>% table() %>% sort(decreasing = T)
+```
 
 
 
