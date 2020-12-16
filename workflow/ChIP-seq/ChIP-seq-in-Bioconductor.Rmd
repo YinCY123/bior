@@ -10,24 +10,166 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
+# Introduction  
+Chromatin immunoprecipitation with sequencing (ChIP-seq) is a widely used technique for identifying the genomic binding sites of a target protein. Conventional analyses of ChIP-seq data aim to detect absolute binding (i.e., the presence or absence of a binding site) based on peaks in the read coverage. An alternative analysis strategy is to detect of changes in the binding profile between conditions (Ross-Innes et al. 2012; Pal et al. 2013). These differential binding (DB) analyses involve counting reads into genomic intervals and testing those counts for significant differences between conditions. This defines a set of putative DB regions for further examination. DB analyses are statistically easier to perform than their conventional counterparts, as the effect of genomic biases is largely mitigated when counts for different libraries are compared at the same genomic region. DB regions may also be more relevant as the change in binding can be associated with the biological difference between conditions.  
+
+The key step in the DB analysis is the manner in which reads are counted. The most obvious strategy is to count reads into pre-defined regions of interest, like promoters or gene bodies (Pal et al. 2013). This is simple but will not capture changes outside of those regions. In contrast, de novo analyses do not depend on pre-specified regions, instead using empirically defined peaks or sliding windows for read counting. Peak-based methods are implemented in the `DiffBind` and `DBChIP` software packages (Ross-Innes et al. 2012; Liang and Keles 2012), which count reads into peak intervals that have been identified with software like MACS (Zhang et al. 2008). This requires some care to maintain statistical rigour as peaks are called with the same data used to test for DB. Alternatively, window-based approaches count reads into sliding windows across the genome. This is a more direct strategy that avoids problems with data re-use and can provide increased DB detection power (Lun and Smyth 2014). However, its correct implementation is not straightforward due to the subtleties with interpretation of the false discovery rate (FDR).  
+
+# Differential binding with sliding windows  
+Here, we describe computational workflows for performing a DB analysis with sliding windows. It is primarily based on the `csaw` software package but also uses a number of other packages from the open-source Bioconductor project (Huber et al. 2015). The aim is to facilitate the practical implementation of window-based DB analyses by providing detailed code and expected output. We demonstrate on data from real studies examining changes in transcription factor binding (Kasper et al. 2014) and histone mark enrichment (Revilla-I-Domingo et al. 2012).
+
+The workflows described here apply to any ChIP-seq experiment with multiple experimental conditions and with multiple biological samples within one or more of the conditions. They detect and summarize DB regions between conditions in a *de novo* manner, i.e., without making any prior assumptions about the location or width of bound regions. Detected regions are then annotated according to their proximity to annotated genes. In addition, the code can be easily adapted to accommodate batch effects, covariates and multiple experimental factors.  
+
+# Obtaining BAM files  
+All of the workflows described here start from sorted and indexed BAM files in the `chipseqDBData` package. For application to user-specified data, the raw read sequences have to be aligned to the appropriate reference genome beforehand. Most aligners can be used for this purpose, but we have used `Rsubread` (Liao, Smyth, and Shi 2013) due to the convenience of its R interface. It is also recommended to mark duplicate reads using tools like Picard prior to starting the workflow.  
+
+# Overview  
+Here, we perform a window-based differential binding (DB) analysis to identify regions of differential H3K9ac enrichment between pro-B and mature B cells (Revilla-I-Domingo et al. 2012). H3K9ac is associated with active promoters and tends to exhibit relatively narrow regions of enrichment relative to other marks such as H3K27me3. We download the BAM files using the relevant function from the `chipseqDBData` package.  
+
+```{r, message=FALSE}
+library(chipseqDBData)
+
+acdata <- H3K9acData()
+```
 
 
+# Pre-processing checks  
+## Examining mapping statistics  
+We use methods from the `Rsamtools` package to compute some mapping statistics for each BAM file. Idealy, the proportion of mapped reads should be high (70-80% or higher), while the proportion of marked reads should be low (generally below 20%).  
+
+```{r}
+library(Rsamtools)
+
+diagnostics <- list()
+for(b in seq_along(acdata$Path)){
+    bam = acdata$Path[[b]]
+    total = countBam(bam)$records
+    mapped <- countBam(bam, param = ScanBamParam(
+        flag = scanBamFlag(isUnmapped = F)
+    ))$records
+    marked = countBam(bam, param = ScanBamParam(
+        flag = scanBamFlag(isUnmapped = F, isDuplicate = T)
+    ))$records
+    diagnostics[[b]] <- c(Total = total, Mapped = mapped, Marked = marked)
+}
+
+diag.stats <- data.frame(do.call(rbind, diagnostics))
+rownames(diag.stats) <- acdata$Name
+diag.stats$Prop.mapped <- diag.stats$Mapped / diag.stats$Total * 100
+diag.stats$Prop.marked <- diag.stats$Marked / diag.stats$Mapped * 100
+
+diag.stats
+```
+
+> Note that all `csaw` functions that read from BAM file require BAM indices with `.bai` suffixes. In this case, index file have already been downloaded by `H3K9acData()`, but users supplaying their own file should take care to ensure that BAM indices are available with appropriate names.  
+
+## Obtaining the ENCODE blacklist for mm10  
+A number of genomic regions contain high artifactual signal in ChIP-seq experiments. These often correspond to genomic features like telomeres or microsatellite repeats. For example, multiple tandem repeats in the real genome are reported as a single unit in the genome build. Alignment of all (non-specifically immunoprecipitated) reads from the former will result in artificially high coverage of the latter. Moreover, differences in repeat copy numbers between conditions can lead to detection of spurious DB.  
+
+As such, these problematic regions must be removed prior to further analysis. This is done with an annotated blacklist for the mm10 build of the mouse genome, constructed by identifying consistently problematic regions from ENCODE datasets (ENCODE Project Consortium 2012). We download this BED file and save it into a local cache with the `BiocFileCache` package. This allows it to be used again in later workflows without being re-downloaded.
+
+```{r}
+library(BiocFileCache)
+
+bfc <- BiocFileCache(cache = "local", ask = FALSE)
+
+black.path <- bfcrpath(x = bfc, file.path("https://www.encodeproject.org",
+                                          "files/ENCFF547MET/@@download/ENCFF547MET.bed.gz"))
+```
+
+Genomic intervals in the blacklist are loaded using the `import()` method from the `rtracklayer` package. All reads mapped within the blacklisted intervals will be ignored during processing in `csaw` by specifying the `discard` parameter.  
+
+```{r}
+library(rtracklayer)
+
+blacklist <- import(black.path)
+blacklist
+```
+
+Any user-defined set of regions can be used as a blacklist in this analysis.  
+
+- For example, one could use predicted repeat regions from the UCSC genome annotation. This tends to remove a greater number of problematic regions (especially microsatellites) compared to the ENCODE blacklist. However, the size of the UCSC list means that genuine DB sites may also be removed. Thus. the ENCODE blacklist is prefered for most applications.  
+
+- Alternatively, if negative control samples are available, they can be used to empirically identify problematic regions with the `GreyListChIP` package. These regions should be ignored as they have high coverage in the controls and are unlikely to be genuine binding sites.  
+
+## Setting up the read extraction parameters  
+In the `csaw` package, the `readParam` object determines which reads are extracted from the BAM files. The intention is to set this up once and to re-use it in all relevant functions. For this analysis, reads are ignored if they map to blacklist regions or do not map to the standard set of mouse nuclear chromosomes.  
+
+```{r}
+library(csaw)
+
+standard.chr <- paste0("chr", c(1:19, "X", "Y"))
+param <- readParam(minq = 20, discard = blacklist, restrict = standard.chr)
+```
+
+Reads are also ignored if they have a mapping quality (MAPQ) score below 203. This avoids spurious results due to weak or non-unique alignments that should be assigned low MAPQ scores by the aligner. Note that the range of MAPQ scores will vary between aligners, so some inspection of the BAM files is necessary to choose an appropriate value.  
+
+# Computing the avarage fragment length  
+Strand bimodality is often observed in ChIP-seq experiments involving narrow binding events like H3K9ac marking. This refers to the presence of distinct subpeaks on each strand and is quantified with cross-correlation plots (Kharchenko, Tolstorukov, and Park 2008). A strong peak in the cross-correlations should be observed if immunoprecipitation was successful. The delay distance at the peak corresponds to the distance between forward- and reverse-strand subpeaks.  
+
+```{r}
+x <- correlatedReads(acdata$Path, param = reform(param, dedup = TRUE))
+frag.len <- maximizeCcf(x)
+frag.len
+```
+
+```{r}
+plot(1:length(x) - 1, xlab = "Delay (bp)", ylab = "CCF", type = "l")
+abline(v = frag.len, col = "red")
+text(x = frag.len, y = min(x), paste(frag.len, "bp"), pos = 4, col = "red")
+```
+
+Only unmarked reads (i.e., not potential PCR duplicates) are used to calculate the cross-correlations. This reduces noise from variable PCR amplification and decreases the size of the “phantom” peak at the read length (Landt et al. 2012). However, general removal of marked reads is risky as it caps the signal in high-coverage regions of the genome. This can result in loss of power to detect DB, or introduction of spurious DB when the same cap is applied to libraries of different sizes. Thus, the marking status of each read will be ignored in the rest of the analysis, i.e., no duplicates will be removed in downstream steps.  
+
+# Counting reads into windows  
+`csaw` uses a sliding window strategy to quantify protein binding intensity across the genome. Each reads is directly extended to the average fragment length to represent the DNA fragment from which that read was sequenced. Any position within the inferred fragment is a potential contact site for the protein of interest. To quantify binding in a genomic window, the number of these fragments overlapping the window is counted. The window is then moved to its next position on the genome and counting is repeated. This is done for all samples such that a count is obtained for each window in each sample.  
+
+```{r}
+knitr::include_graphics("figures/counting-reads-into-windows.PNG")
+```
+
+The `windowCounts()` function prodices a `RangedSummarizedExperiment` object containing a matrix of such counts. Each row corresponds to a window; each column represents a BAM file corresponding to a single sample; and each entry of the matrix represents the number of gragments overlapping a particular window in a particular sample.  
+
+```{r}
+win.data <- windowCounts(acdata$Path, param = param, width = 150, ext = frag.len)
+win.data
+```
+
+To analyze H3K9ac data, a window size of 150 bp is used here. This corresponds roughly to the length of the DNA in a nucleosome (Humburg et al. 2011), which is the smallest relevant unit for studying histone mark enrichment. The spacing between windows is set to the default of 50 bp, i.e., the start positions for adjacent windows are 50 bp apart. Smaller spacings can be used to improve spatial resolution, but will increase memory usage and runtime by increasing the number of windows required to cover the genome. This is unnecessary as increased resolution confers little practical benefit for this data set – counts for very closely spaced windows will be practically identical. Finally, windows with very low counts (by default, less than a sum of 10 across all samples) are removed to reduce memory usage. This represents a preliminary filter to remove uninteresting windows corresponding to likely background regions.  
+
+# Filtering windows by abundance  
+As previously mentioned, low-abundance windows contain no binding sites and need to be filtered out. This improves power by removing irrelevant tests prior to the multiple testing correction; avoids problems with discreteness in downstream statistical methods; and reduces computational work for further analyses. Here, filtering is performed using the average abundance of each window (McCarthy, Chen, and Smyth 2012), which is defined as the average log-count per million for that window. This performs well as an independent filter statistic for NB-distributed count data (Lun and Smyth 2014).  
+
+The filter threshold is defined based on the assumption that most regions in the genome are not marked by H3K9ac. Reads are counted into large bins and the median coverage across those bins is used as an estimate of the background abundance. This estimate is then compared to the average abundances of the windows, after rescaling to account for differences in the window and bin sizes. A window is only retained if its coverage is 3-fold higher than that of the background regions, i.e., the abundance of the window is greater than the background abundance estimate by log2(3) or more. This removes a large number of windows that are weakly or not marked and are likely to be irrelevant.  
+
+```{r}
+bins <- windowCounts(acdata$Path, bin = TRUE, width = 2000, param = param)
+filter.stat <- filterWindowsGlobal(win.data, bins)
+min.fc <- 3
+
+keep <- filter.stat$filter > log2(min.fc)
+summary(keep)
+```
+
+The chosen threshold is greater than the abundances of most bins in the genome – presumably, those that contain background regions. This suggests that the filter will remove most windows lying within background regions.  
+
+```{r}
+hist(filter.stat$back.abundances, 
+     main = "", 
+     breaks = 50, 
+     xlab = "Background abundance (log2-CPM)")
+
+threshold <- filter.stat$abundances[1] - filter.stat$filter[1] + log2(min.fc)
+abline(v = threshold, col = "red")
+```
+
+The filtering itself is done by simply subsetting the RangedSummarizedExperiment object.  
+```{r}
+filtered.data <- win.data[keep, ]
+```
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Normalizing for sample-specific trended biases  
 
 
 
