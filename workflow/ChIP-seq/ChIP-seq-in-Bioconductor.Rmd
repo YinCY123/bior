@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # Introduction  
 Chromatin immunoprecipitation with sequencing (ChIP-seq) is a widely used technique for identifying the genomic binding sites of a target protein. Conventional analyses of ChIP-seq data aim to detect absolute binding (i.e., the presence or absence of a binding site) based on peaks in the read coverage. An alternative analysis strategy is to detect of changes in the binding profile between conditions (Ross-Innes et al. 2012; Pal et al. 2013). These differential binding (DB) analyses involve counting reads into genomic intervals and testing those counts for significant differences between conditions. This defines a set of putative DB regions for further examination. DB analyses are statistically easier to perform than their conventional counterparts, as the effect of genomic biases is largely mitigated when counts for different libraries are compared at the same genomic region. DB regions may also be more relevant as the change in binding can be associated with the biological difference between conditions.  
 
-The key step in the DB analysis is the manner in which reads are counted. The most obvious strategy is to count reads into pre-defined regions of interest, like promoters or gene bodies (Pal et al. 2013). This is simple but will not capture changes outside of those regions. In contrast, de novo analyses do not depend on pre-specified regions, instead using empirically defined peaks or sliding windows for read counting. Peak-based methods are implemented in the `DiffBind` and `DBChIP` software packages (Ross-Innes et al. 2012; Liang and Keles 2012), which count reads into peak intervals that have been identified with software like MACS (Zhang et al. 2008). This requires some care to maintain statistical rigour as peaks are called with the same data used to test for DB. Alternatively, window-based approaches count reads into sliding windows across the genome. This is a more direct strategy that avoids problems with data re-use and can provide increased DB detection power (Lun and Smyth 2014). However, its correct implementation is not straightforward due to the subtleties with interpretation of the false discovery rate (FDR).  
+**The key step in the DB analysis is the manner in which reads are counted**. The most obvious strategy is to count reads into pre-defined regions of interest, like promoters or gene bodies (Pal et al. 2013). This is simple but will not capture changes outside of those regions. In contrast, de novo analyses do not depend on pre-specified regions, instead using empirically defined peaks or sliding windows for read counting. Peak-based methods are implemented in the `DiffBind` and `DBChIP` software packages (Ross-Innes et al. 2012; Liang and Keles 2012), which count reads into peak intervals that have been identified with software like MACS (Zhang et al. 2008). This requires some care to maintain statistical rigour as peaks are called with the same data used to test for DB. Alternatively, window-based approaches count reads into sliding windows across the genome. This is a more direct strategy that avoids problems with data re-use and can provide increased DB detection power (Lun and Smyth 2014). However, its correct implementation is not straightforward due to the subtleties with interpretation of the false discovery rate (FDR).  
 
 # Differential binding with sliding windows  
 Here, we describe computational workflows for performing a DB analysis with sliding windows. It is primarily based on the `csaw` software package but also uses a number of other packages from the open-source Bioconductor project (Huber et al. 2015). The aim is to facilitate the practical implementation of window-based DB analyses by providing detailed code and expected output. We demonstrate on data from real studies examining changes in transcription factor binding (Kasper et al. 2014) and histone mark enrichment (Revilla-I-Domingo et al. 2012).
@@ -21,16 +21,31 @@ Here, we describe computational workflows for performing a DB analysis with slid
 The workflows described here apply to any ChIP-seq experiment with multiple experimental conditions and with multiple biological samples within one or more of the conditions. They detect and summarize DB regions between conditions in a *de novo* manner, i.e., without making any prior assumptions about the location or width of bound regions. Detected regions are then annotated according to their proximity to annotated genes. In addition, the code can be easily adapted to accommodate batch effects, covariates and multiple experimental factors.  
 
 # Obtaining BAM files  
-All of the workflows described here start from sorted and indexed BAM files in the `chipseqDBData` package. For application to user-specified data, the raw read sequences have to be aligned to the appropriate reference genome beforehand. Most aligners can be used for this purpose, but we have used `Rsubread` (Liao, Smyth, and Shi 2013) due to the convenience of its R interface. It is also recommended to mark duplicate reads using tools like Picard prior to starting the workflow.  
+All of the workflows described here start from sorted and indexed BAM files in the `chipseqDBData` package. For application to user-specified data, the raw read sequences have to be aligned to the appropriate reference genome beforehand. Most aligners can be used for this purpose, but we have used `Rsubread` (Liao, Smyth, and Shi 2013) due to the convenience of its R interface. It is also recommended to mark duplicate reads using tools like `Picard` prior to starting the workflow.  
 
 # Overview  
-Here, we perform a window-based differential binding (DB) analysis to identify regions of differential H3K9ac enrichment between pro-B and mature B cells (Revilla-I-Domingo et al. 2012). H3K9ac is associated with active promoters and tends to exhibit relatively narrow regions of enrichment relative to other marks such as H3K27me3. We download the BAM files using the relevant function from the `chipseqDBData` package.  
+Here, we perform a window-based differential binding (DB) analysis to identify regions of differential H3K9ac enrichment between pro-B and mature B cells (Revilla-I-Domingo et al. 2012). H3K9ac is associated with active promoters and tends   to exhibit relatively narrow regions of enrichment relative to other marks such as H3K27me3. We download the BAM files using the relevant function from the `chipseqDBData` package.  
 
 ```{r, message=FALSE}
-library(chipseqDBData)
+#library(chipseqDBData)
 
-acdata <- H3K9acData()
+#acdata <- H3K9acData()
+# manua 
+reg <- "GSM932943|GSM932944|GSM932945|GSM932946|GSM932959|GSM932960|GSM932961|GSM932962|GSM932963"
+samples <- str_split(reg, "\\|")[[1]]
+u <- "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM932nnn/%%/suppl/%%_20GEGAAXX_3_20090127a_8113_20100504_bowtie.bed.gz"
+urls <- str_replace_all(u, "%%", samples)
+
+for(i in seq_along(urls)){
+    download.file(url = urls[i], 
+                  destfile = paste(samples[i], ".bed.gz", sep = ""))
+}
+
+for(i in samples){
+    getGEOSuppFiles(i, baseDir = "f:/git/Data/ChIP-seq/")
+}
 ```
+
 
 
 # Pre-processing checks  
