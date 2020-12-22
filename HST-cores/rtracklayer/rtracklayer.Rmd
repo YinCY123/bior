@@ -33,15 +33,15 @@ Note that there is a help page for the general `import` function, but there are 
 ## BED files  
 Most BED files are small and can be read as a single object. The output of `import(format = "BED)` is a `GRanges`.  
 
-You cna specify `genome` (for example `hg19`) and the function will try to make an effort to populated the `seqinfo` of the `GRanges`.  
+You can specify `genome` (for example `hg19`) and the function will try to make an effort to populated the `seqinfo` of the `GRanges`.  
 
 You can also use the `which` argument to selectively parse a subset of the file which overlaps a `GRanges`. This becomes much more efficient if the file has been tabix-indexed.  
 
 
 ## BigWig files  
-BigWig files typically store whole-genome coverage vectors (or at least whole-genome data). For this reason, the R representation of a BigWig file is usually quite big, so it might be necessary to read it into R in small chunks.  
+**BigWig files typically store whole-genome coverage vectors** (or at least whole-genome data). For this reason, the R representation of a BigWig file is usually quite big, so it might be necessary to read it into R in small chunks.  
 
-As for BED files, `import(format="BigWig")` supports a `which` argument which is a `GRanges`. It output data type is a `GRanges` per default, but using the `as` agurment you can have `as="Rle"` and a few other options.  
+As for BED files, `import(format="BigWig")` supports a `which` argument which is a `GRanges`. It output data type is a `GRanges` by default, but using the `as` agurment you can have `as="Rle"` and a few other options.  
 
 The `import(format = "BigWig")` does not support a `genome` argument.  
 
@@ -56,19 +56,18 @@ The `import(format = "BigWig")` does not support a `genome` argument.
 ## Example  
 ```{r}
 ahub <- AnnotationHub()
-table(ahub$rdataclass)
+table(ahub$rdataclass) %>% sort()
 ```
 
 
 ```{r}
-ahub.gr <- subset(ahub, rdataclass == "GRanges" & species == "Homo sapiens")
+ahub.gr <- subset(ahub, subset = rdataclass == "GRanges" & species == "Homo sapiens")
 gr <- ahub.gr[[1]]
 ```
 
 ```{r}
 seqinfo(gr)
 ```
-
 
 
 ```{r}
@@ -83,7 +82,6 @@ This returns us a file name, ready for use by `import`
 ```{r}
 gr1 <- gr[1:3]
 ```
-
 
 
 ## LiftOver  
