@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Quick Start  
 ## Four steps for peak annotation  
-1. Read peak data with `toGRange`  
+1. Read peak data with `toGRanges`  
 2. Generate annotation data with `tpGRanges`   
 3. Annotate peaks with `annotatePeakInBatch`  
 4. Add addo=itional informations with `addGeneIDs`  
