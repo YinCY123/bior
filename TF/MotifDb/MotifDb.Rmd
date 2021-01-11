@@ -61,6 +61,9 @@ slotNames(MotifDb)
 ## Selection  
 There are three ways to extract subsets of interest from the `MotifDb` collection. **All three operate upon the `MotifDb` metadata, matching values in one or more of those fifteen attributes (listed just above), and returning the subset of `MotifDb` which meet the specified criteria**. The three techniques: `query`, `subset` and `grep`  
 
+There are three ways to extract subsets of interest from the MotifDb collection. All three operate upon the MotifDb metadata, matching values in one or more of those fifteen attributes (listed just above), and returning the subset of MotifDb which meet the specified criteria. The three techniques: `query`, `subset` and `grep`  
+
+
 ### query  
 This is the simplest technique to use, and will suffice in many circumstances. For example, if you want all of the human matrices.  
 ```{r}
