@@ -17,7 +17,7 @@ Sequence specificity among closely related binding sites is nearly always incomp
 
 Despite their importance in current research, there has been until now no single, annotated, comprehensive collection of publicly available motifs.   
 
-The current package provides such a collection, offering more than two thousand annotated matrices from multiple organisms, within the context of the Bioconductor project. The matrices can be filtered and selected on the basis of their metadata, used with other Bioconductor packages (MotIV for motif comparison, seqLogo for visualization) or easily exported for use with standard software and websites such as those provided by the MEME Suite.    
+The current package provides such a collection, offering more than two thousand annotated matrices from multiple organisms, within the context of the Bioconductor project. The matrices can be filtered and selected on the basis of their metadata, used with other Bioconductor packages (`MotIV` for motif comparison, `seqLogo` for visualization) or easily exported for use with standard software and websites such as those provided by the MEME Suite.    
 
 ## Basic Operations 
 ```{r, message=FALSE, warning=FALSE}
@@ -51,7 +51,7 @@ MotifDb %>% class()
 ```
 
 ```{r}
-methods(class = "MotifList")
+methods(class = "MotifList") %>% head()
 ```
 
 ```{r}
@@ -59,9 +59,7 @@ slotNames(MotifDb)
 ```
 
 ## Selection  
-There are three ways to extract subsets of interest from the MotifDb collection. All three operate upon the MotifDb metadata,
-matching values in one or more of those fifteen attributes (listed just above), and returning the subset of MotifDb which
-meet the specified criteria. The three techniques: `query`, `subset` and `grep`  
+There are three ways to extract subsets of interest from the `MotifDb` collection. **All three operate upon the `MotifDb` metadata, matching values in one or more of those fifteen attributes (listed just above), and returning the subset of `MotifDb` which meet the specified criteria**. The three techniques: `query`, `subset` and `grep`  
 
 ### query  
 This is the simplest technique to use, and will suffice in many circumstances. For example, if you want all of the human matrices.  
@@ -79,7 +77,8 @@ all yeast transcription factors with a homeo domain
 query(MotifDb, andStrings = "cerevisiae") %>% query(andStrings = "homeo")
 ```
 
-The last example may inspire more confidence in the precision of the result than is justified, and for a couple of reasons. First, the assignment of protein binding domains to specific categories is, as of 2012, an ad hoc and incomplete process. Second, the query commands matches the supplied character string to all metadata columns. In this case, ’homeo’ appears both in the bindingDomain column and the tfFamily column, and the above query will return matches from both. Searching and filtering should always be accompanined by close scrutiny of the data, such as these commands illustrate:  
+The last example may inspire more confidence in the precision of the result than is justified, and for a couple of reasons. First, the assignment of protein binding domains to specific categories is, as of 2012, an ad hoc and incomplete process. Second, the query commands matches the supplied character string to all metadata columns. In this case, ’homeo’ appears both in the bindingDomain column and the tfFamily column, and the above query will return matches from both. `Searching` and `filtering` should always be accompanined by close scrutiny of the data, such as these commands illustrate:  
+
 ```{r}
 grep("homeo", values(MotifDb)$bindingDomain, ignore.case = T, value = T) %>% unique()
 ```
@@ -89,7 +88,7 @@ grep("homeo", values(MotifDb)$tfFamily, ignore.case = T, value = T) %>% unique()
 ```
 
 ### grep  
-This selection method (and the next, subset) require that you address metadata columns explicitly. This is a little more work, but the requisite direct engagement with the metadata is worthwhile. Repeating the ’query’ examples from above, you can see how more knowedge of MotifDb metadata is required.  
+**This selection method (and the next, `subset`) require that you address metadata columns explicitly**. This is a little more work, but the requisite direct engagement with the metadata is worthwhile. Repeating the ’query’ examples from above, you can see how more knowedge of MotifDb metadata is required.  
 
 ```{r}
 mdb.human <- MotifDb[grep('Hsapiens', values(MotifDb)$organism)]
@@ -114,7 +113,7 @@ table(yeast.homeo.indices)
 
 
 ### subset  
-MotifDb::subset emulates the R base data.frame subset command, which is not unlike an SQL select function. Unfortunately – and just like the R base subset function – this MotifDb method cannot be used reliably within a script: It is only reliable when called interactively. Here, with mixed success (as you will see) , we use MotifDb::subset to reproduce the query and grep selections shown above.  
+`MotifDb::subset` emulates the R base data.frame subset command, which is not unlike an SQL select function. Unfortunately – and just like the R base subset function – this MotifDb method cannot be used reliably within a script: It is only reliable when called interactively. Here, with mixed success (as you will see) , we use MotifDb::subset to reproduce the query and grep selections shown above.  
 ```{r}
 if(interactive()){
   subset(MotifDb, tolower(geneSymbol) == "sox4")
@@ -219,20 +218,8 @@ library(MotIV)
 help(package = "MotIV")
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+```{r}
+values(MotifDb) %>% colnames()
+```
 
 
