@@ -1,0 +1,271 @@
+---
+title: "TFBSTools"
+author: "yincy"
+date: "1/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction  
+Most approaches can be described in three sequential phases.  
+
+- First, a pattern is generated for a set of target sequences known to be bound by a specific transcription factor.  
+- Second, a set of DNA sequences are analyzed to determine the locations of sequences consistent with the described binding pattern.  
+- Finally, in advanced cases, predictive statistical models of regulatory regions are constructed based on mutiple occurrences of the detected patterns.  
+
+Since JASPAR2016, the next generation of transcription factor binding site, TFFM (Mathelier and Wasserman 2013), was introduced into JASPAR for the first time. Now TFBSTools also supports the manipulation of TFFM. TFFM is based on hidden Markov Model (HMM). The biggest advantage of TFFM over basic PWM is that it can model position interdependence within TFBSs and variable motif length.  
+
+A novel graphical representation of the TFFM motifs that captures the position interdependence is also introduced.  
+
+# S4 classes in TFBSTools  
+## XMatrix and its subclasses  
+The package is built around a number of S4 class of which the `XMatrix`, `SiteSet` classes are the most important.  
+
+- `XMatrix` is a virtual class, which means no concrete objects can be created directly from it.  
+
+- The subclass `PFMatrix` is designed to store all the relevant information for one raw position frequency matrix (PFM). This object is compatible with one record from JASPAR database. 
+
+- `PWMatrix` is used to store a position weight matrix (PWM). Compared with  `PFMatrix`, it has one extra slot pseudocounts.  
+
+- `ICMatrix` is used to store a information content matrix (ICM). Compared with `PWMatrix`, it has one extra slot schneider.  
+
+The following examples demonstrate the creation of `PFMatrix`, the conversions between these matrices and some assocated methods defined for these classes.  
+
+```{r}
+library(TFBSTools)
+
+pfm <- PFMatrix(ID = "MA0004.1", 
+                name = "Arnt", 
+                matrixClass = "Zipper-Type", 
+                strand = "+", 
+                bg = c(A = 0.25, C = 0.25, G = 0.25, T = 0.25), 
+                tags = list(family = "Helix-Loop-Helix", 
+                            species = "10090", 
+                            tax_group = "vertebrates", 
+                            medline = "7592839", 
+                            type = "SELEX", 
+                            ACC = "P53762", 
+                            pazar_tf_id = "TF0000003", 
+                            TFBshape_ID = "11", 
+                            TFencyclopedia_ID = "580"), 
+                profileMatrix = matrix(c(4L, 19L, 0L, 0L, 0L, 0L, 
+                                         16L, 0L, 20L, 0L, 0L, 0L, 
+                                         0L, 1L, 0L, 20L, 0L, 20L, 
+                                         0L, 0L, 0L, 0L, 20L, 0L), 
+                                       byrow = T, 
+                                       nrow = 4, 
+                                       dimnames = list(c("A", "C", "G", "T"))))
+
+pfm
+```
+
+```{r}
+as.matrix(pfm)
+```
+
+```{r}
+ID(pfm)
+```
+
+```{r}
+Matrix(pfm)
+```
+
+```{r}
+name(pfm)
+```
+
+```{r}
+ncol(pfm)
+```
+
+```{r}
+nrow(pfm)
+```
+
+```{r}
+length(pfm)
+```
+
+Convert a PFM to PWM, ICM  
+```{r}
+pwm <- toPWM(x = pfm, 
+             type = "log2probratio", 
+             pseudocounts = 0.8, 
+             bg = c(A = 0.25, C = 0.25, G = 0.25, T = 0.25))
+
+pwm
+```
+
+
+```{r}
+icm <- toICM(x = pfm, pseudocounts = sqrt(rowSums(pfm)[1]), 
+             schneider = FALSE, 
+             bg = c(A = 0.25, C = 0.25, G = 0.25, T = 0.25))
+icm
+```
+
+get the reverse complement matrix with all the same information except the strand.  
+```{r}
+pwmRevComp <- reverseComplement(pwm)
+```
+
+## XMatrixList and its subclasses  
+`XMatrixList` is used to store a set of `XMatrix` objects. Basically it is a `SimpleList` for easy manipulation the whole set of `XMatrix.` The concrete objects can be `PFMatrix`, `PWMatrix` and `ICMatrix`.  
+
+```{r}
+pfm2 <- pfm
+
+pfmList <- PFMatrixList(pfm1 = pfm, pfm2 = pfm2, use.names = T)
+pfmList
+names(pfmList)
+```
+
+## SiteSet, SiteSetList, SitePairSet and SitePairSetList  
+The `SiteSet` class is a container for storing a set of putative transcription factor binding sites on a nucleotide sequence (start, end, strand, score, pattern as a `PWMatrix`, etc.) from scaning a nucleotide sequence with the corresponding  `PWMatrix`. Similarly, `SiteSetList` stores a set of `SiteSet` objects.  
+
+For holding the results returned from a pairwise alignment scaning, `SitePairSet` and `SitePairSetList` are provided.   
+
+## MotifSet  
+This `MotifSet` class is used to store the generated motifs from de novo motif discovery software.  
+
+## TFFM and its subclasses  
+`TFMM` is a virtual class and two classes `TFFMFirst` and `TFFMDetail` are derived from this virtual class. Compared with  `PFMatrix` class, `TFFM` has two extra slots that store the emission distribution parameters and transition probabilities. `TFFMFirst` class stands for the first-order `TFFMs`, while `TFFMDetail` stands for the more detailed and descriptive `TFFMs`.  
+
+Although we provide the constructor functions for `TFFM` class, the `TFFM` object is usually generated from reading a XML file from the Python module `TFFM`.  
+
+```{r}
+xmlFirst <- file.path(system.file("extdata", package = "TFBSTools"), 
+                      "tffm_first_order.xml")
+
+tffmFirst <- readXMLTFFM(xmlFirst, type = "First")
+slotNames(tffmFirst)
+
+xmlDetail <- file.path(system.file("extdata", package = "TFBSTools"), 
+                       "tffm_detailed.xml")
+tffmDetail <- readXMLTFFM(fn = xmlDetail, type = "Detail")
+slotNames(tffmDetail)
+```
+
+```{r}
+getPosProb(tffmDetail)
+```
+
+# Database interface for JASPAR2014  
+ASPAR is a collection of transcription factor DNA-binding preferences, modeled as matrices. These can be converted into PWMs, used for scanning genomic sequences. JASPAR is the only database with this scope where the data can be used with no restrictions (open-source).   
+
+## Search JASPAR2014 database  
+This search function fetches matrix data for all matrices in the database matching criteria defined by the named arguments and returns a PFMatrixList object.  
+
+```{r}
+library(JASPAR2020)
+
+opts <- list()
+opts[["species"]] <- 9606
+opts[["name"]] <- "RUNX1"
+opts[["type"]] <- "SELEX"
+opts[["all_versions"]] <- TRUE
+
+PFMatrixList <- getMatrixSet(JASPAR2020, opts)
+```
+
+```{r}
+opts2 <- list()
+opts2[["type"]] <- "SELEX"
+PFMatrixList2 <- getMatrixSet(JASPAR2020, opts2)
+```
+
+## Store, delete and initialize JASPAR2020 database  
+We also provide some functions to initialize an empty JASPAR2014 style database, store new PFMatrix or  PFMatrixList into it, or delete some records based on ID. The backend of the database is SQLite.  
+
+```{r}
+db <- "myMatrixDb.sqlite"
+initializeJASPARDB(x = db, version = "2014")
+data("MA0043")
+storeMatrix(db, MA0043)
+deleteMatrixHavingID(db, "MA0043.1")
+file.remove(db)
+```
+
+# PFM, PWM and ICM methods  
+This section will give an introduction of matrix operations, including conversion from PFM to PWM and ICM, profile matrices comparison, dynamic random profile generation.  
+
+## PFM to PWM  
+The method `toPWM` can convert PFM to PWM (Wasserman and Sandelin 2004). Optional parameters include type, pseudocounts, bg. The implementation in this package is a bit different from that in `Biostrings`.  
+
+First of all, `toPWM` allows the input matrix to have different column sums, which means the count matrix can have an unequal number of sequences contributing to each column. This scenario is rare, but exists in JASPAR SELEX data.  
+
+Second, we can specify customized *pseudocounts*. *pseudocounts* is necessary for correcting the small number of counts or eliminating the zero values before log transformation. In TFBS perl module, the square root of the number of sequences contributing to each column. However, it has been shown to too harsh (Nishida, Frith, and Nakai 2009). Hence, a default value of 0.8 is used. Of course, it can be changed to other customized value or even different values for each column.  
+
+```{r}
+pwm <- toPWM(x = pfm, pseudocounts = 0.8)
+```
+
+## PFM to ICM  
+The method toICM can convert PFM to ICM (Schneider et al. 1986). Besides the similar *pseudocounts*, *bg*, you can also choose to do the *schneider* correction.  
+
+The information content matrix has a column sum between 0 (no base preference) and 2 (only 1 base used). Usually this information is used to plot sequence log.  
+
+```{r}
+icm <- toICM(pfm, pseudocounts = 0.8, schneider = TRUE)
+```
+
+```{r}
+seqLogo(icm)
+```
+
+## Align PFM to a custom matrix or IUPAC string  
+In some cases, it is beneficial to assess similarity of existing profile matrices, such as JASPAR, to a newly discovered matrix (as with using BLAST for sequence data comparison when using Genbank).  
+
+`TFBSTools` provides tools for comparing pairs of PFMs, or a PFM with IUPAC string, using a modified Needleman-Wunsch algorithm (Sandelin et al. 2003).  
+
+```{r}
+data("MA0003.2")
+data("MA0004.1")
+
+pfmQuery <- MA0004.1
+pfmSubject <- MA0003.2
+
+PFMSimilarity(pfmSubject = pfmSubject, pfmQuery = pfmQuery)
+
+IUPACString <- "ACGTMRWSYKVHDBN"
+PFMSimilarity(pfmList, IUPACString)
+```
+
+
+## PWM similarity  
+- normalized Euclidean distance  
+- Pearson correlation  
+- Kullback Leibler divergence  
+
+```{r}
+pwm1 <- toPWM(MA0003.2, type = "prob")
+pwm2 <- toPWM(MA0004.1, type = "prob")
+
+PWMSimilarity(pwm1, pwm2, method = "Euclidean")
+PWMSimilarity(pwm1, pwm2, method = "Pearson")
+PWMSimilarity(pwm1, pwm2, method = "KL")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
