@@ -1,0 +1,72 @@
+---
+title: "kidney LSP"
+author: "yincy"
+date: "1/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+help(package = "GEOmetadb")
+```
+
+```{r}
+dbListTables(con)
+```
+
+
+```{r}
+gpl_technology <- dbReadTable(con, "gpl") %>% 
+    dplyr::pull(technology) %>% 
+    table() %>% 
+    sort(decreasing = T) 
+
+gse_type <- dbReadTable(con, "gse") %>% 
+    dplyr::pull(type) %>% 
+    table() %>% sort(decreasing = T)
+
+gse_type %>% head
+
+gpl_technology %>% head()
+gsm_organism <- dbReadTable(con, "gsm") %>% 
+    dplyr::pull(organism_ch1) %>% 
+    table() %>% 
+    sort(decreasing = T)
+
+gsm_organism %>% head()
+```
+
+```{r}
+dbReadTable(con, "gsm") %>% head
+```
+
+
+```{r}
+dbListFields(con, "gsm")
+```
+
+
+```{r}
+states <- paste("select gse.gse, gse.title, gsm.organism_ch1, gsm.source_name_ch1, gsm.molecule_ch1, gsm.description",
+            "from gse", 
+            "join gse_gsm on gse.gse=gse_gsm.gse", 
+            "join gsm on gse_gsm.gsm = gsm.gsm", 
+            "where gse.title like '%LPS%macrophage'",  
+            "and gsm.title like '%kidney%'",
+            sep = " ")
+
+states
+```
+
+
+```{r}
+dbGetQuery(con , states)
+```
+
+
+
+

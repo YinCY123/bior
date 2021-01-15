@@ -1,0 +1,26 @@
+---
+title: "motifmatchr"
+author: "yincy"
+date: "1/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction  
+The `motifmatchr` package is designed for analyzing many sequences and many motifs to find which sequences contain which motifs. It uses the MOODS C++ library (developedby Pasi Rastas, Janne Korhonen, and Petri Martinmaki) internally for motif matching. The primary method of `motifmatchr` is matchMotifs, which takes in motif PWMs/PFMs and genomic ranges or sequences and returns either which ranges/sequences match which motifs or the positions of the matches.  
+
+Compared with alternative motif matching functions available in Bioconductor (e.g. matchPWM in Biostrings or searchSeq in TFBSTools), `motifmatchr` is designed specifically for the use case of determining whether many different sequences/ranges contain many different motifs. For example, when analyzing ChIP-seq or ATAC-seq data one might want to find what motifs in a collection of motifs like the JASPAR database are found in what peaks.  
+
+# Quickstart  
+Example use case of `motifmatchr` with a set of peaks and a few motifs. For additional options for inputs & outputs, see remainder of vignette.  
+
+```{r, message=FALSE, warning=FALSE}
+library(motifmatchr)
+library(GenomicRanges)
+library(SummarizedExperiment)
+library(BSgenome)
+```
+
