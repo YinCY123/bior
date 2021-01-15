@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r load packages, message=FALSE, warning=FALSE}
 library(Biobase)
 library(ALL)
-library(hgu95av2.db)
+#library(hgu95av2.db)
 library(magrittr)
 ```
 

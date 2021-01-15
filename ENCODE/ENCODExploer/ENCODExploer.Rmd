@@ -28,7 +28,7 @@ We implemented time-saving features to select ENCODE files by querying their met
 
 
 # Introduction  
-To use the functionalities of the ENCODExplorer package, you must first download the data.table containing all of the ENCODE metadata.  
+To use the functionalities of the `ENCODExplorer` package, you must first download the data.table containing all of the ENCODE metadata.  
 
 This `data.table` is available through the `AnnotationHub` package. For convenience, the latest available version at each release will be downloaded and used by default.  
 
@@ -354,7 +354,7 @@ query(ah, "ENCODExplorerData")
 ```
 
 
-Finally, it is also possible to use ENCODExplorerData functionalities to generate an up-to-date `data.table`, and pass it to `ENCODExplorer’s` functions.  
+Finally, it is also possible to use ENCODExplorerData functio  nalities to generate an up-to-date `data.table`, and pass it to `ENCODExplorer’s` functions.  
 
 ```{r}
 encode_df %>% dplyr::pull(assay) %>% table() %>% sort(decreasing = T)

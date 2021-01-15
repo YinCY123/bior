@@ -1,0 +1,28 @@
+---
+title: "SummarizedExperiment"
+author: "yincy"
+date: "1/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction  
+The `SummarizedExperiment` class is used to store rectangular matrices of experimental results, which are commonly produced by sequencing and microarray experiments. Each object stores observations of one or more samples, along with additional meta-data describing both the observations (features) and samples (phenotypes).  
+
+**A key aspect of the `SummarizedExperiment` class is the coordination of the meta-data and assays when subsetting**. For example, if you want to exclude a given sample you can do for both the meta-data and assay in one operation, which ensures the meta-data and observed data will remain in sync. Improperly accounting for meta and observational data has resulted in a number of incorrect results and retractions so this is a very desirable property.  
+
+`SummarizedExperiment` is in many ways similar to the historical `ExpressionSet`, the main distinction being that  `SummarizedExperiment` is more flexible in it’s row information, allowing both `GRanges` based as well as those described by arbitrary  `DataFrames`. This makes it ideally suited to a variety of experiments, particularly sequencing based experiments such as RNA-Seq and ChIp-Seq.  
+
+
+# Anatomy of a `SummarizedExperiment`  
+The `SummarizedExperiment` package contains two classes: `SummarizedExperiment` and `RangedSummarizedExperiment`.  
+
+SummarizedExperiment is a matrix-like container where rows represent features of interest (e.g. genes, transcripts, exons, etc.) and columns represent samples. The objects contain one or more assays, each represented by a matrix-like object of numeric or other mode. The rows of a SummarizedExperiment object represent features of interest. Information about these features is stored in a  DataFrame object, accessible using the function rowData(). Each row of the DataFrame provides information on the feature in the corresponding row of the SummarizedExperiment object. Columns of the DataFrame represent different attributes of the features of interest, e.g., gene or transcript IDs, etc.  
+
+
+
+
+
