@@ -13,13 +13,14 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r, message=FALSE}
 library(rGADEM)
 library(BSgenome.Hsapiens.UCSC.hg38)
+library(BSgenome.Mmusculus.UCSC.mm10)
 ```
 
 
 ## Loading in the data  
-The first step is to load data from BED files or FASTA format in the R environment. The sequences are stored in some of the basic containers defined in the Biostrings package. So, the data can be manipulated in a consistent and easy way.   
+The first step is to load data from BED files or FASTA format in the R environment. The sequences are stored in some of the basic containers defined in the `Biostrings` package. So, the data can be manipulated in a consistent and easy way.   
 
-The maximum number of sequences allowed is 44000. But it is possible to change the default parameters by editing the defines.h file and recompiling it.  
+The maximum number of sequences allowed is 44000. But it is possible to change the default parameters by editing the `defines.h` file and recompiling it.  
 
 
 ### Load data from BED file  
@@ -51,12 +52,14 @@ Sequences <- GRanges(seqnames = BED[, 1],
 pwd <- ""
 path <- system.file("extdata/Test_100.fasta", package = "rGADEM")
 fastaFile <- paste(pwd, path, sep = "")
+
+fastaFile <- "../../R/sslab/neuron-microglia/data/kcnd3_pro_seq.fasta"
 Sequences <- readDNAStringSet(fastaFile, format = "fasta")
 ```
 
 
 ## rGADEM analysis 
-At this time, we are now ready to start rGADEM analysis.  
+At this time, we are now ready to start `rGADEM` analysis.  
 
 P-Value cutoff: The P-Value cutoff controls the number of binding site in a motif.  
 E-Value cutoff: The E-Value cutoff controls the number of motifs to be identified.  
@@ -68,11 +71,11 @@ gadem <- GADEM(Sequences = Sequences,
 
 
 ## Seeded analysis  
-In a seeded analysis rGADEM does not generate the starting PWMs through spaced dyads and optimize them through a Genetic Algorithm. This makes seeded runs much faster than unseeded. The effciency of seeded runs makes it practical, even for sequence sets consisting of thousands of ChIP-seq peak cores, to assess several alternative seed PWMs, when prior knowledge suggests that this may be advisable. 
+In a seeded analysis `rGADEM` does not generate the starting PWMs through spaced dyads and optimize them through a Genetic Algorithm. This makes seeded runs much faster than unseeded. The effciency of seeded runs makes it practical, even for sequence sets consisting of thousands of ChIP-seq peak cores, to assess several alternative seed PWMs, when prior knowledge suggests that this may be advisable. 
 
-The main advantage of a seeded analysis over an unseeded analysis is its computational effciency.We recommend a seeded analysis whenever a reasonable starting PWM is available. However, for de novo motif discovery, an unseeded analysis is necessary.   
+The main advantage of a seeded analysis over an unseeded analysis is its computational effciency. We recommend a seeded analysis whenever a reasonable starting PWM is available. However, **for de novo motif discovery, an unseeded analysis is necessary**.   
 
-First step is to prepare a text fle with your PWM. It could be a general database (JASPAR, Transfac©,...). Only STAT1 have been selected in our example but it is possible to select a list of PWMs.  
+First step is to prepare a text file with your PWM. It could be a general database (JASPAR, Transfac©,...). Only STAT1 have been selected in our example but it is possible to select a list of PWMs.  
 
 ```{r}
 path <- system.file("extdata/jaspar2009.txt", package = "rGADEM")
@@ -104,6 +107,7 @@ slotNames(gadem)
 ```
 
 ```{r}
-slot(gadem, "motifList") %>% .[[1]]
+slot(gadem, "motifList") 
+slot(gadem, "parameters")
 ```
 
