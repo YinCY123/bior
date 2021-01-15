@@ -36,3 +36,21 @@ Specific functionalities of this package include
 - construction of user-defined prior ligand-target models.  
 
 
+# Main Steps  
+1. define expressed genes in sender and receiver cell populations  
+2. define gene set of interest, the genes in reciver might be affected by sender cell expressed ligands.  
+3. define the potential ligands that might affect the gene set of interest `predict_ligand_activities()`.  
+4. infer targeted genes of top-ranked ligands `get_weighted_ligand_target_links()`.  
+5. inferring ligand-to-target signaling paths `get_ligand_signaling_path()`.  
+6. infer supporting datasources `infer_supporting_datasources()`.  
+7. 
+
+
+
+
+
+
+
+
+
+

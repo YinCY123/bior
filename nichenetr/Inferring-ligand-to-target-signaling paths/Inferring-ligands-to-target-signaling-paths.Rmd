@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ## Infer signaling paths between ligand(s) and target(s) of interest  
 To determine signaling paths between a ligand and target of interest, we look at which transcription factors are best regulating the target genes and are most closely downstream of the ligand (based on the weights of the edges in the integrated ligand-signaling and gene regulatory networks).  
 
-Then, the shortest paths between these transcription factors and the ligand of interests are determined and genes forming part in this path are considered as important signaling mediators.  
+Then, *the shortest paths between these transcription factors and the ligand of interests are determined and genes forming part in this path are considered as important signaling mediators*.  
 
 Finally, we look in our collected data source networks for all interactions between the ligand, signaling mediators, transcription factors and target genes. This allows to both prioritize signaling mediators and check which of all collected data sources support the ligand-target predictions of interest.  
 
