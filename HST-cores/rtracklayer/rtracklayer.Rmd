@@ -9,132 +9,71 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r, load packages, message=FALSE}
-library(rtracklayer)
-library(AnnotationHub)
-library(Rsamtools)
+# Steps  
+```
+session <- browserSession() # create a BrowserSession object
+track(session, trackName = "") <- targetTrack # layer the track
+view <- browserView(object = session, 
+                    range = `GRanges`, # to focus a particular range
+                    pack = "targets")
 ```
 
 
-## Overview  
-The `rtracklayer` package interfaces to UCSC Genome Browser. It contains functions for importing and exporting data to this browser. This includes functionality for parsing file formats associated the UCSC Genome Browser such as BED, Wig, BigBed and BigWig.  
+# Introduction  
+
+The `rtracklayer` package is an interface (or layer ) between R and genome browsers. Its main purpose is the visualization of genomic annotation tracks, whether generated through experimental data analysis performed in R or loaded from an external data source.  
+
+The features of **rtracklayer** may be divided into two categories:  
+
+1. the import/export of track data  
+2. the control and querying of external genome browser sessions and views.  
+
+The basic track data structure in Bioconductor is the *GRanges* class, defined in the *GenomicRanges* package.  
+
+**Rtracklayer** supports the import and export of tracks from and to files in various formats.  
+
+1. Browser Extended Display (BED).  
+2. General Feature Format (GFF).  
+3. Wiggle (WIG).  
+
+The **rtracklayer** package currently interfaces with the **UCSC** web-based genome browser.  
 
 
-## The Import function  
-The function to parse data formats is `import`. This function has a `format` argument taking values such as `BED` or `BigWig`.  
+# Gene expression and microRNA target sites  
+## Constructing the GRanges 
 
-Note that there is a help page for the general `import` function, but there are also file format specific help pages. The easiest way to get to these help pages is to look for `XXFile` with `XX` bing the format.  
-```{r}
-?import
-?BigWigFile
-```
-
-
-## BED files  
-Most BED files are small and can be read as a single object. The output of `import(format = "BED)` is a `GRanges`.  
-
-You can specify `genome` (for example `hg19`) and the function will try to make an effort to populated the `seqinfo` of the `GRanges`.  
-
-You can also use the `which` argument to selectively parse a subset of the file which overlaps a `GRanges`. This becomes much more efficient if the file has been tabix-indexed.  
-
-
-## BigWig files  
-**BigWig files typically store whole-genome coverage vectors** (or at least whole-genome data). For this reason, the R representation of a BigWig file is usually quite big, so it might be necessary to read it into R in small chunks.  
-
-As for BED files, `import(format="BigWig")` supports a `which` argument which is a `GRanges`. It output data type is a `GRanges` by default, but using the `as` agurment you can have `as="Rle"` and a few other options.  
-
-The `import(format = "BigWig")` does not support a `genome` argument.  
-
-
-## Other file formats  
-- GFF  
-- TwoBit  
-- Wig  
-- bedGRaph  
-
-
-## Example  
-```{r}
-ahub <- AnnotationHub()
-table(ahub$rdataclass) %>% sort()
-```
-
-
-```{r}
-ahub.gr <- subset(ahub, subset = rdataclass == "GRanges" & species == "Homo sapiens")
-gr <- ahub.gr[[1]]
-```
-
-```{r}
-seqinfo(gr)
-```
-
-
-```{r}
-ahub.bw <- subset(ahub, rdataclass == "BigWigFile" & species == "Homo sapiens")
-```
-
-```{r}
-bw <- ahub.bw[[1]]
-```
-
-This returns us a file name, ready for use by `import`  
-```{r}
-gr1 <- gr[1:3]
-```
-
-
-## LiftOver  
-LiftOver is a popular tool from UCSC Genome Browser for converting between different genome versions. The `rtracklayer` package also exposes this function through the `liftOver`. To use `liftOver` you need a so-called 'chain' file describing to convert from one genome to another. This can be obtained by hand from UCSC, or directly from `AnnotationHub`.  
-
-```{r}
-ahub.chain <- subset(ahub, rdataclass == "ChainFile" & species == "Homo sapiens")
-query(x = ahub.chain, pattern = c("hg18", "hg19"))
-```
-
-
-## Importing directly from UCSC  
-Using `rtracklayer` you can import tables and tracks directly from the UCSC Genome Browser. However, it is now possible to get a lot (all?) of this data from `AnnotationHub` and this later package seems friendlier.  
-
-It is possible that not all tracks / tables and/or all information from the different track / tables from UCSC are exposed in `AnnotationHub`.  
-
-
-## Tabix indexing  
-
-
-
-# rtracklayer vignette  
 ```{r}
 library("humanStemCell")
 data(fhesc)
-library(genefilter)
-library(magrittr)
-library(limma)
-```
 
-```{r}
-design <- model.matrix(~ phenoData(fhesc)$Diff)
-hesclim <- lmFit(object = exprs(fhesc), design)
-hesceb <- eBayes(fit = hesclim)
+library(genefilter)
+filtFhesc <- nsFilter(fhesc)[[1]]
+
+library(limma)
+design <- model.matrix(~ filtFhesc$Diff)
+hesclim <- lmFit(filtFhesc, design)
+hesceb <- eBayes(hesclim)
 tab <- topTable(hesceb, coef = 2, adjust.method = "BH", n = 7676)
 tab2 <- tab[(tab$logFC > 1) & (tab$adj.P.Val < 0.01), ]
-
 affyIDs <- rownames(tab2)
+
 library(microRNA)
 data("hsTargets")
+
 library(hgu133plus2.db)
+entrezIDs <- mappedRkeys(hgu133plus2ENTREZID[affyIDs])
 
-entrezIDs <- mappedRkeys(x = hgu133plus2ENTREZID[affyIDs])
 library(org.Hs.eg.db)
+mappedEntrezIDs <- entrezIDs[entrezIDs %in% mappedkeys(org.Hs.egENSEMBL)]
+ensemblIDs <- mappedRkeys(org.Hs.egENSEMBLTRANS[mappedEntrezIDs])
+targetMatches <- match(ensemblIDs, hsTargets$target, 0)
 
-mappedEntrezIDs <- entrezIDs[entrezIDs %in% mappedkeys(org.Hs.egENSEMBLTRANS)]
-ensembleIDs <- mappedRkeys(org.Hs.egENSEMBLTRANS[mappedEntrezIDs])
-targetMatches <- match(ensembleIDs, hsTargets$target, 0)
-
+# same as data(targets)
 targets <- hsTargets[targetMatches, ]
 targets$chrom <- paste("chr", targets$chrom, sep = "")
 ```
 
+creates track from the *targets* dataset.  
 
 ```{r}
 library(rtracklayer)
@@ -143,72 +82,114 @@ library(GenomicRanges)
 head(targets)
 ```
 
-
 ```{r}
-targetRanges <- IRanges(start = targets$start, 
-                        end = targets$end)
+targetRanges <- IRanges(targets$start, targets$end)
+targetTrack <- with(targets, GRangesForUCSCGenome(genome = "hg18", 
+                                                  chrom = chrom, 
+                                                  ranges = targetRanges, 
+                                                  strand = strand, 
+                                                  name = name, 
+                                                  target = target))
 
-targetTrack <- GRangesForUCSCGenome(genome = "hg18", 
-                                    chrom = targets$chrom, 
-                                    ranges = targetRanges, 
-                                    strand = targets$strand, 
-                                    name = targets$name, 
-                                    target = targets$target)
-```
-
-```{r}
 genome(targetTrack) %>% head()
-```
-
-
-```{r}
 seqlengths(targetTrack) %>% head()
 ```
 
+## Accessing track information  
 ```{r}
 seqnames(targetTrack) %>% head()
-```
 
-```{r}
 start(targetTrack) %>% head()
+
+width(targetTrack) %>% head()
+
+strand(targetTrack) %>% head()
 ```
 
-```{r}
-strand(targetTrack)
-```
 
-```{r}
-width(targetTrack)
-```
-
+## Subsetting a GRanges  
 ```{r}
 targetTrack[1:10]
+
+targetTrack[strand(targetTrack) == "+"]
+
+targetTrack[seqnames(targetTrack) == "chr1"]
 ```
+
+## Exporting and importing tracks  
+```{r}
+export(object = targetTrack, con = "targets.bed")
+
+retrack <- import(con = "targets.bed")
+```
+
 
 ```{r}
-targetTrack[strand(targetTrack) == "-" & seqnames(targetTrack) == "chr2"]
+export(targetTrack, con = "targets.gff")
 ```
 
+
+# Viewing the targets in a genome browser  
+### Starting a session  
+The first step towards interfacing with a browser is to start a browser session, represented in R as a BrowserSession object. A BrowserSession is primarily a container of tracks and genomic views.  
 
 ```{r}
 session <- browserSession(object = "UCSC")
-genomeBrowsers()
-track(object = session, "targets") <- targetTrack
 
+genomeBrowsers()
+```
+
+### Laying the track  
+before a track can be viewed on the genome, it must be loaded into the session using the **track** function.  
+
+```{r}
+track(object = session, "targets") <- targetTrack
+```
+
+
+### Viewing the track  
+```{r}
 subTargetsTrack <- targetTrack[1]
 view <- browserView(object = session, range = subTargetsTrack * -10, pack = "targets")
 ```
 
+
+If multiple ranges are provided, multiple views are lanuched  
 ```{r}
-view <- browserView(object = session, 
-                    range = targetTrack[1] * -10, 
-                    pack = "targets")
+view <- browserView(session, range = targetTrack[1:5] * -10, pack = "targets")
+```
+
+
+### A shortcut  
+```{r}
+browseGenome(object = targetTrack, range = subTargetsTrack * -10)
+```
+
+
+# Downloading Tracks from your Web Browser  
+```{r}
+loaded_tracks <- trackNames(session)
+
+loaded_tracks %>% head()
+```
+
+```{r}
+subTargetsTrack <- track(session, "targets")
 ```
 
 
 
-### Downloading Tracks from Web Browser  
-```{r}
-subtrack <- track(session, "targets")
-```
+
+
+
+
+
+
+
+
+
+
+
+
+
 
