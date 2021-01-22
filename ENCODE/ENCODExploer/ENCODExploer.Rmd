@@ -295,13 +295,21 @@ res
 
 
 ## Obtaining average gene expression  
-For RNA-Seq experiment, the most straightforward type of results is the expression level of all genes or transcripts. ENCODExplorer provides the `queryGeneExpression` and `queryTranscriptExpression` methods to summarize these results. ENCODExplorer finds all gene or transcript expression levels for a given biosample and calculates per-condition mean values.  
+For RNA-Seq experiment, the most straightforward type of results is the expression level of all genes or transcripts. `ENCODExplorer` provides the `queryGeneExpression` and `queryTranscriptExpression` methods to summarize these results. `ENCODExplorer` finds all gene or transcript expression levels for a given biosample and calculates per-condition mean values.  
 
 Most biosamples in the ENCODE Project have RNA-seq experiments targeting different cell fractions, such as whole cells, cytoplasmic fractions, and nuclear fractions. Since it makes no biological sense to aggregate such results, ENCODExplorer automatically splits them by the dataset_description column, which details the cell fraction as well as other methodological or biological parameters which make samples unfit for aggregation.  
 
 ```{r}
 # obtain a summary of all peaks for NR3C1 ChIP-seq assays in the A549 cell line.
-res <- queryGeneExpression(biosample_name = "bone marrow")
+cell_lines <- encode_df %>% 
+    dplyr::filter(biosample_type == "cell line", nucleic_acid_term %in% c("RNA", "polyadenylated mRNA")) %>% 
+    dplyr::pull(biosample_name) %>% 
+    table() %>% 
+    sort(decreasing = T) %>% 
+    names()
+
+res <- queryGeneExpression(biosample_name = cell_lines[50], 
+                           assay = "polyA plus RNA-seq")
 ```
 
 The `files()`, `file_metadata()` and `metadata()` methods behave the same way as they do for `queryConsensusPeaks`.  
