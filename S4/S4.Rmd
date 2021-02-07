@@ -64,7 +64,7 @@ isS4(ALL)
 
 
 ## Constructors and getting help  
-The Bioconductor coding standards suggests that an S4 class should have a name that begins with a capital letter and a constructor function with the same name as the class.  
+**The Bioconductor coding standards suggests that an S4 class should have a name that begins with a capital letter and a constructor function with the same name as the class**.  
 
 It is common that the constructor function is documented on the same help page as the class.  
 
@@ -101,13 +101,13 @@ annotation(ALL)
 
 Traditionally, accessor functions are documented on the same help page as the class itself.  
 
-Accessor functions does not always precisely refer to a slot. For example, for ExpressionSet we use exprs() to get the expression matrix, but there is no slot called exprs in the class definition. We still refer to exprs() as an accessor function.  
+Accessor functions does not always precisely refer to a slot. For example, for `ExpressionSet` we use `exprs()` to get the expression matrix, but there is no slot called exprs in the class definition. We still refer to `exprs()` as an accessor function.  
 
 By only using accessor functions you are protecting yourself (and your code) against future changes in the class definition; accessor functions should always work.  
 
 
 ## Class inheritance  
-Class inheritance is used a lot in Bioconductor. Class inheritance is used when you define a new class which “is almost like this other class but with a little twist”. For example ExpressionSet inherits from eSet, and when you look at the class definition you cannot easily see a difference. The difference is that ExpressionSet is meant to contain expression data and has the exprs() accessor.  
+Class inheritance is used a lot in Bioconductor. Class inheritance is used when you define a new class which “is almost like this other class but with a little twist”. For example `ExpressionSet` inherits from `eSet`, and when you look at the class definition you cannot easily see a difference. The difference is that `ExpressionSet` is meant to contain expression data and has the `exprs()` accessor.  
 
 
 ## Outdated S4 classes  
@@ -117,7 +117,7 @@ new_object <- updateObject(old_object)
 
 
 ## S4 Methods  
-You can think of S4 methods as simple functions. A method is a function whichh can look at its arguments and decide what to do. One way to mimic a method is by a function definition like the following  
+You can think of S4 methods as simple functions. A method is a function which can look at its arguments and decide what to do. One way to mimic a method is by a function definition like the following  
 ```
 mimicMethod <- function(x){
   if(is(x, "matrix"))
@@ -128,6 +128,7 @@ mimicMethod <- function(x){
     methods3(x)
 }
 ```
+
 This function examines the x argument and runs different sets of code (method1, method2, method3) depending on which class x is.  
 ```{r}
 showMethods("as.data.frame")
@@ -140,7 +141,7 @@ Actually, this does not show you the actual methods, it just shows you which val
 getMethod(f = "as.data.frame", "DataFrame")
 ```
 
-Lingo - `as.data.frame` is a generic method. It operatures on different signatures (values of x) and each signature has an associated method. This method is said to “dispatch” on `x`.   
+Lingo - `as.data.frame` is a generic method. It operates on different signatures (values of x) and each signature has an associated method. This method is said to “dispatch” on `x`.   
 
 
 ```{r}
