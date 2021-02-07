@@ -1,0 +1,83 @@
+---
+title: "PVN-neuron"
+author: "yincy"
+date: "1/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(DBI)
+library(RSQLite)
+library(magrittr)
+```
+
+```{r}
+con <- dbConnect(drv = RSQLite::SQLite(), "../../Data/GEOmetadb.sqlite")
+```
+
+
+```{r}
+dbListTables(con)
+```
+
+```{r}
+dbListFields(con, "gsm")
+```
+
+```{r}
+gpl_technology <- dbReadTable(con, "gpl") %>% 
+    dplyr::pull(technology) %>% 
+    table() %>% 
+    sort(decreasing = T) 
+
+gse_type <- dbReadTable(con, "gse") %>% 
+    dplyr::pull(type) %>% 
+    table() %>% sort(decreasing = T)
+
+gsm_molecule_ch1 <- dbReadTable(con, "gsm") %>% 
+    dplyr::pull("molecule_ch1") %>% 
+    table() %>% 
+    sort(decreasing = T)
+
+gsm_molecule_ch1 %>% head()
+
+dbReadTable(con, "gsm") %>% 
+    dplyr::pull("type") %>% 
+    tolower() %>% 
+    table() %>% 
+    sort(decreasing = T) %>% 
+    head()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
