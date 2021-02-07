@@ -1,0 +1,43 @@
+---
+title: "AnnotatedDataFrame"
+author: "yincy"
+date: "2/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+An AnnotatedDataFrame consists of two parts. There is a collection of samples and the values of variables measured on those samples. There is also a description of each variable measured. The components of an `AnnotatedDataFrame` can be accessed with `pData` and `varMetadata`.  
+
+```
+AnnotatedDataFrame(data, varMetadata, dimLabels = c("rowNames", "columnNames"), ...)
+```
+
+- data: A `data.frame` containing samples (rows) and measured variables (columns).  
+- dimLabels: A character vector of length 2 that provides labels for the rows and columns in the show method.  
+- varMetadata: A `data.frame` with number of rows equal number of columns in data, and at least one column, named `labelDescription`, containing a textual description of each variable.  
+- .__classVersion__: A Version object describing the R and `Biobase` version numbers used to created the instance. Intended for developer use.  
+
+Class-specific methods.  
+
+1. as(annotatedDataFrame, "data.frame")  
+    + Coerce objects of AnnotatedDataFrame to data.frame.  
+2. combine  
+    + Bind data from one AnnotatedDataFrame to a second AnnotatedDataFrame, returning the results as an AnnotatedDataFrame. Row (sample) names in each argument must be unique. Variable names present in both arguments occupy a single column in the resulting AnnotatedDataFrame. Variable names unique to either argument create columns with values assigned for those samples where the variable is present. varMetadata in the returned AnnotatedDataFrame is updated to reflect the combination.  
+3. pData  
+    + set and retrieve the data (samples and variables) in the AnnotatedDataFrame.  
+4. varMetadata  
+    + set and retrieve the meta-data (variables and their descriptions) in the AnnotatedDataFrame.  
+5. featureNames  
+    + Set and retrieve the feature names in AnnotatedDataFrame; a synonym for sampleNames.  
+6. sampleNames  
+    + Set and retrieve the sample names in AnnotatedDataFrame.  
+7. varLabels  
+    + Set and retrieve the variable labels in the AnnotatedDataFrame.  
+8. dimLabels  
+    + Retrieve labels used for display of AnnotatedDataFrame, e.g., ‘rowNames’, ‘columnNames’.  
+
+
+

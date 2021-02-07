@@ -1,0 +1,64 @@
+---
+title: "eSet"
+author: "yincy"
+date: "2/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, echo=FALSE}
+library(Biobase)
+```
+
+
+# What is an `eSet`?  
+1. Coordinate high through-put and phenotype data.  
+2. Provide common data container for diverse Bioconductor packages.  
+
+```{r}
+getClass("eSet")
+```
+
++ `assayData`: high-throughput data.  
+    - efficiently and flexibly contain high-volume data.  
+    - each element of list/environment/localEnvironment is a matrix
+    - Rows: *features*, e.g., gene names.  
+    - Columns: *samples* represented on each chip.  
+    - All matricies must have the same dimensions, row names, and column names.  
+    - Subclasses determine which matrices *must* be present.  
+    
++ `phenoData`: sample covariates.  
+    - Contain and document sample covariates.  
+    - Structure: AnnotatedDataFrame
+    - data: data.frame
+        + Rows: sample identifiers
+        + Columns: measured covariates
+    - varMetadata: data.frame
+        + Rows: measured covariate labels
+        + Columns: covariate descriptors
+        
++ `featureData`: feature covariates.  
+    - Purpose: Contain and document feature covariates specific to the experiment, use the `annotation` slot for chip-level descriptions.  
+    - Structure: AnnotatedDataFrame
+    - data: data.frame
+        + Rows: feature identifiers. There match row names of assayData
+        + Columns: measured covariates
+    - varMetadata: data.frame
+        + Rows: measured covariate labels 
+        + Columns: covariate descriptors
+        
++ `experimentData`: experimental description.  
+    - Purpose: Summarize where and how the experiment was performed.  
+    - Structure: MIAxE virtual class
+        + In Biobase version 2.11 the MIAxE virtual class was introduced as a general container for experiment meta-data. The MIAME class is now subclass of MIAxE. The MIAME class structure is as follows.  
+            - title: experiment title
+            - name: experiment name(s)
+            preprocessing: list of pre-processing steps
+            Additional slots
++ `annotation`: assay description.  
+    - Purpose: Link experiment to annotation package.
+    - Structure: character
+        + Label identifying annotation package.  
