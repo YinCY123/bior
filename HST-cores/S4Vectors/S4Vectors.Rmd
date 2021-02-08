@@ -19,7 +19,7 @@ All vector-like objects have three main properties:
     1. a notion of length or number of elements   
     2. the ability to extract elements to create new vector-like objects  
     3. the ability to be concatenated with one or more vector-like objects to form larger vectorlike objects.   
-    
+
 The main functions for these three operations are `length`, `[`, and `c`.   
 
 Some vector-like objects can also have a list-like semantic, which means that individual
@@ -29,7 +29,7 @@ In `S4Vectors` and many other Bioconductor packages, vector-like and list-like o
 
 
 #### Vector-like objects  
-The Rle class defined in the `S4Vectors` package is used to represent a run-length encoded (compressed) sequence of *logical*, *integer*, *numeric*, *complex*, *character*, *raw*, or *factor* values.  
+The `Rle` class defined in the `S4Vectors` package is used to represent a run-length encoded (compressed) sequence of *logical*, *integer*, *numeric*, *complex*, *character*, *raw*, or *factor* values.  
 ```{r}
 showClass("Rle")
 ```
@@ -122,8 +122,7 @@ aggregate(xSnippet, start = 1:8, width = 3, FUN = median)
 
 The `shiftApply` function is a looping operation involving two vector-like objects whose elements are lined up via a positional shift operation.   
 
-If we did not know the size of the
-shift, we could estimate it by finding the shift that maximizes the correlation between xRle and yRle.  
+If we did not know the size of the shift, we could estimate it by finding the shift that maximizes the correlation between xRle and yRle.  
 
 ```{r}
 cor(xRle, yRle)
@@ -149,7 +148,7 @@ head(runValue(xRle))
 head(runLength(xRle))
 ```
 
-The Rle class supports many of the basic methods associated with R atomic vectors including the `Ops`, `Math`, `Math2`, `Summary`, and `Complex` group generics.  
+The `Rle` class supports many of the basic methods associated with R atomic vectors including the `Ops`, `Math`, `Math2`, `Summary`, and `Complex` group generics.  
 
 ```{r}
 xRle > 0
@@ -224,8 +223,8 @@ endoapply(X = df, FUN = "+", 0.5)
 Often when one has a collection of objects, there is a need to attach metadata that describes the collection in some way. **Two kinds of metadata can be attached to a Vector object**.  
     1. **Metadata about the object as a whole**: this metadata us accessed via `metadata` accessor and is represented as an ordinary **list**.  
     
-    2. **Metadata about the individual elements of the object**: this metadata is accessed via the `mcols` accessor (`mcols` stands for *metadata columns*) and is represneted as a DataTable object. This DataTable object can be thought of as hte rsult of binding together one or several vector-like objects (the metadata columns) of the same length as the Vector object. Each row of the DataTable object annotates the coresponding element of the Vector object.  
-   
+    2. **Metadata about the individual elements of the object**: this metadata is accessed via the `mcols` accessor (`mcols` stands for *metadata columns*) and is represneted as a `DataTable` object. This `DataTable` object can be thought of as the result of binding together one or several vector-like objects (the metadata columns) of the same length as the Vector object. Each row of the `DataTable` object annotates the coresponding element of the Vector object.  
+
    
  `aggregate`: Splits the data into subsets, computes summary statistics for each, and returns the result in a convenient form.  
 ```{r}
