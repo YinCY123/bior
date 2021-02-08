@@ -62,3 +62,38 @@ getClass("eSet")
     - Purpose: Link experiment to annotation package.
     - Structure: character
         + Label identifying annotation package.  
+        
+        
+# Important `eSet` methods  
+1. Initialization.  
+    - `eSet` is VIRTUAL, initialize via subclass `callNextMethod`  
+    
+2. Accessors (get, set).  
+    - `assayData(obj)`: access or assign assayData  
+    - `phenoData(obj)`: access or assign phenoData  
+    - `experimentData(obj)`: access or assign experimentData
+    - `annotation(obj)`: access or assign annotation
+    
+3. Subsetting.  
+    - obj[i, j]: select genes i and samples j
+    - obj$name: retrive or assign covariate **name** in phenoData
+    
+    
+## Additional eSet methods  
+    - `show`
+    - `storageMode`: influence how assayData is stored
+    - `updateObject`: update eSet objects to their current version 
+    - `validObject`: ensure that eSet is valid
+    
+The `validObject` method is particularly important to `eSet`, ensuring that `eSet` contains consistent structure to data.  
+
+
+# Subclasses of eSet  
+`Biobase` defines three classes that extend `eSet`.  
+
+- `ExpressionSet` is meant to contain microarray gene expression data.  
+- `SnapSet` is a preliminary class to contain SNP data  
+- `MultiSet` is an `ExpressionSet-like` class, but without restriction on the names (though not structure) of elements in the `assayData` slot.  
+
+
+
