@@ -1,0 +1,69 @@
+---
+title: "DataFrame"
+author: "yincy"
+date: "2/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Description  
+`DatFrame` class is define in the `S4Vectors` package.  
+
+The `DataFrame` class extends the `DataTable` virtual class and supports the storage of any type of object (with `length` and `[` methods) as columns.  
+
+On the whole, the `DataFrame` behaves very similarly to `data.frame`, in terms of construction, subsetting, splitting, combining, etc. The most notable exception is that the row names are optional. This means calling `rownames(x)` will return `NULL` if there are no row names. Of course, it could return `seq_len(nrow(x))`, but returning `NULL` informs, for example, combination functions that no row names are desired (they are often a luxury when dealing with large data).  
+
+As `DataFrame` derives from `Vector`, it is possible to set an `annotation` string. Also, another `DataFrame` can hold metadata on the columns.  
+
+For a class to be supported as a column, it must have `length` and `[` methods, where `[` supports subsetting only by `i` and respects `drop = FALSE`. Optionally, a method may be defined for the `showAsCell` generic, which should return a vector of the same length as the subset of the column passed to it. This vector is then placed into a `data.frame` and converted to text with `format`. Thus, each element of the vector should be some simple, usually character, representation of the corresponding element in the column.  
+
+
+```
+DataFrame(..., row.names = NULL, check.names = TRUE, stringsAsFactors)
+```
+
+Constructs a `DataFrame` in similar fashion to `data.frame`. Each argument in `...` is coerced to a `DataFrame` and combined column-wise. No special effort is expended to automatically determine the row names from the arguments. The row names should be given in `row.names`; otherwise, there are no row names. This is by design, as row names are normally undesirable when data is large. If `check.names` is TRUE, the column names will be checked for syntactic validity and made unique, if necessary.  
+
+To store an object of a class that does not support coercion to `DataFrame`, wrap it in `I()`. The class must still have methods for `length` and `[`.  
+
+The `stringAsFactors` argument is ignored. The coercion of column arguments to DatFrame determines whether strings become factors.  
+
+```
+make_zero_col_DFrame(nrow)
+```
+
+Constructs a zero-column DFrame object with `nrow` rows. Intended for developers to use in other packages and typically not needed by the end user.  
+
+# Accessors  
+- `dim(x)`: get the length two integer vector indicating in the first and second element the number of rows and columns, respectively.  
+
+- `dimnames(x)`: get and set the two element list containing the row names (character vector of length `nrow(x)` or `NULL`) and the column names (character vector of length `ncol(x)`).  
+
+
+# Coercion  
+- as(from, "DataFrame"): By default, constructs a new `DataFrame` with `from` as its only column. If `from` is a `matrix` or `data.frame`, all of its columns become columns in the new `DataFrame`. If `from` is a list, each element becomes a column, recycling as necessary. Note that for the `DataFrame` to behave correctly, each column object must support element-wise subsetting via the `[` method and return the number of elements with `length`. It is recommended to use the `DataFrame` constructor, rather than this interface.  
+
+- as.list(x): Coerces x, a `DataFrame`, to a list.  
+
+- as.data.frame(x, row.names = NULL, optional = FALSE): Coerces x, a `DataFrame`, to a `data.frame`. Each column is coerced to a `data.frame` and then column bound together. If `row.names` is NULL, they are retrived from x, if it has any. Otherwise, they are inferred by the `data.frame` constructor.
+
+- as(from, "data.frame"): Coerces a `DataFrame` to a `data.frame` by calling `as.data.frame(from)`.  
+
+- as.matrix(x): Coerce the `DataFrame` to a matrix, if possible.  
+
+
+# Combining  
+- `rbind(...)`:  Creates a new `DataFrame` by combining the rows of the `DataFrame` objects in `...`. Very similar to `rbind.data.frame`, except in the handling of row names. If all elements have row names, thery are concatenated and made unique. Otherwise, the result does not have row names. The return value inherits its metadata from the first argument.  
+
+- `cbind(...)`: Creates a new `DataFrame` by combining the columns of the `DataFrame` objects in `...`. Very similar to `cbind.data.frame`. The return value inherits its metadata from the first argument.  
+
+
+
+
+
+
+
