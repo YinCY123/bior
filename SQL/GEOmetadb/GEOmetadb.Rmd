@@ -17,6 +17,11 @@ library(RSQLite)
 library(tidyverse)
 ```
 
+file relationship
+```{r, fig.align='center'}
+knitr::include_graphics("figures/GEOmetadb.png")
+```
+
 
 ```{r}
 con <- dbConnect(drv = RSQLite::SQLite(), "f:/git/Data/GEOmetadb.sqlite")

@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(DBI)
 library(RSQLite)
 library(magrittr)
+library(tidyverse)
 ```
 
 ```{r}
@@ -29,33 +30,85 @@ dbListFields(con, "gsm")
 ```
 
 ```{r}
-gpl_technology <- dbReadTable(con, "gpl") %>% 
-    dplyr::pull(technology) %>% 
-    table() %>% 
-    sort(decreasing = T) 
+dbReadTable(con, "gsm")
+```
 
+filtering fields  
+```{r}
 gse_type <- dbReadTable(con, "gse") %>% 
-    dplyr::pull(type) %>% 
-    table() %>% sort(decreasing = T)
-
-gsm_molecule_ch1 <- dbReadTable(con, "gsm") %>% 
-    dplyr::pull("molecule_ch1") %>% 
-    table() %>% 
-    sort(decreasing = T)
-
-gsm_molecule_ch1 %>% head()
-
-dbReadTable(con, "gsm") %>% 
-    dplyr::pull("type") %>% 
-    tolower() %>% 
+    pull(type) %>% 
     table() %>% 
     sort(decreasing = T) %>% 
-    head()
+    names()
+
+gse_pubmed_id <- dbReadTable(con, "gse") %>% 
+    pull(pubmed_id) %>% 
+    unique() %>% 
+    na.omit() %>% 
+    as.character()
+
+gsm_organism_ch1 <- dbReadTable(con, "gsm") %>% 
+    pull(organism_ch1) %>% 
+    table() %>% 
+    sort(decreasing = T) %>% 
+    names()
+
+gsm_source_name_ch1 <- dbReadTable(con, "gsm") %>% 
+    pull(source_name_ch1) %>% 
+    table() %>% 
+    sort(decreasing = T) %>% 
+    names()
+
+gsm_molecule_ch1 <- dbReadTable(con, "gsm") %>% 
+    pull(molecule_ch1) %>% 
+    unique() %>% 
+    na.omit() %>% 
+    as.character()
+
+gpl_technology <- dbReadTable(con, "gpl") %>% 
+    pull(technology) %>% 
+    unique() %>% 
+    na.omit() %>% 
+    as.character()
+
+gpl_organism <- dbReadTable(con, "gpl") %>% 
+    pull(organism) %>% 
+    table() %>% 
+    sort(decreasing = T) %>% 
+    names()
+
+gds_title <- dbReadTable(con, "gds") %>% 
+    pull(title) %>% 
+    unique()
+
+gds_type <- dbReadTable(con, "gds") %>% 
+    pull(type) %>% 
+    unique()
 ```
 
 
+Query statements  
+```{r}
+statement <- paste("select gse.title, gse.gse, gse.pubmed_id, gpl.technology, gsm.source_name_ch1", 
+                   "from gpl", 
+                   "join gds on gds.gpl=gpl.gpl", 
+                   "join gse on gse.gse=gds.gse", 
+                   "join gse_gsm on gse.gse=gse_gsm.gse",
+                   "join gsm on gse_gsm.gsm=gsm.gsm",  
+                   "where gpl.technology = 'high-throughput sequencing'",
+                   "and gsm.source_name_ch1 like '%hypothalamus%'", 
+                   sep = " ")
+```
+
+```{r}
+query <- dbGetQuery(conn = con, 
+                    statement = statement)
+```
 
 
+```{r}
+grep("hypothalamus", gsm_source_name_ch1, ignore.case = T, value = T)
+```
 
 
 
