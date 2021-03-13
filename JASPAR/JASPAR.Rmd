@@ -1,0 +1,51 @@
+---
+title: "JASPAR"
+author: "yincy"
+date: "3/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(DBI)
+library(RSQLite)
+library(tidyverse)
+```
+
+```{r}
+jaspar2020 <- dbConnect(drv = RSQLite::SQLite(),
+                        "C:/Users/YinCY/Documents/R/win-library/4.0/JASPAR2020/extdata/JASPAR2020.sqlite")
+```
+
+```{r}
+dbListTables(conn = jaspar2020)
+```
+
+```{r}
+dbListFields(jaspar2020, "TAX")
+```
+
+```{r}
+tables <- dbListTables(jaspar2020)
+
+coln <- vector(mode = "list")
+for(i in tables){
+    coln[[i]] <- dbReadTable(jaspar2020, i) %>% colnames()
+}
+```
+
+```{r}
+coln
+```
+
+```{r}
+table_relations <- data.frame(
+    from = c("MATRIX", "MATRIX", "MATRIX", "MATRIX", "MATRIX"), 
+    to = c("MATRIX_ANNOTATION", "MATRIX_DATA", "MATRIX_PROTEIN", "MATRIX_SPECIES", "TFFM"), 
+    by = c("ID", "ID", "ID", "ID", "BASE_ID")
+)
+```
+
