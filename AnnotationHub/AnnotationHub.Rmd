@@ -21,7 +21,6 @@ library(magrittr)
 ### Non-model organism gene annotations  
 Bioconductor offers pre-built org.* annotation packages for model organisms, with their use described in the OrgDb section of the Annotation work flow. Here we discover available OrgDb objects for less-model organisms.  
 ```{r, message=FALSE}
-library(AnnotationHub)
 ahub <- AnnotationHub()
 
 query(x = ahub, pattern = "OrgDb")
