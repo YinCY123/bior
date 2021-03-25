@@ -1,0 +1,52 @@
+---
+title: "tenXplore"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction/Executive summary
+## A challenge: finding expression signatures of anatomic structures or cell types  
+Gene Ontology and Gene Ontology Annotation are the primary resources at present for enumerating gene signatures for cell types. The `ontoProc` package assists in providing some mappings, but much work is needed.  
+
+```{r}
+library(ontoProc)
+library(org.Mm.eg.db)
+library(org.Hs.eg.db)
+
+data(allGOterms)
+allGOterms %>% head()
+```
+
+
+```{r}
+cellTypeToGO(celltypeString = "serotonergic neuron", 
+             gotab = allGOterms)
+```
+
+```{r}
+cellTypeToGenes(celltypeString = "serotonergic neuron", 
+                gotab = allGOterms, 
+                orgDb = org.Mm.eg.db)
+```
+
+```{r}
+cellTypeToGenes(celltypeString = "serotonergic neuron", 
+                gotab = allGOterms, 
+                orgDb = org.Hs.eg.db)
+```
+
+## Discrimination of neuron types: exploratory multivariate analysis  
+At this point the API for selecting cell types, bridging to gene sets, and acquiring expression data, is not well-modularized, but extensive activity in these areas in new Bioconductor packages will foster enhancements for this application.
+
+In brief, we often fail to find GO terms that approximately match, as strings, Cell Ontology terms corresponding to cell types and subtypes. Thus the cell type to gene mapping is very spotty and the app has nothing to show.
+
+On the other hand, if we match on cell types, we get very large numbers of matches, which will need to be filtered. We will introduce tools for generating additional type to gene harvesting/filtering in real time.  
+
+```{r}
+help(package = "ontoProc")
+```
+
+
+
