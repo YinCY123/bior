@@ -435,20 +435,34 @@ sce.416b <- LunSpikeInData(which = "416b")
 
 library(readr)
 library(dplyr)
-library(EnsDb.Mmusculus.v79)
+library(org.Mm.eg.db)
+
 
 x1 <- read_tsv("/home/yincy/git/Data/NCBI/E-MTAB-5522/counts_Calero_20160113.tsv")
 x2 <- read_tsv("/home/yincy/git/Data/NCBI/E-MTAB-5522/counts_Calero_20160325.tsv")
 
 counts <- left_join(x1, x2, by = c("GeneID" = "GeneID")) %>% 
-    select(-contains("length")) %>% 
-    filter(!grepl('^ERCC-|SIRV', GeneID)) %>% 
-    tibble::column_to_rownames("GeneID") %>% 
+    dplyr::select(-contains("length")) %>% 
+    dplyr::filter(!grepl('^ERCC-|SIRV', GeneID)) 
+
+mgs <- data.frame(ensembl = counts$GeneID)
+mgs$symbol <- mapIds(org.Mm.eg.db, 
+                     keys = mgs$ensembl, 
+                     keytype = "ENSEMBL", 
+                     column = "SYMBOL")
+
+counts <- left_join(counts, mgs, by = c("GeneID" = "ensembl")) %>% 
+    dplyr::select(-GeneID) %>% 
+    dplyr::relocate(symbol, everything()) %>% 
+    dplyr::distinct(symbol, .keep_all = T) %>% 
+    na.omit() %>% 
+    tibble::column_to_rownames('symbol') %>% 
     as.matrix()
 
+
 length <- left_join(x1, x2, by = c("GeneID" = "GeneID")) %>% 
-    select(GeneID, Length.x) %>% 
-    filter(!grepl("^ERCC-|^SIRV", GeneID)) %>% 
+    dplyr::select(GeneID, Length.x) %>% 
+    dplyr::filter(!grepl("^ERCC-|^SIRV", GeneID)) %>% 
     tibble::column_to_rownames("GeneID") %>% 
     magrittr::set_colnames("Length") %>% 
     as.data.frame()
