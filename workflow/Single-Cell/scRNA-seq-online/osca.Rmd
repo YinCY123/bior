@@ -431,80 +431,8 @@ scRNA-seq dataset from [PMID:29030468]
 ```{r}
 library(scRNAseq)
 
-sce.416b <- LunSpikeInData(which = "416b")
-
-library(readr)
-library(dplyr)
-library(org.Mm.eg.db)
-
-
-x1 <- read_tsv("/home/yincy/git/Data/NCBI/E-MTAB-5522/counts_Calero_20160113.tsv")
-x2 <- read_tsv("/home/yincy/git/Data/NCBI/E-MTAB-5522/counts_Calero_20160325.tsv")
-
-counts <- left_join(x1, x2, by = c("GeneID" = "GeneID")) %>% 
-    dplyr::select(-contains("length")) %>% 
-    dplyr::filter(!grepl('^ERCC-|SIRV', GeneID)) 
-
-mgs <- data.frame(ensembl = counts$GeneID)
-mgs$symbol <- mapIds(org.Mm.eg.db, 
-                     keys = mgs$ensembl, 
-                     keytype = "ENSEMBL", 
-                     column = "SYMBOL")
-
-counts <- left_join(counts, mgs, by = c("GeneID" = "ensembl")) %>% 
-    dplyr::select(-GeneID) %>% 
-    dplyr::relocate(symbol, everything()) %>% 
-    dplyr::distinct(symbol, .keep_all = T) %>% 
-    na.omit() %>% 
-    tibble::column_to_rownames('symbol') %>% 
-    as.matrix()
-
-
-length <- left_join(x1, x2, by = c("GeneID" = "GeneID")) %>% 
-    dplyr::select(GeneID, Length.x) %>% 
-    dplyr::filter(!grepl("^ERCC-|^SIRV", GeneID)) %>% 
-    tibble::column_to_rownames("GeneID") %>% 
-    magrittr::set_colnames("Length") %>% 
-    as.data.frame()
-
-length <- length[rownames(counts), , drop = F]
-gs <- genes(EnsDb.Mmusculus.v79)
-gs <- gs[match(rownames(counts), gs$gene_id) %>% na.omit() %>% as.integer(), ]
-
-sample_info <- read_tsv("/home/yincy/git/Data/NCBI/E-MTAB-5522/E-MTAB-5522.sdrf.txt", 
-                          col_names = T)
-sample_info <- sample_info %>% 
-    dplyr::rename('Source_Name' = "Source Name") %>% 
-    dplyr::filter(grepl("^SLX-", Source_Name, ignore.case = F)) %>% 
-    tibble::column_to_rownames('Source_Name')
-
-sample_info <- sample_info[colnames(counts), ] %>% 
-    tibble::rownames_to_column("Source_Name") %>% 
-    dplyr::select(Source_Name, `Characteristics[cell type]`, `Characteristics[genotype]`,
-           `Characteristics[phenotype]`, `Characteristics[strain]`, 
-           `Material Type`, `Comment[spike sequence file]`, 
-           `Comment[LIBRARY_SELECTION]`, `Assay Name`, 
-           `Factor Value[spike-in addition]`)
-
-alt_counts_ERCC <- left_join(x1, x2, by = c("GeneID" = "GeneID")) %>% 
-    dplyr::select(-contains("length")) %>% 
-    dplyr::filter(grepl('^ERCC-', GeneID)) %>% 
-    tibble::column_to_rownames("GeneID") %>% 
-    as.matrix()
-
-alt_counts_SIRV <- left_join(x1, x2, by = c("GeneID" = "GeneID")) %>% 
-    dplyr::select(-contains("length")) %>% 
-    dplyr::filter(!grepl('^SIRV', GeneID)) %>% 
-    tibble::column_to_rownames("GeneID") %>% 
-    as.matrix()
-
-alt_ERCC <- SummarizedExperiment(assays = list(ERCC = alt_counts_ERCC))
-alt_SIRV <- SummarizedExperiment(assays = list(SIRV = alt_counts_SIRV))
-
-sce.416b <- SingleCellExperiment(assays = list(counts = counts), 
-                                 rowData = length, 
-                                 colData = sample_info, 
-                                 altExps = list(ERCC = alt_ERCC, SIRV = alt_SIRV))
+load("data/sce.416b.RData")
+sce.416b$block <- factor(sce.416b$block)
 ```
 
 
@@ -523,17 +451,119 @@ We use several common QC metrics to identify low-quality cells based on their ex
 For each cell, we calculate these QC metrics using the `perCellQCMetrics()` function from the scater package (McCarthy et al. 2017). The `sum` column contains the total count for each cell and the `detected` column contains the number of detected genes. The `subsets_Mito_percent` column contains the percentage of reads mapped to mitochondrial transcripts. (For demonstration purposes, we show two different approaches of determining the genomic location of each transcript.) Finally, the `altexps_ERCC_percent` column contains the percentage of reads mapped to ERCC transcripts.  
 
 ```{r}
-location <- rowRanges(sce.416b)
-is.mito <- any(seqnames(location)  == "MT")
+# retrieving the mitochondrial transcripts using genomic locations included in the low-level annotation for the SingleCellExperiment.  
+location <- rownames(sce.416b) %>% 
+    select(EnsDb.Mmusculus.v79, 
+           keys = ., 
+           keytype = "GENEID", 
+           columns = c("GENEID", "SYMBOL"))
+is.mito <- grepl("^MT-", location$SYMBOL, ignore.case = T)
 
-chr.loc <- mapIds(EnsDb.Mmusculus.v79, 
+
+# ALTERNATIVELY: using resources in AnnotationHub to retrieve chromosomal locations given the Ensembl IDs; this should yield the same result.  
+library(EnsDb.Mmusculus.v79)
+
+# ens.mm.v97 <- AnnotationHub()[["AH73905"]]
+load("data/ens.mm.v97.RData")
+chr.loc <- select(EnsDb.Mmusculus.v79, 
                   keys = rownames(sce.416b), 
                   keytype = "GENEID", 
-                  column = "SEQNAME")
-is.mito.alt <- which(chr.loc == "MT")
+                  column = c("SYMBOL", "GENEID"))
+chr.loc %>% head()
+
+is.mito.alt <- grepl("^MT-", chr.loc$SYMBOL, ignore.case = T)
+is.mito.alt %>% table
 
 library(scater)
-df <- perCellQCMetrics(sce.416b, subsets = list(Mito = is.mito))
+df <- perCellQCMetrics(sce.416b, subset = list(Mito = is.mito))
+```
+
+**A key assumption here is that the QC metrics are independent of the biological state of each cell**. Poor values (e.g., low library sizes, high mitochondrial proportions) are presumed to be driven by technical factors rather than biological processes, meaning that the subsequent removal of cells will not misrepresent the biology in downstream analyses. Major violations of this assumption would potentially result in the loss of cell types that have, say, systematically low RNA content or high numbers of mitochondria.  
+
+
+## Identifying low-quality cells  
+### With fixed thresholds  
+The simplest approach to identifying low-quality cells is to apply thresholds on the QC metrics. For example, we might consider cells to be low quality if they have library sizes below 100,000 reads; express fewer than 5,000 genes; have spike-in proportions above 10%; or have mitochondrial proportions above 10%.  
+
+```{r}
+qc.lib <- df$sum < 1e5
+qc.nexprs <- df$detected < 5e3
+qc.spike <- df$altexps_ERCC_percent > 10
+qc.mito <- df$subsets_Mito_percent > 0.1
+discard <- qc.lib | qc.nexprs | qc.spike | qc.mito
+
+# Summarize the number of cells removed for each reason
+tibble(LibSize = sum(qc.lib), 
+          NExpers = sum(qc.nexprs), 
+          SpikeProp = sum(qc.spike), 
+          MitoProp = sum(qc.mito), 
+          Total = sum(discard))
+```
+
+While simple, this strategy requires considerable experience to determine appropriate thresholds for each experimental protocol and biological system. Thresholds for read count-based data are simply not applicable for UMI-based data, and vice versa. Differences in mitochondrial activity or total RNA content require constant adjustment of the mitochondrial and spike-in thresholds, respectively, for different biological systems. Indeed, even with the same protocol and system, the appropriate threshold can vary from run to run due to the vagaries of cDNA capture efficiency and sequencing depth per cell.  
+
+
+### With adaptive thresholds  
+#### Identifying outliers  
+To obtain an adaptive threshold, we assume that most of the dataset consists of high-quality cells. We then identify cells that are outliers for the various QC metrics, based on the median absolute deviation (MAD) from the median value of each metric across all cells. Specifically, a value is considered an outlier if it is more than 3 MADs from the median in the “problematic” direction. This is loosely motivated by the fact that such a filter will retain 99% of non-outlier values that follow a normal distribution.  
+
+For the 416B data, we identify cells with log-transformed library sizes that are more than 3 MADs below the median. A log-transformation is used to improve resolution at small values when type="lower". Specifically, it guarantees that the threshold is not a negative value, which would be meaningless for a non-negative metric. Furthermore, it is not uncommon for the distribution of library sizes to exhibit a heavy right tail; the log-transformation avoids inflation of the MAD in a manner that might compromise outlier detection on the left tail. (More generally, it makes the distribution seem more normal to justify the 99% rationale mentioned above.)  
+
+```{r}
+qc.lib2 <- isOutlier(metric = df$sum, log = T, type = "lower")
+```
+
+We do the same for the log-transformed number of expressed genes.  
+
+```{r}
+qc.nexpers2 <- isOutlier(df$detected, log = T, type = "lower")
+```
+
+`is.Outlier()` will also return the exact filter thresholds for each metric in the attributes of the output vector. These are useful for checking whether the automatically selected thresholds are appropriate.  
+
+```{r}
+attr(qc.lib2, "thresholds")
+```
+
+```{r}
+attr(qc.nexpers2, "thresholds")
+```
+
+We identify outliers for the proportion-based metrics with the same function. These distributions frequently exhibit a heavy right tail, but unlike the two previous metrics, it is the right tail itself that contains the putative low-quality cells. Thus, we do not perform any transformation to shrink the tail - rather, our hope is that the cells in the tail are identified as large outliers. (While it is theoretically possible to obtain a meaningless threshold above 100%, this is rare enough to not be of practical concern.)  
+
+```{r}
+qc.spike2 <- isOutlier(df$altexps_ERCC_percent, type = "higher")
+attr(qc.spike2, "thresholds")
+```
+
+```{r}
+qc.mito2 <- isOutlier(df$subsets_Mito_percent, type = "higher")
+attr(qc.mito2, "thresholds")
+```
+
+A cell that is an outlier for any of these metrics is considered to be of low quality and discarded.  
+
+```{r}
+discard2 <- qc.lib2 | qc.nexpers2 | qc.spike2 | qc.mito2
+
+# Summarize the number of cells removed for each reason.  
+
+tibble(
+    LibSize = sum(qc.lib2), 
+    NExpes = sum(qc.nexpers2), 
+    SpikeProp = sum(qc.spike2), 
+    MitoProp = sum(qc.mito2), 
+    Total = sum(discard2)
+)
+```
+
+Alternatively, this entire process can be done in a single step using the `quickPerCellQC()` function. This is a wrapper that simply calls `isOutlier()` with the settings described above.  
+
+```{r}
+reasons <- quickPerCellQC(df, 
+                          sub.fields = c("subsets_Mito_percent", "altexps_ERCC_percent"))
+
+
 ```
 
 
