@@ -1043,6 +1043,15 @@ ncol = 2)
 
 As the problem arises from differences in the sizes of the counts, the most straightforward solution is to downsample the counts of the high-coverage cells to match those of low-coverage cells. This uses the size factors to determine the amount of downsampling for each cell required to reach the 1st percentile of size factors. (The small minority of cells with smaller size factors are simply scaled up. We do not attempt to downsample to the smallest size factor, as this would result in excessive loss of information for one aberrant cell with very low size factors.) We can see that this eliminates the library size factor-associated trajectories from the first two PCs, improving resolution of the known differences based on mixing ratios (Figure 7.6). The log-transformation is still necessary but no longer introduces a shift in the means when the sizes of the counts are similar across cells.  
 
+```{r}
+saveRDS(sce.lawlor, "sce.lawlor.rds")
+
+samples = c("NP_1", "NP_2", "G_1", "G_2", "L_1", "L_2", "PI_1", "PI_2")
+man <- list()
+for(i in samples){
+    man[[i]] <- BachMammaryData(samples = i)
+}
+```
 
 
 
