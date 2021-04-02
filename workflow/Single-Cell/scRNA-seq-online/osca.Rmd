@@ -1007,7 +1007,7 @@ Whether or not total RNA content is relevant – and thus, the choice of normali
 
 ## Applying the size factors  
 ### Scaling and log-transforming  
-Once we have computed the size factors, we use the `logNormCounts()` function from `scater` to compute normalized expression values for each cell. This is done by dividing the count for each gene/spike-in transcript with the appropriate size factor for that cell. The function also log-transforms the normalized values, creating a new assay called `"logcounts"`. (Technically, these are “log-transformed normalized expression values”, but that’s too much of a mouthful to fit into the assay name.) These log-values will be the basis of our downstream analyses in the following chapters.  
+Once we have computed the size factors, we use the `logNormCounts()` function from `scater` to compute normalized expression values for each cell. This is done by dividing the count for each gene/spike-in transcript with the appropriate size factor for that cell. The function also log-transforms the normalized values, creating a new assay called `"logcounts"`. (Technically, these are “log-transformed normalized expression values”, but that’s too much of a mouthful to fit into the assay name.) **These log-values will be the basis of our downstream analyses in the following chapters**.  
 
 ```{r}
 set.seed(100)
@@ -1024,12 +1024,12 @@ When log-transforming, we typically add a pseudo-count to avoid undefined values
 Incidentally, the addition of the pseudo-count is the motivation for the centering of the size factors at unity. This ensures that both the pseudo-count and the normalized expression values are on the same scale; a pseudo-count of 1 can be interpreted as an extra read or UMI for each gene. In practical terms, centering means that the shrinkage effect of the pseudo-count diminishes as sequencing depth improves. This correctly ensures that estimates of the log-fold change in expression (e.g., from differences in the log-values between groups of cells) become increasingly accurate with deeper coverage. In contrast, if we applied a constant pseudo-count to some count-per-million-like measure, accuracy of the subsequent log-fold changes would never improve regardless of how much additional sequencing we performed.
 
 ### Downsampling and log-transforming  
-In rare cases, direct scaling of the counts is not appropriate due to the effect described by A. Lun (2018). Briefly, this is caused by the fact that the mean of the log-normalized counts is not the same as the log-transformed mean of the normalized counts. The difference between them depends on the mean and variance of the original counts, such that there is a systematic trend in the mean of the log-counts with respect to the count size. This typically manifests as trajectories correlated strongly with library size even after library size normalization, as shown in Figure 7.5 for synthetic scRNA-seq data generated with a pool-and-split approach (Tian et al. 2019).  
+**In rare cases, direct scaling of the counts is not appropriate due to the effect described by A. Lun (2018). Briefly, this is caused by the fact that the mean of the log-normalized counts is not the same as the log-transformed mean of the normalized counts**. The difference between them depends on the mean and variance of the original counts, such that there is a systematic trend in the mean of the log-counts with respect to the count size. This typically manifests as trajectories correlated strongly with library size even after library size normalization, as shown in Figure 7.5 for synthetic scRNA-seq data generated with a pool-and-split approach (Tian et al. 2019).  
 
 ```{r, fig.cap='PCA plot of all pool-and-split libraries in the SORT-seq CellBench data, computed from the log-normalized expression values with library size-derived size factors. Each point represents a library and is colored by the mixing ratio used to construct it (left) or by the size factor (right).'}
 load("data/mRNAmix_qc.RData")
 sce.8qc <- sce8_qc
-
+rm(sce8_qc)
 # library size normalization and log-transformation.
 sce.8qc <- logNormCounts(sce.8qc)
 sce.8qc <- runPCA(sce.8qc)
@@ -1043,24 +1043,195 @@ ncol = 2)
 
 As the problem arises from differences in the sizes of the counts, the most straightforward solution is to downsample the counts of the high-coverage cells to match those of low-coverage cells. This uses the size factors to determine the amount of downsampling for each cell required to reach the 1st percentile of size factors. (The small minority of cells with smaller size factors are simply scaled up. We do not attempt to downsample to the smallest size factor, as this would result in excessive loss of information for one aberrant cell with very low size factors.) We can see that this eliminates the library size factor-associated trajectories from the first two PCs, improving resolution of the known differences based on mixing ratios (Figure 7.6). The log-transformation is still necessary but no longer introduces a shift in the means when the sizes of the counts are similar across cells.  
 
-```{r}
-saveRDS(sce.lawlor, "sce.lawlor.rds")
+```{r, fig.cap='PCA plot of pool-and-split libraries in the SORT-seq CellBench data, computed from the log-transformed counts after downsampling in proportion to the library size factors. Each point represents a library and is colored by the mixing ratio used to construct it (left) or by the size factor (right).'}
+sce.8qc2 <- logNormCounts(sce.8qc, downsample = TRUE)
+sce.8qc2 <- runPCA(sce.8qc2)
+cowplot::plot_grid(plotlist = list(
+    plotPCA(sce.8qc2, colour_by = I(factor(sce.8qc2$mix))), 
+    plotPCA(sce.8qc2, colour_by = I(librarySizeFactors(sce.8qc2)))
+), 
+ncol = 2)
+```
 
-samples = c("NP_1", "NP_2", "G_1", "G_2", "L_1", "L_2", "PI_1", "PI_2")
-man <- list()
-for(i in samples){
-    man[[i]] <- BachMammaryData(samples = i)
-}
+While downsampling is an expedient solution, it is statistically inefficient as it needs to increase the noise of high-coverage cells in order to avoid differences with low-coverage cells. It is also slower than simple scaling. Thus, we would only recommend using this approach after an initial analysis with scaled counts reveals suspicious trajectories that are strongly correlated with the size factors. In such cases, it is a simple matter to re-normalize by downsampling to determine whether the trajectory is an artifact of the log-transformation.  
+
+### Other options  
+Of course, log-transformation is not the only possible transformation. More sophisticated approaches can be used such as dedicated *variance stabilizing transformations* (e.g., from the `DESeq2` or `sctransform` packages), which out-perform the log-transformation for removal of the mean-variance trend. In practice, though, the log-transformation is a good default choice due to its simplicity (a.k.a., reliability, predictability and computational efficiency) and interpretability.  
+
+
+# Chapter 8 Feature selection  
+## Motivation  
+We often use scRNA-seq data in exploratory analyses to characterize heterogeneity across cells. Procedures like clustering and dimensionality reduction compare cells based on their gene expression profiles, which involves aggregating per-gene differences into a single (dis)similarity metric between a pair of cells. The choice of genes to use in this calculation has a major impact on the behavior of the metric and the performance of downstream methods. We want to select genes that contain useful information about the biology of the system while removing genes that contain random noise. This aims to preserve interesting biological structure without the variance that obscures that structure, and to reduce the size of the data to improve computational efficiency of later steps.  
+
+The simplest approach to feature selection is to select the most variable genes based on their expression across the population. This assumes that genuine biological differences will manifest as increased variation in the affected genes, compared to other genes that are only affected by technical noise or a baseline level of “uninteresting” biological variation (e.g., from transcriptional bursting). Several methods are available to quantify the variation per gene and to select an appropriate set of highly variable genes (HVGs). We will discuss these below using the 10X PBMC dataset for demonstration.  
+
+```{r}
+library(DropletTestFiles)
+library(DropletUtils)
+fname <- file.path("data/pbmc4k/raw_gene_bc_matrices/GRCh38/")
+sce.pbmc <- read10xCounts(fname, col.names = T)
+
+# gene annotation  
+library(scater)
+rownames(sce.pbmc) <- uniquifyFeatureNames(
+    ID = rowData(sce.pbmc)$ID, 
+    names = rowData(sce.pbmc)$Symbol
+)
+
+library(EnsDb.Hsapiens.v86)
+location <- mapIds(EnsDb.Hsapiens.v86, 
+                   keys = rowData(sce.pbmc)$ID, 
+                   keytype = "GENEID", 
+                   column = "SEQNAME")
+
+# cell detection
+set.seed(100)
+e.out <- emptyDrops(counts(sce.pbmc))
+sce.pbmc <- sce.pbmc[, which(e.out$FDR <= 0.001)]
+
+# quality-control
+stats <- perCellQCMetrics(sce.pbmc, subsets = list(Mito = which(location == "MT")))
+high.mito <- isOutlier(stats$subsets_Mito_percent, type = "higher")
+sce.pbmc <- sce.pbmc[, !high.mito]
+
+# normalization
+library(scran)
+set.seed(1000)
+clusters <- quickCluster(sce.pbmc)
+sce.pbmc <- logNormCounts(sce.pbmc)
+```
+
+```{r}
+library(scRNAseq)
+
+sce.416b <- readRDS("data/sce.416b.rds")
+sce.416b$block <- factor(sce.416b$block)
+
+# gene annotation 
+library(AnnotationHub)
+ens.mm.v97 <- AnnotationHub()[["AH73905"]]
+rowData(sce.416b)$ENSEMBL <- rownames(sce.416b)
+rowData(sce.416b)$SYMBOL <- mapIds(ens.mm.v97, 
+                                   keys = rownames(sce.416b), 
+                                   keytype = "GENEID", 
+                                   column = "SYMBOL")
+
+rowData(sce.416b)$SEQNAME <- mapIds(ens.mm.v97, 
+                                    keys = rownames(sce.416b), 
+                                    keytype = "GENEID", 
+                                    column = "SEQNAME")
+
+library(scater)
+rownames(sce.416b) <- uniquifyFeatureNames(
+    ID = rowData(sce.416b)$ENSEMBL,
+    names = rowData(sce.416b)$SYMBOL
+)
+
+# quality control
+mito <- which(rowData(sce.416b)$SEQNAME == "MT")
+stats <- perCellQCMetrics(sce.416b, subsets = list(Mt = mito))
+qc <- quickPerCellQC(stats, 
+                     percent_subsets = c("subsets_Mt_percent", "altexps_ERCC_percent"), 
+                     batch = sce.416b$block)
+
+sce.416b <- sce.416b[, !qc$discard]
+
+
+# normalization  
+library(scran)
+sce.416b <- computeSumFactors(sce.416b)
+sce.416b <- logNormCounts(sce.416b)
+```
+
+## Quantifying per-gene variation  
+### Variance of the log-counts  
+The simplest approach to quantifying per-gene variation is to simply compute the variance of the log-normalized expression values (referred to as “log-counts” for simplicity) for each gene across all cells in the population (A. T. L. Lun, McCarthy, and Marioni 2016). This has an advantage in that the feature selection is based on the same log-values that are used for later downstream steps. In particular, genes with the largest variances in log-values will contribute the most to the Euclidean distances between cells. By using log-values here, we ensure that our quantitative definition of heterogeneity is consistent throughout the entire analysis.  
+
+Calculation of the per-gene variance is simple but feature selection requires modelling of the mean-variance relationship. As discussed briefly in Section 7.5.1, the log-transformation does not achieve perfect variance stabilization, which means that the variance of a gene is driven more by its abundance than its underlying biological heterogeneity. To account for this effect, we use the `modelGeneVar()` function to fit a trend to the variance with respect to abundance across all genes.  
+
+```{r, fig.cap='Variance in the PBMC data set as a function of the mean. Each point represents a gene while the blue line represents the trend fitted to all genes.'}
+library(scran)
+dec.pbmc <- modelGeneVar(sce.pbmc)
+
+# visualizing the fit
+fit.pbmc <- metadata(dec.pbmc)
+plot(fit.pbmc$mean, fit.pbmc$var, 
+     xlab = "Mean of log-epression", 
+     ylab = "Variance of log-expression", 
+     pch = 19, 
+     cex= 0.5)
+curve(fit.pbmc$trend(x), col = "dodgerblue", add = T, lwd = 2)
+```
+
+At any given abundance, we assume that the expression profiles of most genes are dominated by random technical noise (see Section 8.2.3 for details). Under this assumption, our trend represents an estimate of the technical noise as a function of abundance. We then break down the total variance of each gene into the technical component, i.e., the fitted value of the trend at that gene’s abundance; and the biological component, defined as the difference between the total variance and the technical component. This biological component represents the “interesting” variation for each gene and can be used as the metric for HVG selection.  
+
+```{r}
+# ordering by most interesting genes for inspection
+dec.pbmc[order(dec.pbmc$bio, decreasing = T), ]
+```
+
+> Careful readers will notice that some genes have negative biological components, which have no obvious interpretation and can be ignored in most applications. They are inevitable when fitting a trend to the per-gene variances as approximately half of the genes will lie below the trend.
+
+The trend fit has several useful parameters (see `?fitTrendVar`) that can be tuned for a more appropriate fit. For example, the defaults can occasionally yield an overfitted trend when the few high-abundance genes are also highly variable. In such cases, users can reduce the contribution of those high-abundance genes by turning off density weights.  
+
+```{r}
+library(scRNAseq)
+sce.seger <- SegerstolpePancreasData()
+sce.seger <- readRDS("data/sce.seger.rds")
+
+# gene annotation
+library(AnnotationHub)
+edb <- AnnotationHub()[["AH73881"]]
+symbols <- rowData(sce.seger)$symbol
+ens.id <- mapIds(edb, 
+                 keys = symbols, 
+                 keytype = "SYMBOL", 
+                 column = "GENEID")
+ens.id <- ifelse(is.na(ens.id), symbols, ens.id)
+
+
+# removing duplicated rows
+keep <- !duplicated(ens.id)
+sce.seger <- sce.seger[keep, ]
+rownames(sce.seger) <- ens.id[keep]
+
+# sample annotation
+emtab.meta <- colData(sce.seger)[, c("cell type", "disease", "individual", "single cell well quality")]
+colnames(emtab.meta) <- c("CellType", "Disease", "Donor", "Quality")
+colData(sce.seger) <- emtab.meta
+
+sce.seger$CellType <- gsub(" cell", "", sce.seger$CellType)
+sce.seger$CellType <- paste(
+    toupper(substr(sce.seger$CellType, 1, 1)), 
+    substring(sce.seger$CellType, 2)
+)
+
+# quality control
+low.qual <- sce.seger$Quality == "low quality cell"
+
+
+library(scater)
+stats <- perCellQCMetrics(sce.seger)
+qc <- quickPerCellQC(stats, percent_subsets = "altexps_ERCC_percent", 
+                     batch = sce.seger$Donor, 
+                     subset =! sce.seger$Donor %in% c("HP1504901", "HP1509101"))
+
+sce.seger <- sce.seger[, !(qc$discard | low.qual)]
+
+
+# normalization
+library(scran)
+clusters <- quickCluster(sce.seger)
+sce.seger <- computeSumFactors(sce.seger, clusters=clusters)
+sce.seger <- logNormCounts(sce.seger) 
 ```
 
 
-
-
-
-
-
-
-
+```{r}
+sce.seger <- sce.seger[, sce.seger$Donor == "HP1507101"]
+dec.default <- modelGeneVar(sce.seger)
+dec.noweight <- modelGeneVar(sce.seger, weights = NULL)
+```
 
 
 
