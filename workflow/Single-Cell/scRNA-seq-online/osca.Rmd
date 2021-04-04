@@ -1063,7 +1063,7 @@ Of course, log-transformation is not the only possible transformation. More soph
 ## Motivation  
 We often use scRNA-seq data in exploratory analyses to characterize heterogeneity across cells. Procedures like clustering and dimensionality reduction compare cells based on their gene expression profiles, which involves aggregating per-gene differences into a single (dis)similarity metric between a pair of cells. The choice of genes to use in this calculation has a major impact on the behavior of the metric and the performance of downstream methods. We want to select genes that contain useful information about the biology of the system while removing genes that contain random noise. This aims to preserve interesting biological structure without the variance that obscures that structure, and to reduce the size of the data to improve computational efficiency of later steps.  
 
-The simplest approach to feature selection is to select the most variable genes based on their expression across the population. This assumes that genuine biological differences will manifest as increased variation in the affected genes, compared to other genes that are only affected by technical noise or a baseline level of “uninteresting” biological variation (e.g., from transcriptional bursting). Several methods are available to quantify the variation per gene and to select an appropriate set of highly variable genes (HVGs). We will discuss these below using the 10X PBMC dataset for demonstration.  
+**The simplest approach to feature selection is to select the most variable genes based on their expression across the population**. This assumes that genuine biological differences will manifest as increased variation in the affected genes, compared to other genes that are only affected by technical noise or a baseline level of “uninteresting” biological variation (e.g., from transcriptional bursting). Several methods are available to quantify the variation per gene and to select an appropriate set of highly variable genes (HVGs). We will discuss these below using the 10X PBMC dataset for demonstration.  
 
 ```{r}
 library(DropletTestFiles)
@@ -1147,7 +1147,7 @@ sce.416b <- logNormCounts(sce.416b)
 ### Variance of the log-counts  
 The simplest approach to quantifying per-gene variation is to simply compute the variance of the log-normalized expression values (referred to as “log-counts” for simplicity) for each gene across all cells in the population (A. T. L. Lun, McCarthy, and Marioni 2016). This has an advantage in that the feature selection is based on the same log-values that are used for later downstream steps. In particular, genes with the largest variances in log-values will contribute the most to the Euclidean distances between cells. By using log-values here, we ensure that our quantitative definition of heterogeneity is consistent throughout the entire analysis.  
 
-Calculation of the per-gene variance is simple but feature selection requires modelling of the mean-variance relationship. As discussed briefly in Section 7.5.1, the log-transformation does not achieve perfect variance stabilization, which means that the variance of a gene is driven more by its abundance than its underlying biological heterogeneity. To account for this effect, we use the `modelGeneVar()` function to fit a trend to the variance with respect to abundance across all genes.  
+Calculation of the per-gene variance is simple but feature selection requires modelling of the mean-variance relationship. As discussed briefly in Section 7.5.1, **the log-transformation does not achieve perfect variance stabilization, which means that the variance of a gene is driven more by its abundance than its underlying biological heterogeneity**. To account for this effect, we use the `modelGeneVar()` function to fit a trend to the variance with respect to abundance across all genes.  
 
 ```{r, fig.cap='Variance in the PBMC data set as a function of the mean. Each point represents a gene while the blue line represents the trend fitted to all genes.'}
 library(scran)
@@ -1176,12 +1176,12 @@ The trend fit has several useful parameters (see `?fitTrendVar`) that can be tun
 
 ```{r}
 library(scRNAseq)
-sce.seger <- SegerstolpePancreasData()
+# sce.seger <- SegerstolpePancreasData()
 sce.seger <- readRDS("data/sce.seger.rds")
 
 # gene annotation
 library(AnnotationHub)
-edb <- AnnotationHub()[["AH73881"]]
+edb <- AnnotationHub(localHub = T)[["AH73881"]]
 symbols <- rowData(sce.seger)$symbol
 ens.id <- mapIds(edb, 
                  keys = symbols, 
@@ -1230,15 +1230,126 @@ sce.seger <- logNormCounts(sce.seger)
 ```{r}
 sce.seger <- sce.seger[, sce.seger$Donor == "HP1507101"]
 dec.default <- modelGeneVar(sce.seger)
-dec.noweight <- modelGeneVar(sce.seger, weights = NULL)
+dec.noweight <- modelGeneVar(sce.seger)
+
+fit.default <- metadata(dec.default)
+fit.noweight <- metadata(dec.noweight, density.weights=FALSE)
+
+plot(fit.default$mean, fit.default$var, 
+     xlab = "Mean of log-expression", 
+     ylab = "Variance of log-expression")
+curve(fit.default$trend(x), col = "dodgerblue", add = T, lwd = 2)
+
+curve(fit.noweight$trend(x), col = "red", add = T, lwd = 1)
+
+legend("topleft", col = c("dodgerblue", "red"), 
+       legend = c("Default", "No weight"), 
+       lwd = 2)
 ```
 
+### Coefficient of variation  
+An alternative approach to quantification uses the squared coefficient of variation (CV2) of the normalized expression values prior to log-transformation. The CV2 is a widely used metric for describing variation in non-negative data and is closely related to the dispersion parameter of the negative binomial distribution in packages like edgeR and DESeq2. We compute the CV2 for each gene in the PBMC dataset using the modelGeneCV2() function, which provides a robust implementation of the approach described by Brennecke et al. (2013).  
 
+```{r}
+dec.cv2.pbmc <- modelGeneCV2(sce.pbmc)
+```
 
+This allows us to model the mean-variance relationship when considering the relevance of each gene (Figure 8.3). Again, our assumption is that most genes contain random noise and that the trend captures mostly technical variation. Large CV2 values that deviate strongly from the trend are likely to represent genes affected by biological structure.  
 
+```{r, fig.cap='CV2 in the PBMC data set as a function of the mean. Each point represents a gene while the blue line represents the fitted trend.'}
+fit.cv2.pbmc <- metadata(dec.cv2.pbmc)
 
+plot(fit.cv2.pbmc$mean, fit.cv2.pbmc$cv2, log = "xy")
+curve(fit.cv2.pbmc$trend(x), col = "dodgerblue", add = T, lwd = 2)
+```
 
+For each gene, we quantify the deviation from the trend in terms of the ratio of its CV2 to the fitted value of trend at its abundance. This is more appropriate than the directly subtracting the trend from the CV2, as the magnitude of the ratio is not affected by the mean.  
 
+```{r}
+dec.cv2.pbmc[order(dec.cv2.pbmc$ratio, decreasing = T), ]
+```
+
+Both the CV2 and the variance of log-counts are effective metrics for quantifying variation in gene expression. The CV2 tends to give higher rank to low-abundance HVGs driven by upregulation in rare subpopulations, for which the increase in variance on the raw scale is stronger than that on the log-scale. However, the variation described by the CV2 is less directly relevant to downstream procedures operating on the log-counts, and the reliance on the ratio can assign high rank to uninteresting genes with low absolute variance. We prefer the use of the variance of log-counts and will use it in the following sections though many of the same principles apply to procedures based on the CV2.  
+
+### Quantifying technical noise  
+Strictly speaking, the use of a trend fitted to endogenous genes assumes that the expression profiles of most genes are dominated by random technical noise. In practice, all expressed genes will exhibit some non-zero level of biological variability due to events like transcriptional bursting. This suggests that our estimates of the technical component are likely to be inflated. It would be more appropriate to consider these estimates as technical noise plus “uninteresting” biological variation, under the assumption that most genes are unaffected by the relevant heterogeneity in the population.  
+
+This revised assumption is generally reasonable but may be problematic in some scenarios where many genes at a particular abundance are affected by a biological process. For example, strong upregulation of cell type-specific genes may result in an enrichment of HVGs at high abundances. This would inflate the fitted trend in that abundance interval and compromise the detection of the relevant genes. We can avoid this problem by fitting a mean-dependent trend to the variance of the spike-in transcripts (Figure 8.4), if they are available. The premise here is that spike-ins should not be affected by biological variation, so the fitted value of the spike-in trend should represent a better estimate of the technical component for each gene.  
+
+```{r}
+dec.spike.416b <- modelGeneVarWithSpikes(x = sce.416b, spikes = "ERCC")
+dec.spike.416b[order(dec.spike.416b$bio, decreasing = T), ]
+```
+
+```{r, fig.cap='Variance in the 416B data set as a function of the mean. Each point represents a gene (black) or spike-in transcript (red) and the blue line represents the trend fitted to all spike-ins.'}
+plot(dec.spike.416b$mean, dec.spike.416b$total, 
+     xlab = "Mean of log-expression", 
+     ylab = "Variance of log-expression")
+
+fit.spike.416b <- metadata(dec.spike.416b)
+points(fit.spike.416b$mean, fit.spike.416b$var, col = "red", pch = 19)
+curve(fit.spike.416b$trend(x), col = "dodgerblue", add = T, lwd = 2)
+```
+
+In the absence of spike-in data, one can attempt to create a trend by making some distributional assumptions about the noise. For example, UMI counts typically exhibit near-Poisson variation if we only consider technical noise from library preparation and sequencing. This can be used to construct a mean-variance trend in the log-counts (Figure 8.5) with the `modelGeneVarByPoisson()` function. Note the increased residuals of the high-abundance genes, which can be interpreted as the amount of biological variation that was assumed to be “uninteresting” when fitting the gene-based trend.  
+
+```{r}
+set.seed(0010101)
+dec.pois.pbmc <- modelGeneVarByPoisson(sce.pbmc)
+dec.pois.pbmc[order(dec.pois.pbmc$bio, decreasing = T), ]
+```
+
+```{r, fig.cap="Variance of normalized log-expression values for each gene in the PBMC dataset, plotted against the mean log-expression. The blue line represents the mean-variance relationship corresponding to Poisson noise."}
+plot(dec.pois.pbmc$mean, dec.pois.pbmc$total, 
+     pch = 19, 
+     xlab = "Mean of log-expression", 
+     ylab = "Variance of log-expression")
+curve(metadata(dec.pois.pbmc)$trend(x), col = "dodgerblue", add = T, lwd = 2)
+```
+
+Interestingly, trends based purely on technical noise tend to yield large biological components for highly-expressed genes. This often includes so-called “house-keeping” genes coding for essential cellular components such as ribosomal proteins, which are considered uninteresting for characterizing cellular heterogeneity. These observations suggest that a more accurate noise model does not necessarily yield a better ranking of HVGs, though one should keep an open mind - house-keeping genes are regularly DE in a variety of conditions (Glare et al. 2002; Nazari, Parham, and Maleki 2015; Guimaraes and Zavolan 2016), and the fact that they have large biological components indicates that there is strong variation across cells that may not be completely irrelevant.  
+
+### Accounting for blocking factors  
+#### Fitting block-specific trends  
+Data containing multiple batches will often exhibit batch effects (see Chapter 28.8 for more details). We are usually not interested in HVGs that are driven by batch effects. Rather, we want to focus on genes that are highly variable within each batch. This is naturally achieved by performing trend fitting and variance decomposition separately for each batch. We demonstrate this approach by treating each plate (block) in the 416B dataset as a different batch, using the modelGeneVarWithSpikes() function. (The same argument is available in all other variance-modelling functions.)  
+
+```{r}
+dec.block.416b <- modelGeneVarWithSpikes(sce.416b, spikes = "ERCC", 
+                                         block = sce.416b$block)
+dec.block.416b[order(dec.block.416b$bio, decreasing = T), 1:6]
+```
+
+The use of a batch-specific trend fit is useful as it accommodates differences in the mean-variance trends between batches. This is especially important if batches exhibit systematic technical differences, e.g., differences in coverage or in the amount of spike-in RNA added. In this case, there are only minor differences between the trends, which indicates that the experiment was tightly replicated across plates. The analysis of each plate yields estimates of the biological and technical components for each gene, which are averaged across plates to take advantage of information from multiple batches.  
+
+```{r, fig.cap="Variance in the 416B data set as a function of the mean after blocking on the plate of origin. Each plot represents the results for a single plate, each point represents a gene (black) or spike-in transcript (red) and the blue line represents the trend fitted to all spike-ins."}
+par(mfrow = c(1, 2))
+blocked.stats <- dec.block.416b$per.block
+
+for(i in colnames(blocked.stats)){
+    current <- blocked.stats[[i]]
+    plot(current$mean, current$total, main = i, pch = 16, cex = 0.5, 
+         xlab = "Mean of log-expression", 
+         ylab = "Variance of log-expression")
+    curfit <- metadata(current)
+    points(curfit$mean, curfit$var, col = "red", pch = 16)
+    curve(curfit$trend(x), col = "dodgerblue", add = T, lwd = 2)
+}
+```
+
+As an aside, the wave-like shape observed above is typical of the mean-variance trend for log-expression values. (The same wave is present but much less pronounced for UMI data.) A linear increase in the variance is observed as the mean increases from zero, as larger variances are obviously possible when the counts are not all equal to zero. In contrast, the relative contribution of sampling noise decreases at high abundances, resulting in a downward trend. The peak represents the point at which these two competing effects cancel each other out.  
+
+#### Using a design matrix  
+The use of block-specific trends is the recommended approach for experiments with a single blocking factor. However, this is not practical for studies involving a large number of blocking factors and/or covariates. In such cases, we can use the design= argument to specify a design matrix with uninteresting factors of variation. We illustrate again with the 416B data set, blocking on the plate of origin and oncogene induction. (The same argument is available in modelGeneVar() when spike-ins are not available.)  
+
+```{r}
+design <- model.matrix( ~ factor(block) + phenotype, colData(sce.416b))
+dec.design.416b <- modelGeneVarWithSpikes(sce.416b, spikes = "ERCC", design = design)
+dec.design.416b[order(dec.design.416b, decreasing = T), ]
+```
+
+This strategy is simple but somewhat inaccurate as it does not consider the mean expression in each blocking level. Recall that the technical component is estimated as the fitted value of the trend at the average abundance for each gene. However, the true technical component is the average of the fitted values at the per-block means, which may be quite different for strong batch effects and non-linear mean-variance relationships. The block= approach is safer and should be preferred in all situations where it is applicable.  
+
+## Selecting highly variable genes
 
 
 
