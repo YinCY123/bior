@@ -1163,7 +1163,7 @@ plot(fit.pbmc$mean, fit.pbmc$var,
 curve(fit.pbmc$trend(x), col = "dodgerblue", add = T, lwd = 2)
 ```
 
-At any given abundance, we assume that the expression profiles of most genes are dominated by random technical noise (see Section 8.2.3 for details). Under this assumption, our trend represents an estimate of the technical noise as a function of abundance. We then break down the total variance of each gene into the technical component, i.e., the fitted value of the trend at that gene’s abundance; and the biological component, defined as the difference between the total variance and the technical component. This biological component represents the “interesting” variation for each gene and can be used as the metric for HVG selection.  
+**At any given abundance, we assume that the expression profiles of most genes are dominated by random technical noise (see Section 8.2.3 for details). Under this assumption, our trend represents an estimate of the technical noise as a function of abundance**. We then break down the total variance of each gene into the technical component, i.e., the fitted value of the trend at that gene’s abundance; and the biological component, defined as the difference between the total variance and the technical component. This biological component represents the “interesting” variation for each gene and can be used as the metric for HVG selection.  
 
 ```{r}
 # ordering by most interesting genes for inspection
@@ -1230,10 +1230,10 @@ sce.seger <- logNormCounts(sce.seger)
 ```{r}
 sce.seger <- sce.seger[, sce.seger$Donor == "HP1507101"]
 dec.default <- modelGeneVar(sce.seger)
-dec.noweight <- modelGeneVar(sce.seger)
+dec.noweight <- modelGeneVar(sce.seger, density.weights = F)
 
 fit.default <- metadata(dec.default)
-fit.noweight <- metadata(dec.noweight, density.weights=FALSE)
+fit.noweight <- metadata(dec.noweight)
 
 plot(fit.default$mean, fit.default$var, 
      xlab = "Mean of log-expression", 
