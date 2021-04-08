@@ -1566,9 +1566,14 @@ rowData(sce.zeisel)$Ensembl <- mapIds(org.Mm.eg.db,
 stats <- perCellQCMetrics(sce.zeisel, 
                           subsets = list(Mt = rowData(sce.zeisel)$featureType == "mito"))
 qc <- quickPerCellQC(df = stats, 
-                     percent_subsets = c("altexps_ERCC_percent", "subsets_Mt_percent"))
+                     subsets = c("altexps_ERCC_percent", "subsets_Mt_percent"))
 
-sce.zeisel <- sce.zeisel[, !qc$discard]
+qc_ercc <- isOutlier(stats$altexps_ERCC_percent, type = "both", log = T)
+qc_mito <- isOutlier(stats$subsets_Mt_percent, type = "both", log = T)
+qc <- qc_ercc | qc_mito
+qc %>% table
+
+sce.zeisel <- sce.zeisel[, !qc]
 
 # normalization
 library(scran)
@@ -1588,7 +1593,7 @@ Principal components analysis (PCA) discovers axes in high-dimensional space tha
 
 By definition, the top PCs capture the dominant factors of heterogeneity in the data set. Thus, we can perform dimensionality reduction by restricting downstream analyses to the top PCs. This strategy is simple, highly effective and widely used throughout the data sciences. It takes advantage of the well-studied theoretical properties of the PCA - namely, that a low-rank approximation formed from the top PCs is the optimal approximation of the original data for a given matrix rank. It also allows us to use a wide range of fast PCA implementations for scalable and efficient data analysis.  
 
-When applying PCA to scRNA-seq data, our assumption is that biological processes affect multiple genes in a coordinated manner. This means that the earlier PCs are likely to represent biological structure as more variation can be captured by considering the correlated behavior of many genes. By comparison, random technical or biological noise is expected to affect each gene independently. There is unlikely to be an axis that can capture random variation across many genes, meaning that noise should mostly be concentrated in the later PCs. This motivates the use of the earlier PCs in our downstream analyses, which concentrates the biological signal to simultaneously reduce computational work and remove noise.  
+**When applying PCA to scRNA-seq data, our assumption is that biological processes affect multiple genes in a coordinated manner. This means that the earlier PCs are likely to represent biological structure as more variation can be captured by considering the correlated behavior of many genes**. By comparison, random technical or biological noise is expected to affect each gene independently. There is unlikely to be an axis that can capture random variation across many genes, meaning that noise should mostly be concentrated in the later PCs. This motivates the use of the earlier PCs in our downstream analyses, which concentrates the biological signal to simultaneously reduce computational work and remove noise.  
 
 We perform the PCA on the log-normalized expression values using the `runPCA()` function from scater. By default, `runPCA()` will compute the first 50 PCs and store them in the `reducedDims()` of the output `SingleCellExperiment` object, as shown below. Here, we use only the top 2000 genes with the largest biological components to reduce both computational work and high-dimensional random noise. In particular, while PCA is robust to random noise, an excess of it may cause the earlier PCs to capture noise instead of biological structure (Johnstone and Lu 2009). This effect can be mitigated by restricting the PCA to a subset of HVGs, for which we can use any of the strategies described in Chapter 8.  
 
@@ -1618,15 +1623,115 @@ reducedDimNames(sce.zeisel)
 ```
 
 ## Choosing the number of PCs  
+### Motivation  
+How many of the top PCs should we retain for downstream analyses? The choice of the number of PCs d is a decision that is analogous to the choice of the number of HVGs to use. Using more PCs will retain more biological signal at the cost of including more noise that might mask said signal. Much like the choice of the number of HVGs, it is hard to determine whether an “optimal” choice exists for the number of PCs. Even if we put aside the technical variation that is almost always uninteresting, there is no straightforward way to automatically determine which aspects of biological variation are relevant; one analyst’s biological signal may be irrelevant noise to another analyst with a different scientific question.
 
+Most practitioners will simply set d to a “reasonable” but arbitrary value, typically ranging from 10 to 50. This is often satisfactory as the later PCs explain so little variance that their inclusion or omission has no major effect. For example, in the Zeisel dataset, few PCs explain more than 1% of the variance in the entire dataset (Figure 9.1) and using, say, 30 ± 10 PCs would not even amount to four percentage points’ worth of difference in variance. In fact, the main consequence of using more PCs is simply that downstream calculations take longer as they need to compute over more dimensions, but most PC-related calculations are fast enough that this is not a practical concern.  
 
+```{r, fig.cap="Percentage of variance explained by successive PCs in the Zeisel dataset, shown on a log-scale for visualization purposes."}
+percent.var <- attr(reducedDim(sce.zeisel), "percentVar")
+plot(percent.var, log = "y", xlab = "PC", ylab = "Variance explained (%)")
+```
 
+Nonetheless, we will describe some more data-driven strategies to guide a suitable choice of d. These automated choices are best treated as guidelines as they make some strong assumptions about what variation is “interesting”. More diligent readers may consider repeating the analysis with a variety of choices of d to explore other perspectives of the dataset at a different bias-variance trade-off, though this tends to be more work than necessary for most questions.  
 
+### Using the elbow point  
+A simple heuristic for choosing d involves identifying the elbow point in the percentage of variance explained by successive PCs. This refers to the “elbow” in the curve of a scree plot.  
 
+```{r, fig.cap="Percentage of variance explained by successive PCs in the Zeisel brain data. The identified elbow point is marked with a red line."}
+# percentage of variance explained is tucked away in the attributes.  
+percent.var <- attr(reducedDim(sce.zeisel), "percentVar")
+chosen.elbow <- PCAtools::findElbowPoint(percent.var)
 
+plot(percent.var, xlab = "PC", ylab = "Variance explained (%)")
+abline(v = chosen.elbow, col = "red", lty = 2)
+```
 
+Our assumption is that each of the top PCs capturing biological signal should explain much more variance than the remaining PCs. Thus, there should be a sharp drop in the percentage of variance explained when we move past the last “biological” PC. This manifests as an elbow in the scree plot, the location of which serves as a natural choice for d. Once this is identified, we can subset the reducedDims() entry to only retain the first d PCs of interest.  
 
+```{r}
+# Creating a new entry with only the first 20 PCs, useful if we still need the full set of PCs later.
+reducedDim(sce.zeisel, "PCA.elbow") <- reducedDim(sce.zeisel)[, 1:chosen.elbow]
+reducedDimNames(sce.zeisel)
+```
 
+```{r}
+# alternatively, just overwriting the original PCA entry
+sce.zeisel.copy <- sce.zeisel
+reducedDim(sce.zeisel.copy) <- reducedDim(sce.zeisel.copy)[, 1:chosen.elbow]
+reducedDim(sce.zeisel.copy) %>% ncol
+```
+
+From a practical perspective, the use of the elbow point tends to retain fewer PCs compared to other methods. The definition of “much more variance” is relative so, in order to be retained, later PCs must explain a amount of variance that is comparable to that explained by the first few PCs. **Strong biological variation in the early PCs will shift the elbow to the left, potentially excluding weaker (but still interesting) variation in the next PCs immediately following the elbow**.  
+
+### Using the technical noise  
+Another strategy is to retain all PCs until the percentage of total variation explained reaches some threshold T. For example, we might retain the top set of PCs that explains 80% of the total variation in the data. Of course, it would be pointless to swap one arbitrary parameter d for another T. Instead, we derive a suitable value for T by calculating the proportion of variance in the data that is attributed to the biological component. This is done using the denoisePCA() function with the variance modelling results from modelGeneVarWithSpikes() or related functions, where T is defined as the ratio of the sum of the biological components to the sum of total variances. To illustrate, we use this strategy to pick the number of PCs in the 10X PBMC dataset.    
+
+```{r}
+#--- loading ---#
+library(DropletTestFiles)
+library(DropletUtils)
+fname <- file.path("data/pbmc4k/raw_gene_bc_matrices/GRCh38/")
+sce.pbmc <- read10xCounts(fname, col.names=TRUE)
+
+#--- gene-annotation ---#
+library(scater)
+rownames(sce.pbmc) <- uniquifyFeatureNames(
+    rowData(sce.pbmc)$ID, rowData(sce.pbmc)$Symbol)
+
+library(EnsDb.Hsapiens.v86)
+location <- mapIds(EnsDb.Hsapiens.v86, keys=rowData(sce.pbmc)$ID, 
+    column="SEQNAME", keytype="GENEID")
+
+#--- cell-detection ---#
+set.seed(100)
+e.out <- emptyDrops(counts(sce.pbmc))
+sce.pbmc <- sce.pbmc[,which(e.out$FDR <= 0.001)]
+
+#--- quality-control ---#
+stats <- perCellQCMetrics(sce.pbmc, subsets=list(Mito=which(location=="MT")))
+high.mito <- isOutlier(stats$subsets_Mito_percent, type="higher")
+sce.pbmc <- sce.pbmc[,!high.mito]
+
+#--- normalization ---#
+library(scran)
+set.seed(1000)
+clusters <- quickCluster(sce.pbmc)
+sce.pbmc <- computeSumFactors(sce.pbmc, cluster=clusters)
+sce.pbmc <- logNormCounts(sce.pbmc)
+
+#--- variance-modelling ---#
+set.seed(1001)
+dec.pbmc <- modelGeneVarByPoisson(sce.pbmc)
+top.pbmc <- getTopHVGs(dec.pbmc, prop=0.1)
+```
+
+```{r}
+library(scran)
+set.seed(111001001)
+denoised.pbmc <- denoisePCA(x = sce.pbmc, technical = dec.pbmc, subset.row = top.pbmc)
+reducedDim(denoised.pbmc) %>% ncol()
+```
+
+The dimensionality of the output represents the lower bound on the number of PCs required to retain all biological variation. This choice of d is motivated by the fact that any fewer PCs will definitely discard some aspect of biological signal. (Of course, the converse is not true; there is no guarantee that the retained PCs capture all of the signal, which is only generally possible if no dimensionality reduction is performed at all.) From a practical perspective, the `denoisePCA()` approach usually retains more PCs than the elbow point method as the former does not compare PCs to each other and is less likely to discard PCs corresponding to secondary factors of variation. The downside is that many minor aspects of variation may not be interesting (e.g., transcriptional bursting) and their retention would only add irrelevant noise.  
+
+Note that `denoisePCA()` imposes internal caps on the number of PCs that can be chosen in this manner. By default, the number is bounded within the “reasonable” limits of 5 and 50 to avoid selection of too few PCs (when technical noise is high relative to biological variation) or too many PCs (when technical noise is very low). For example, applying this function to the Zeisel brain data hits the upper limit:  
+
+```{r}
+set.seed(001001001)
+denoised.zeisel <- denoisePCA(sce.zeisel, technical = dec.zeisel, subset.row = top.zeisel)
+reducedDim(denoised.zeisel) %>% ncol
+```
+
+This method also tends to perform best when the mean-variance trend reflects the actual technical noise, i.e., estimated by `modelGeneVarByPoisson()` or `modelGeneVarWithSpikes()` instead of `modelGeneVar()` (Chapter 8). Variance modelling results from `modelGeneVar()` tend to understate the actual biological variation, especially in highly heterogeneous datasets where secondary factors of variation inflate the fitted values of the trend. Fewer PCs are subsequently retained because T is artificially lowered, as evidenced by `denoisePCA()` returning the lower limit of 5 PCs for the PBMC dataset:  
+
+```{r}
+dec.pbmc2 <- modelGeneVar(sce.pbmc)
+denoised.pbmc2 <- denoisePCA(sce.pbmc, technical = dec.pbmc2, subset.row = top.pbmc)
+reducedDim(denoised.pbmc2) %>% ncol
+```
+
+### Based on population structure  
 
 
 
