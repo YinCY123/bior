@@ -1544,9 +1544,80 @@ As the name suggests, dimensionality reduction aims to reduce the number of sepa
 
 We will use the Zeisel et al. (2015) dataset to demonstrate the applications of various dimensionality reduction methods in this chapter.  
 
+```{r}
+library(scRNAseq)
+# sce.zeisel <- ZeiselBrainData()
+sce.zeisel <- readRDS("data/sce.zeisel.rds")
 
+library(scater)
+sce.zeisel <- aggregateAcrossFeatures(
+    x = sce.zeisel, 
+    ids = sub("_loc[0-9]+$", "", rownames(sce.zeisel))
+)
 
+# gene annotation
+library(org.Mm.eg.db)
+rowData(sce.zeisel)$Ensembl <- mapIds(org.Mm.eg.db, 
+                                      keys = rownames(sce.zeisel), 
+                                      keytype = "SYMBOL", 
+                                      column = "ENSEMBL")
 
+# quality control
+stats <- perCellQCMetrics(sce.zeisel, 
+                          subsets = list(Mt = rowData(sce.zeisel)$featureType == "mito"))
+qc <- quickPerCellQC(df = stats, 
+                     percent_subsets = c("altexps_ERCC_percent", "subsets_Mt_percent"))
+
+sce.zeisel <- sce.zeisel[, !qc$discard]
+
+# normalization
+library(scran)
+clusters <- quickCluster(x = sce.zeisel)
+sce.zeisel <- computeSumFactors(x = sce.zeisel, cluster = clusters)
+sce.zeisel <- logNormCounts(sce.zeisel)
+
+# variance modeling
+dec.zeisel <- modelGeneVarWithSpikes(sce.zeisel, spikes = "ERCC")
+top.hvgs=getTopHVGs(stats = dec.zeisel, prop = 0.1)
+str(top.hvgs)
+sce.zeisel
+```
+
+## Principal components analysis  
+Principal components analysis (PCA) discovers axes in high-dimensional space that capture the largest amount of variation. This is best understood by imagining each axis as a line. Say we draw a line anywhere, and we move all cells in our data set onto this line by the shortest path. The variance captured by this axis is defined as the variance across cells along that line. In PCA, the first axis (or “principal component”, PC) is chosen such that it captures the greatest variance across cells. The next PC is chosen such that it is orthogonal to the first and captures the greatest remaining amount of variation, and so on.  
+
+By definition, the top PCs capture the dominant factors of heterogeneity in the data set. Thus, we can perform dimensionality reduction by restricting downstream analyses to the top PCs. This strategy is simple, highly effective and widely used throughout the data sciences. It takes advantage of the well-studied theoretical properties of the PCA - namely, that a low-rank approximation formed from the top PCs is the optimal approximation of the original data for a given matrix rank. It also allows us to use a wide range of fast PCA implementations for scalable and efficient data analysis.  
+
+When applying PCA to scRNA-seq data, our assumption is that biological processes affect multiple genes in a coordinated manner. This means that the earlier PCs are likely to represent biological structure as more variation can be captured by considering the correlated behavior of many genes. By comparison, random technical or biological noise is expected to affect each gene independently. There is unlikely to be an axis that can capture random variation across many genes, meaning that noise should mostly be concentrated in the later PCs. This motivates the use of the earlier PCs in our downstream analyses, which concentrates the biological signal to simultaneously reduce computational work and remove noise.  
+
+We perform the PCA on the log-normalized expression values using the `runPCA()` function from scater. By default, `runPCA()` will compute the first 50 PCs and store them in the `reducedDims()` of the output `SingleCellExperiment` object, as shown below. Here, we use only the top 2000 genes with the largest biological components to reduce both computational work and high-dimensional random noise. In particular, while PCA is robust to random noise, an excess of it may cause the earlier PCs to capture noise instead of biological structure (Johnstone and Lu 2009). This effect can be mitigated by restricting the PCA to a subset of HVGs, for which we can use any of the strategies described in Chapter 8.  
+
+```{r}
+library(scran)
+top.zeisel <- getTopHVGs(dec.zeisel, n = 2000)
+str(top.zeisel)
+
+library(scater)
+set.seed(100)
+sce.zeisel <- runPCA(x = sce.zeisel, subset_row = top.zeisel)
+reducedDimNames(sce.zeisel)
+reducedDim(sce.zeisel, "PCA") %>% dim()
+```
+
+For large data sets, greater efficiency is obtained by using approximate SVD algorithms that only compute the top PCs. By default, most PCA-related functions in `scater` and `scran` will use methods from the `irlba` or `rsvd` packages to perform the SVD. We can explicitly specify the SVD algorithm to use by passing an `BiocSingularParam` object (from the `BiocSingular` package) to the `BSPARAM=` argument (see Section 23.2.2 for more details). Many of these approximate algorithms are based on randomization and thus require `set.seed()` to obtain reproducible results.  
+
+```{r}
+library(BiocSingular)
+set.seed(1000)
+sce.zeisel <- runPCA(x = sce.zeisel, 
+                     subset_row = top.zeisel, 
+                     BSPARAM = RandomParam(), 
+                     name = "IRLBA")
+
+reducedDimNames(sce.zeisel)
+```
+
+## Choosing the number of PCs  
 
 
 
