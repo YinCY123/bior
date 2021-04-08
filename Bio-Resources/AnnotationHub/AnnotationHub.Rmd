@@ -1,0 +1,298 @@
+---
+title: "AnnotationHub"
+author: "yincy"
+date: "11/6/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages, message=FALSE}
+library(GenomicRanges)
+library(rtracklayer)
+library(AnnotationHub)
+library(magrittr)
+```
+
+# AnnotationHub HOW TO's  
+## Accessing Genome-Scale Data  
+### Non-model organism gene annotations  
+Bioconductor offers pre-built org.* annotation packages for model organisms, with their use described in the OrgDb section of the Annotation work flow. Here we discover available OrgDb objects for less-model organisms.  
+```{r, message=FALSE}
+ahub <- AnnotationHub()
+
+query(x = ahub, pattern = "OrgDb")
+```
+
+```{r}
+orgdb <- query(x = ahub, pattern = c("OrgDb", "maintainer@bioconductor.org"))[[1]]
+```
+
+The object returned by AnnotationHub is directly usable with the `select()` interface, e.g., to discover the available `keytypes` for querying the object, the columns that these keytypes can map to, and finally selecting the SYMBOL and GENENAME corresponding to the first 6 ENTREZIDs.  
+
+```{r}
+keytypes(orgdb)
+columns(orgdb)
+```
+
+```{r}
+keys <- keys(orgdb, "ENTREZID")
+
+# the subset of an annotationhub just like an org.*.eg.db annotation package.  
+select(x = orgdb, 
+       keys = head(keys, n = 10), 
+       keytype = "ENTREZID", 
+       columns = c("SYMBOL", "GENENAME"))
+```
+
+
+### Roadmap Epigenomics Project  
+All Roadmap Epigenomics files are hosted [here](http://egg2.wustl.edu/roadmap/data/byFileType/). If one had to download these files on their own, one would navigate through the web interface to find useful files, then use something like the following *R* code.  
+
+```{r}
+url <- "http://egg2.wustl.edu/roadmap/data/byFileType/peaks/consolidated/broadPeak/E001-H3K4me1.broadPeak.gz"
+filename <- basename(url)
+download.file(url = url, destfile = filename)
+
+if (file.exists(filename)){
+    data <- import(filename, format = "bed")
+}
+```
+
+This would have to be repeated for all files, and the onus would lie on the user to identify, download, import, and manage the local disk location of these files.  
+
+`AnnotationHub` reduces this task to just a few lines of R code.  
+```{r}
+epiFiles <- query(ahub, pattern = "EpigenomeRoadMap")
+epiFiles
+```
+
+A look at the value returned by epiFiles shows us that 18248 roadmap resources are available via `AnnotationHub`. Additional information about the files is also available, e.g., where the files came from (dataprovider), genome, species, sourceurl, sourcetypes.  
+
+
+A good sanity check to ensure that we have files only from the Roadmap Epigenomics project is to check that all the files in the returned smaller hub object come from Homo sapiens and the hg19 genome  
+
+```{r}
+unique(epiFiles$species)
+
+unique(epiFiles$genome)
+```
+
+Broadly, one can get an idea of the different files from this project looking at the sourcetype  
+
+```{r}
+table(epiFiles$sourcetype)
+```
+
+```{r}
+epiFiles$description %>% 
+    table() %>% 
+    sort(decreasing = T)
+```
+
+The ‘metadata’ provided by the Roadmap Epigenomics Project is also available. Note that the information displayed about a hub with a single resource is quite different from the information displayed when the hub references more than one resource.  
+
+```{r}
+metadata.tab <- query(x = ahub, pattern = c("EpigenomeRoadMap", "Metadata"))
+```
+
+So far we have been exploring information about resources, without downloading the resource to a local cache and importing it into R. One can retrieve the resource using `[[` as indicated at the end of the show method.  
+
+```{r}
+metadata.tab <- ahub[["AH41830"]]
+```
+
+The metadata.tab file is returned as a data.frame.  
+```{r}
+metadata.tab %>% dim()
+metadata.tab %>% colnames()
+metadata.tab[1:5, 1:5]
+```
+
+One can keep constructing different queries using multiple arguments to trim down these 18248 to get the files one wants. For example, to get the ChIP-Seq files for consolidated epigenomes, one could use.  
+
+```{r}
+bpChipEpi <- query(ahub, pattern = c("EpigenomeRoadMap", "broadPeak", "chip", "consolidated"))
+```
+
+to get all the bigWig signal files, one can query the hub using.  
+
+```{r}
+allBigWigFiles <- query(ahub, pattern = c("EpigenomeRoadMap", "BigWig"))
+```
+
+to access the 15 stats chromatin segmentations, one can use.  
+
+```{r}
+seg <- query(ahub, pattern = c("EpigenomeRoadMap", "segmentations"))
+```
+
+if one interested in getting all the files related to one sample  
+
+```{r}
+E126 <- query(ahub, pattern = c("EpigenomeRoadMap", "E126", "H3K4ME2"))
+```
+
+Hub resources are imported as the appropriate Bioconductor object for use in further analysis. For example, peak files are returned as GRanges objects.  
+
+```{r}
+library(rtracklayer)
+
+peaks <- E126[["AH29817"]]
+seqinfo(peaks)
+```
+
+BigWig files are returned as *BigWigFile* objects. A BigWigFile is a reference to a file on disk; the data in the file can be read in using `rtracklayer::import()`, perhaps querying these large files for particular genomic regions of interest.  
+
+Each record inside AnnotationHub is associated with a unique identifier. Most GRanges objects returned by AnnotationHub contain the unique AnnotationHub identifier of the resource from which the GRanges is derived. This can come handy when working with the GRanges object for a while, and additional information about the object (e.g., the name of the file in the cache, or the original sourceurl for the data underlying the resource) that is being worked with.  
+
+```{r}
+metadata(peaks)
+```
+
+```{r}
+ahub[metadata(peaks)$AnnotationHubName]$sourceurl
+```
+
+
+### Ensembl GTF and FASTA files for TxDb gene modles and sequence queries  
+Bioconductor represents gene models using ‘transcript’ databases. These are available via packages such as `TxDb.Hsapiens.UCSC.hg38.knownGene` or can be constructed using functions such as `GenomicFeatures::makeTxDbFromBiomart()`.  
+
+AnnotationHub provides an easy way to work with gene models published by Ensembl. Let’s see what Ensembl’s Release-94 has in terms of data for pufferfish, Takifugu rubripes.  
+
+```{r}
+query(ahub, pattern = c("Takifugu", "release-94"))
+```
+
+We see that there is a GTF file descrbing gene models, as well as various DNA sequences. Let’s retrieve the GTF and top-level DNA sequence files. The GTF file is imported as a GRanges instance, the DNA sequence as a twobit file.  
+
+```{r}
+gtf <- ahub[["AH64858"]]
+dna <- ahub[["AH66116"]]
+```
+
+
+```{r}
+head(gtf)
+```
+
+```{r}
+dna
+seqlevelsStyle(dna)
+seqlevels(dna) %>% head()
+```
+
+It is trival to make a TxDb instance of this subset.  
+```{r}
+txdb <- makeTxDbFromGRanges()
+```
+
+
+
+```{r}
+keep <- seqlengths(dna) %>% sort() %>% tail(n = 25) %>% names()
+gtf_subset <- gtf[seqnames(gtf) %in% keep]
+```
+
+It is trivial to make a TxDb instance of this subset (or of the entire gtf).  
+
+```{r}
+library(GenomicFeatures)
+
+txdb <- makeTxDbFromGRanges(gr = gtf_subset)
+```
+
+and to use that in conjunction with the DNA sequences, e.g., to find exon sequences of all annotated genes.  
+
+```{r}
+library(Rsamtools)
+exons <- exons(x = txdb)
+length(exons)
+
+getSeq(x = dna, exons)
+```
+
+There is a one-to-one mapping between the genomic ranges contained in exons and the DNA sequences returned by  `getSeq()`.  
+
+Some difficulties arise when working with this partly assembled genome that require more advanced GenomicRanges skills.  
+
+### liftOver to map between genome builds  
+Suppose we wanted to lift features from one genome build to another, e.g., because annotations were generated for hg19 but our experimental analysis used hg18. We know that UCSC provides ‘liftover’ files for mapping between genome builds.  
+
+In this example, we will take our broad Peak GRanges from E126 which comes from the ‘hg19’ genome, and lift over these features to their ‘hg38’ coordinates.  
+
+```{r}
+chainfiles <- query(ahub, pattern = c("hg38", 'hg19', "chainfile"))
+```
+
+We are interested in the file that lifts over features from hg19 to hg38 so lets download that using.  
+
+```{r}
+chain <- chainfiles[["AH14150"]]
+chain
+```
+
+Perform the liftOver operation using `rtracklayer::liftOver()`:  
+
+```{r}
+library(rtracklayer)
+gr38 <- liftOver(x = peaks, chain = chain)
+gr38
+```
+
+### Working with dbSNP Variants   
+One may also be interested in working with common germline variants with evidence of medical interest. This information is available at NCBI.  
+
+Query the dbDNP files in the hub:  
+
+This returns a *VcfFile* which can be read in using `r Biocpkg("VariantAnnotation")`; because VCF files can be large, `readVcf()` supports several strategies for importing only relevant parts of the file (e.g., particular genomic locations, particular features of the variants), see `?readVcf` for additional information.  
+
+```{r}
+library(VariantAnnotation)
+vcf <- system.file("extdata", "chr7-sub.vcf.gz", package = "VariantAnnotation")
+
+variants <- readVcf(file = vcf, genome = "hg19")
+```
+
+```{r}
+rowRanges(variants)
+```
+
+Note that the broadPeaks files follow the UCSC chromosome naming convention, and the vcf data follows the NCBI style of chromosome naming convention. To bring these ranges in the same chromosome naming convention (ie UCSC), we would use
+
+```{r}
+seqlevelsStyle(variants) <- seqlevelsStyle(peaks)
+
+seqlevels(variants)
+```
+
+And then finally to find which variants overlap these broadPeaks we would use:  
+
+```{r}
+overlap <- findOverlaps(query = variants, peaks)
+overlap
+```
+
+Some insight into how these results can be interpretted comes from looking a particular peak, e.g., the 3852nd peak.  
+
+```{r}
+idx <- subjectHits(overlap) == 14012
+overlap[idx]
+```
+
+There are three variants overlapping this peak; the coordinates of the peak and the overlapping variants are.  
+
+```{r}
+peaks[14012]
+```
+
+```{r}
+rowRanges(variants)[queryHits(overlap[idx])]
+```
+
+
+
+
+

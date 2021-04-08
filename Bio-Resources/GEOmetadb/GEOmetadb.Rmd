@@ -1,0 +1,103 @@
+---
+title: "GEOmetadb"
+author: "yincy"
+date: "3/27/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r,message=FALSE, warning=FALSE}
+library(GEOmetadb)
+library(DBI)
+library(RSQLite)
+library(tidyverse)
+```
+
+file relationship
+```{r, fig.align='center'}
+knitr::include_graphics("figures/GEOmetadb.png")
+```
+
+
+```{r}
+con <- dbConnect(drv = RSQLite::SQLite(), "/home/yincy/git/Data/NCBI/GEOmetadb.sqlite")
+```
+
+```{r}
+dbListFields(con, "gsm")
+dbReadTable(conn = con, name = "gsm") %>% head()
+  pull(organism_ch1) %>% 
+  table() %>% 
+  sort(decreasing = T)
+```
+
+
+```{r}
+hsa_ngs <- dbGetQuery(conn = con, 
+           statement = "select gse.gse, gsm.title, gse.summary, 
+           gse.pubmed_id, gpl.gpl, gpl.technology, gsm.gsm, 
+           gsm.source_name_ch1, gsm.organism_ch1, gsm.molecule_ch1
+           from gsm 
+           join gse_gsm on gsm.gsm=gse_gsm.gsm 
+           join gse on gse_gsm.gse=gse.gse 
+           join gse_gpl on gse_gpl.gse=gse.gse 
+           join gpl on gse_gpl.gpl=gpl.gpl 
+           where gsm.organism_ch1 = 'Homo sapiens' 
+           and technology = 'high-throughput sequencing'")
+``` 
+
+
+```{r}
+hsa_ngs %>% 
+    dplyr::filter(grepl("(AMD)", summary, ignore.case = F))
+```
+
+
+```{r}
+hsa_retina_ngs %>% 
+    filter((grepl("pbmc|`whole blood`", title) | grepl("pbmc|`whole blood`", summary) | grepl("pbmc|`whole blood`", source_name_ch1)) & technology == "high-throughput sequencing") %>% 
+    pull(summary) %>% 
+    unique()
+```
+
+
+AMD datasets: 
++ GSE99248: RPE-Choriod
++ GSE135092: late stage of amd is not specified  
++ GSE125564: RPE expression by array   
++ GSE146887: neovascular membrane in AMD patients (newly generated invision vascular)  
++ GSE29801: expression by array, RPEChoroid, retina  
++ SRP107997 (GSE99287): ATAC-seq of AMD RPE show decresed chromation accessibility  
+
+
+```{r}
+dbListFields(conn = con, name = "gsm")
+```
+
+
+```{r}
+dbReadTable(conn = con, name = "gsm") %>% 
+    select(organism_ch1) %>% 
+    table(decreasing = T)
+```
+
+
+
+## kidney tumor single cell sequencing  
+```{r}
+con <- dbConnect(drv = RSQLite::SQLite(), "f:/git/Data/GEOmetadb.sqlite")
+
+mouse_kidney_tumor <- dbGetQuery(conn = con, 
+                                 statement = "")
+```
+
+
+
+
+
+
+

@@ -1,0 +1,117 @@
+---
+title: "AnnotationHub objects and methods"
+author: "yincy"
+date: "12/22/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Description  
+Use `AnnotationHub` to interact with Bioconductor's AnnotationHub service. Query the instance to discover and use resources that are of interest, and then easily download and import the resource into R for immediate use.  
+
+Use `AnnotationHub()` to retrieve information about all records in the hub. If working offline, add argument `localHub=TRUE` to work with a local, non-updated hub; It will only have resources available that have previously been downloaded. To force redownload of the hub, `refreshHub(hubClass="AnnotationHub")` can be utilized.  
+
+Discover records in a hub using `mcols()`, `query()`, `subset()`, `[`, and `display()`.  
+
+Retrieve individual records using `[[`. On first use of a resource, the corresponding files or other hub resources are downloaded from the internet to a local cache. On this and all subsequent uses the files are quickly input from the cache into the R session. If a user wants to download the file again and not use the cache version add the argument `force=TRUE`.  
+
+`AnnotationHub` records can be added (and sometimes removed) at any time. `snapshotDate()` restricts hub records to those available at the time of the snapshot. `possibleDates()` lists snapshot dates valid for the current version of Bioconductor. You can check the status of a past record using `recordStatus()`.   
+
+The location of the local cache can be found (and updated) with `hubCache()` and `setAnnotationHubCache`; `removeCache` removes all cache resources.  
+
+
+# Constructors  
+```
+AnnotationHub(..., hub = getAnnotationHubOption(arg = "URL"), 
+              cache = getAnnotationHubOption(arg = "CACHE"), 
+              proxy = getAnnotationHubOption(arg = "PROXY"), 
+              localHub = getAnnotationHubOption(arg = "LOCAL"))
+```
+
+# Accessors  
+In the code below, x and object are AnnotationHub objects.  
+
+- `hubCache(x)`: Gets the files system location of the local AnnotationHub cache.  
+- `hubUrl(x)`: Gets the URL for the online hub.  
+- `isLocalHub(x)`: Get whether or not constructor was called with `localHub = TRUE`.  
+- `length(x)`: Get the number of hub records.  
+- `names(x)`: Get the names (AnnotationHub unique identifers, of the form AH12345) of the hub records.  
+- `fileName(x)`: Get the file path of the hub records as stored in the local cache (AnnotationHub files are stored as unique numbers, of the form 12345). NA is returned for those records which have not been cached.  
+- `mcols(x)`: Get the metadata columns describing each record.  Columns include:  
+
++ `title`: record title, frequently the file name of the object.  
++ `dataprovider`: Original provider of the resource, e.g., Ensembl, UCSC.  
++ `species`: The species for which the record is most relevent, e.g., "Homo sapiens".  
++ `taxonomyid`: NCBI taxonomy identifier of the species.  
++ `genome`: Genome build relevent to the record, e.g., hg19.  
++ `description`: Textual description of the resource, frequently automatically generated from file path and other information available when the record was created.  
++ `tags`: Single words added to the records to facilitate identification, e.g., TCGA, Roadmap.  
++ `rdataclass`: The class of the R object used to represent the object when imported into R, e.g., `GRanges`, `VCFFile`.   
++ `sourceurl`: Orignal URL of the resources.  
++ `sourcetype`: Format of the original recources, e.g., BED file.  
+
+- `dbconn`(x): Return an open connection to the underyling SQLite database.  
+- `dbfile(x)`: return the full path the underlaying SQLite database.  
+- `.db_close(conn)`: Close the SQLite connection `conn` returned by `dbconn(x)`.  
+
+# Subsetting and related operations  
+In the code below, x is an AnnotationHub object.  
+
+- `x$name`: Convenient reference to individual metadata columns, e.g., `x$species`.  
+
+- `x[i]`: Numerical, logical, or character vector (of AnnotationHub names) to be subset the hub, e.g., `x[x$species == "Homo sapiens]`.  
+
+- `x[[i, force = F, verbose = T]]`: Numerical or character scalar to retrieve (if necessary) and import the resource into R. If a user wants to download the file again and not use the cache version add the argument `force = TRUE`. `verbose = F` will quiet status messages.  
+
+- `query(x, pattern, ignore.case=T, pattern.op = `&`)`: return an AnnotationHub subset containing only those elements whose metadata matches `pattern`. Matching uses `pattern` as in `grepl` to search the `as.character` representation of each column, performing a logical `&` across columns. e.g., query(x, pattern = c("Homo sapiens", "hg19", "GTF")).  
+
+ + `pattern` A character vector of patterns to search (via grepl) for in any of the `mcols` columns.  
+ + `ignore.case` A logical vector indicating whether the search should ignore cases.  
+ + `pattern.op` Any function of two arguments, describing how matches across pattern elements are to be combined. The default `&` required that only records with all elements of patterns in their metadata columns are returned. `&`, `|`, and `!` are most noteable.   
+ 
+- `subset(x, subset)`: return the subset of records containing only those element whose metadata satisfies the expression in subset. The expression can reference columns of `mcols(x)`, and should return a logical vector of length `length(x)`.  
+
+- `display(object)`: open a web browser allowing for easy selection of hub records via interactive tabular display. Return value is the subset of hub records identified while navigating the display.  
+
+- `recordsStatus(hub, record)`: returns a `data.frame` of the records id and status. `hub` must be a Hub object and `record` must be a `character(1)`. Can be used to discover why a resource was removed from the hub.  
+
+# Cache and hub management  
+In the code below, x is an AnnotationHub object.  
+
+- `snapshotDate(x)` and `snapshotDate(x) <- value`. Get or set the date for the snapshot in use. `value` should be one of `possibleDates()`.  
+
+- `possibleDates(x)`: Lists the valid snapshot dates for the version of Bioconductor that is being run. (e.g., BiocManager::version()).  
+
+- `cache(x)` and `cache(x) <- NULL`: adds (downloads) all resources in x, or removes all local resources corresponding to the records in x from the cache. In the later case, x would typically be a small subset of AnnotationHub resources. If x is a subset hub from a large hub, and `localHub = TRUE` was used to construct the hubs, the original object will need to be reconstructed to reflect the removed resources.  
+
+- `hubUrl(x)`: Gets the URL for the online AnnotationHub.  
+
+- `hubCache(x)`: Gets the file system location of the local AnnotationHub cache.  
+
+- `refreshHub(..., hub, cache, proxy, hubClass = c("AnnotationHub", "ExperimentHub"))`: Force redownload specifically for AnnotationHub the base call should be `refreshHub(hubClass = "AnnotationHub")`.  
+
+- `RemoveResources(hub, ids)`: Removes listed ids from the local cache. ids are "AH" ids. Returns an updated hub object. To work with updated hub object suggested syntax is to reassign (i.e., hub = removeResources(hub, "AH1")). If ids are missing will remove all previously downloaded local resources.  
+
+- `removeCache(x, ask = TRUE)`: removes local AnnotationHub database and all related resources. After calling this function, the user will have to downlaod any AnnotationHub resources again.  
+
+
+# Coercion  
+In the code below, x is an AnnotationHub object.  
+
+- `as.list()x`: Coerce x to a list of hub instances, one entery per element. Primarily for internal use.  
+
+- `c(x, ...)`: Concatenate one or more sub-hub. Sub-hubs must reference the same AnnotationHub instance. Duplicate entries are removed.  
+
+
+
+
+
+
+
+
+
+
+
