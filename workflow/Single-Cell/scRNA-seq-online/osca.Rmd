@@ -1583,7 +1583,7 @@ sce.zeisel <- logNormCounts(sce.zeisel)
 
 # variance modeling
 dec.zeisel <- modelGeneVarWithSpikes(sce.zeisel, spikes = "ERCC")
-top.hvgs=getTopHVGs(stats = dec.zeisel, prop = 0.1)
+top.hvgs.zeisel=getTopHVGs(stats = dec.zeisel, prop = 0.1)
 str(top.hvgs)
 sce.zeisel
 ```
@@ -1822,6 +1822,61 @@ gv.choice
 The Gavish-Donoho method is appealing as, unlike the other approaches for choosing `d`, the concept of the optimum is rigorously defined. By minimizing the reconstruction error, we can most accurately represent the true biological variation in terms of the distances between cells in PC space. However, there remains some room for difference between “optimal” and “useful”; for example, noisy datasets may find themselves with very low `d` as including more PCs will only ever increase reconstruction error, regardless of whether they contain relevant biological variation. This approach is also dependent on some strong i.i.d. assumptions about the noise matrix.  
 
 ## Count-based dimensionality reduction  
+For count matrices, correspondence analysis (CA) is a natural approach to dimensionality reduction. In this procedure, we compute an expected value for each entry in the matrix based on the per-gene abundance and size factors. Each count is converted into a standardized residual in a manner analogous to the calculation of the statistic in Pearson’s chi-squared tests, i.e., subtraction of the expected value and division by its square root. An SVD is then applied on this matrix of residuals to obtain the necessary low-dimensional coordinates for each cell. To demonstrate, we use the corral package to compute CA factors for the Zeisel dataset.  
+
+```{r}
+library(corral)
+
+sce.corral <- corral_sce(sce.zeisel, 
+                         subset_row = top.hvgs, 
+                         col.w = sizeFactors(sce.zeisel))
+
+reducedDim(sce.corral, "corral") %>% dim
+```
+
+The major advantage of CA is that it avoids difficulties with the mean-variance relationship upon transformation (Section 7.5.1). If two cells have the same expression profile but differences in their total counts, CA will return the same expected location for both cells; this avoids artifacts observed in PCA on log-transformed counts (Figure 9.5). However, CA is more sensitive to overdispersion in the random noise due to the nature of its standardization. This may cause some problems in some datasets where the CA factors may be driven by a few genes with random expression rather than the underlying biological structure.  
+
+```{r}
+library(BiocFileCache)
+
+load("data/mRNAmix_qc.RData")
+sce.8qc <- sce8_qc
+sce.8qc$mix <- factor(sce.8qc$mix)
+
+# choosing some HVGs for PCA
+sce.8qc <- logNormCounts(sce.8qc)
+dec.8qc <- modelGeneVar(sce.8qc)
+hvgs.8qc <- getTopHVGs(dec.8qc, n = 1000)
+sce.8qc <- runPCA(sce.8qc, subset_row = hvgs.8qc)
+
+# by comparison, corral operates on the raw counts
+sce.8qc <- corral_sce(sce.8qc, 
+                      subset_row = hvgs.8qc, 
+                      col.w = sizeFactors(sce.8qc))
+
+```
+
+```{r, fig.cap="Dimensionality reduction results of all pool-and-split libraries in the SORT-seq CellBench data, computed by a PCA on the log-normalized expression values (left) or using the corral package (right). Each point represents a library and is colored by the mixing ratio used to construct it."}
+library(patchwork)
+
+p1 <- plotPCA(sce.8qc, colour_by = "mix") + ggtitle("PCA")
+p2 <- plotReducedDim(sce.8qc, dimred = "corral", colour_by = "mix") + ggtitle("corral")
+
+p1 | p2
+```
+
+## Dimensionality reduction for visualization  
+### Motivation  
+Another application of dimensionality reduction is to compress the data into 2 (sometimes 3) dimensions for plotting. This serves a separate purpose to the PCA-based dimensionality reduction described above. Algorithms are more than happy to operate on 10-50 PCs, but these are still too many dimensions for human comprehension. Further dimensionality reduction strategies are required to pack the most salient features of the data into 2 or 3 dimensions, which we will discuss below.  
+
+#### Visualizing with PCA  
+```{r, fig.cap="PCA plot of the first two PCs in the Zeisel brain data. Each point is a cell, coloured according to the annotation provided by the original authors."}
+sce.zeisel <- runPCA(sce.zeisel, subset_row = top.hvgs.zeisel)
+plotReducedDim(sce.zeisel, dimred = "PCA", colour_by = "level1class")
+```
+
+The problem is that PCA is a linear technique, i.e., only variation along a line in high-dimensional space is captured by each PC. As such, it cannot efficiently pack differences in d dimensions into the first 2 PCs. This is demonstrated in Figure 9.6 where the top two PCs fail to resolve some subpopulations identified by Zeisel et al. (2015). If the first PC is devoted to resolving the biggest difference between subpopulations, and the second PC is devoted to resolving the next biggest difference, then the remaining differences will not be visible in the plot.  
+
 
 
 
