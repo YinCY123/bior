@@ -1,0 +1,65 @@
+---
+title: "symbol_convertion_from_has_to_mmu"
+author: "yincy"
+date: "2/25/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Converting NicheNet's model from human to mouse symbols  
+One-to-one orthologs were gathered from NCBI HomoloGene and also from ENSEMBL vis biomaRt.  
+
+### Load required packages  
+```{r, message=FALSE}
+library(nichenetr)
+library(tidyverse)
+```
+ 
+
+### Load NicheNet's ligand-receptor model  
+```{r}
+ligand_target_matrix <- readRDS(file = "/home/yincy/git/Bioconductor/nichenetr/data/ligand_target_matrix.rds")
+ligand_target_matrix[1:5, 1:5] # ligands in columns, target genes in rows
+```
+
+
+### Convert the ligand-target model from human to mouse symbols  
+Because not all human have a mouse one-to-one ortholog, these genes will be removed from the mouse model.  
+```{r}
+colnames(ligand_target_matrix) <- ligand_target_matrix %>% 
+    colnames() %>% 
+    convert_human_to_mouse_symbols()
+
+rownames(ligand_target_matrix) <- ligand_target_matrix %>% 
+    rownames() %>% 
+    convert_human_to_mouse_symbols()
+```
+
+
+```{r}
+ligand_target_matrix <- ligand_target_matrix[!is.na(rownames(ligand_target_matrix)), !is.na(colnames(ligand_target_matrix))]
+ligand_target_matrix %>% dim()
+```
+
+Show the top 10 targets of TNF (in mouse symbols)  
+```{r}
+top_targets <- extract_top_n_targets(ligand_oi = "Tnf", top_n = 10, ligand_target_matrix = ligand_target_matrix)
+```
+
+
+convert mouse symbol to human  
+```{r}
+top_targets %>% names() %>% convert_mouse_to_human_symbols()
+```
+
+
+
+
+
+
+
+
