@@ -32,12 +32,12 @@ library(igraph)
 
 
 ```{r load required data, message=FALSE}
-weighted_network <- readRDS(file = "/home/yincy/git/Data/NicheNet/data/weighted_networks.rds")
-ligand_tf_matrix <- readRDS(file = "/home/yincy/git/Data/NicheNet/data/ligand_tf_matrix.rds")
+weighted_network <- readRDS(file = "../../Data/nichenet/weighted_networks.rds")
+ligand_tf_matrix <- readRDS(file = "../../Data/nichenet/ligand_tf_matrix.rds")
 
-lr_network <- readRDS(file = "/home/yincy/git/Data/NicheNet/data/lr_network.rds")
-sig_network <- readRDS(file = "/home/yincy/git/Data/NicheNet/data/signaling_network.rds")
-gr_network <- readRDS(file = "/home/yincy/git/Data/NicheNet/data/gr_network.rds")
+lr_network <- readRDS(file = "../../Data/NicheNet/lr_network.rds")
+sig_network <- readRDS(file = "../../Data/NicheNet/signaling_network.rds")
+gr_network <- readRDS(file = "../../Data/NicheNet/gr_network.rds")
 ```
 
 

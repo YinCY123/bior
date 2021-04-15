@@ -80,14 +80,19 @@ Because the expression data is of mouse origin, we will convert the NicheNet net
 lr_network <- lr_network %>% mutate(from = convert_human_to_mouse_symbols(from), 
                                     to = convert_human_to_mouse_symbols(to))
 
-colnames(ligand_target_matrix) <- ligand_target_matrix %>% colnames() %>% convert_human_to_mouse_symbols()
-rownames(ligand_target_matrix) <- ligand_target_matrix %>% rownames() %>% convert_human_to_mouse_symbols()
+colnames(ligand_target_matrix) <- ligand_target_matrix %>% 
+  colnames() %>% 
+  convert_human_to_mouse_symbols()
+rownames(ligand_target_matrix) <- ligand_target_matrix %>% 
+  rownames() %>% 
+  convert_human_to_mouse_symbols()
 
 ligand_target_matrix <- ligand_target_matrix %>% 
     .[!is.na(rownames(ligand_target_matrix)), !is.na(colnames(ligand_target_matrix))]
 
-weighted_network_lr <- weighted_network_lr %>% mutate(from = convert_human_to_mouse_symbols(from), 
-                                                      to = convert_human_to_mouse_symbols(to)) %>% 
+weighted_network_lr <- weighted_network_lr %>% 
+  mutate(from = convert_human_to_mouse_symbols(from),
+         to = convert_human_to_mouse_symbols(to)) %>% 
     drop_na()
 ```
 
@@ -104,7 +109,8 @@ In this case study, the receiver cell population is the ‘CD8 T’ cell populat
 # receiver 
 receiver = "CD8 T"
 expressed_genes_receiver <- get_expressed_genes(ident = receiver, seurat_obj = seuratObj, pct = 0.1)
-background_expressed_genes <- expressed_genes_receiver %>% .[. %in% rownames(ligand_target_matrix)]
+background_expressed_genes <- expressed_genes_receiver %>% 
+  .[. %in% rownames(ligand_target_matrix)]
 ```
 
 ```{r}
@@ -192,6 +198,7 @@ DotPlot(object = seuratObj,
 ```
 
 5. Infer receptors and top-predicted target genes of ligands that are top-ranked in the ligand activity analysis.  
+
 **active target gene inference**  
 
 ```{r}
@@ -272,10 +279,10 @@ dist_ligands <- dist(lr_network_top_matrix %>% t(), method = "binary")
 hclust_ligands <- hclust(dist_ligands, method = "ward.D2")
 order_ligands <- hclust_ligands$labels[hclust_ligands$order]
 
-order_receptors <- order_recepotors %>% intersect(rownames(lr_network_top_matrix))
+order_receptors <- order_receptors %>% intersect(rownames(lr_network_top_matrix))
 order_ligands <- order_ligands %>% intersect(colnames(lr_network_top_matrix))
 
-vis_ligand_receptor_network <- lr_network_top_matrix[order_recepotors, order_ligands]
+vis_ligand_receptor_network <- lr_network_top_matrix[order_receptors, order_ligands]
 rownames(vis_ligand_receptor_network) <- order_receptors %>% make.names()
 colnames(vis_ligand_receptor_network) <- order_ligands %>% make.names()
 ```
@@ -345,8 +352,50 @@ Here this is possible: we will define the log fold change between LCMV and stead
 DE_table_all <- Idents(seuratObj) %>% 
     levels() %>% 
     intersect(sender_celltypes) %>% 
-    lapply(get_lfc_celltype, seurat_obj = seuratObj)
+    lapply(get_lfc_celltype, 
+           seurat_obj = seuratObj, 
+           condition_colname = "aggregate", 
+           condition_oi = condition_oi, 
+           condition_reference = condition_reference, 
+           expression_pct = 0.10) %>% 
+  reduce(full_join)
+
+# combine ligand activities with DE information
+ligand_activities_de <- ligand_activities %>% 
+  select(test_ligand, pearson) %>% 
+  rename(ligand = test_ligand) %>% 
+  left_join(DE_table_all %>% rename(ligand = gene))
+
+# make LFC heatmap 
+lfc_matrix <- ligand_activities_de %>% 
+  select(-ligand, -pearson) %>% 
+  as.matrix() %>% 
+  magrittr::set_rownames(ligand_activities_de$ligand)
+
+rownames(lfc_matrix) <- rownames(lfc_matrix) %>% make.names()
+
+order_ligands <- order_ligands[order_ligands %in% rownames(lfc_matrix)]
+vis_ligand_lfc <- lfc_matrix[order_ligands, ]
+
+colnames(vis_ligand_lfc) <- vis_ligand_lfc %>% colnames() %>% make.names()
+
+p_ligand_lfc <- vis_ligand_lfc %>% 
+  make_threecolor_heatmap_ggplot(y_name = "Prioritized ligands", 
+                                 x_name = "LFC in Sender", 
+                                 low_color = "white", 
+                                 mid = median(vis_ligand_lfc), 
+                                 mid_color = "white",
+                                 high_color = "red", 
+                                 legend_position = "top", 
+                                 x_axis_position = "top", 
+                                 legend_title = "LFC") + 
+  theme(axis.text.y = element_text(face = "italic"))
 ```
+
+7. Summary visulization of the NicheNet analysis  
+For example, you can make a combined heatmap of ligand activities, ligand expression, ligand log fold change and the target genes of the top-ranked ligands. The plots for the log fold change and target genes were already made. Let’s now make the heatmap for ligand activities and for expression.  
+
+
 
 
 
