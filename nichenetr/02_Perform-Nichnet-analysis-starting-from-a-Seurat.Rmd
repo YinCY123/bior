@@ -53,14 +53,13 @@ weighted_networks$lr_sig %>% head
 weighted_networks$gr %>% head
 ```
 
-## read in the expression data of interacting cells  
+## Read in the expression data of interacting cells  
 The dataset used here is publicly available single-cell data from immune cells in the T cell area of the inguinal lymph node. The data was processed and aggregated by applying the Seurat alignment pipeline. The Seurat object contains this aggregated data. Note that this should be a Seurat v3 object and that gene should be named by their official mouse/human gene symbol.  
 
 ```{r}
 seuratObj <- readRDS("../../Data/NicheNet/seuratObj.rds")
 seuratObj[[]] %>% head
 ```
-
 
 Visualize which cell populations are present: CD4 T cells (including regulatory T cells), CD8 T cells, B cells, NK cells, dendritic cells (DCs) and inflammatory monocytes.  
 
@@ -101,7 +100,7 @@ All these steps are contained in one of three following similar single functions
 ## NicheNet analysis on Seurat object: explain differential expression between two conditions  
 In this case study, the receiver cell population is the ‘CD8 T’ cell population, whereas the sender cell populations are ‘CD4 T,’ ‘Treg,’ ‘Mono,’ ‘NK,’ ‘B’ and ‘DC.’ The above described functions will consider a gene to be expressed when it is expressed in at least a predefined fraction of cells in one cluster (default: 10%).  
 
-The gene set of interest are the genes differentially expressed in CD8 T cells after LCMV infection. The condition of interest is thus ‘LCMV,’ whereas the reference/steady-state condition is ‘SS.’ The notion of conditions can be extracted from the metadata column ‘aggregate,’ the method to calculate the differential expression is the standard Seurat Wilcoxon test.  
+The gene set of interest are the genes diferentially expressed in CD8 T cells after LCMV infection. The condition of interest is thus ‘LCMV,’ whereas the reference/steady-state condition is ‘SS.’ The notion of conditions can be extracted from the metadata column ‘aggregate,’ the method to calculate the differential expression is the standard Seurat Wilcoxon test.  
 
 The number of top-ranked ligands that are further used to predict active target genes and construct an active ligand-receptor network is 20 by default.  
 
@@ -121,19 +120,89 @@ nichenet_ouput <- nichenet_seuratobj_aggregate(
     weighted_networks = weighted_networks, 
     organism = "mouse"
 )
+
+nichenet_ouput %>% names()
 ```
 
+## Interpret the NicheNet analysis output  
+### Ligand activity analysis results  
+A first thing NicheNet does, is prioritizing ligands based on predicted ligand activity. To see the ranking of these ligands, run the following command:  
 
-## Interpret
+```{r}
+nichenet_ouput[["ligand_activities"]]
+```
 
+The different ligand activity measures (auroc, aupr, pearson correlation coefficient) are a measure for how well a ligand can predict the observed differentially expressed genes compared to the background of expressed genes. In our validation study, we showed that the pearson correlation coefficient between a ligand’s target predictions and the observed transcriptional response was the most informative measure to define ligand activity. Therefore, NicheNet ranks the ligands based on their pearson correlation coefficient. This allows us to prioritize ligands inducing the antiviral response in CD8 T cells.  
 
+The column ‘bona_fide_ligand’ indicates whether the ligand is part of ligand-receptor interactions that are documented in public databases (‘bona_fide_ligand = TRUE’) and not of ligand-receptor interactions that we predicted based on annotation as ligand/receptor and protein-protein interaction databases (‘bona_fide_ligand = FALSE’).  
 
+To get a list of the 20 top-ranked ligands: run the following command  
 
+```{r}
+nichenet_ouput[["top_ligands"]]
+```
 
+These ligands are expressed by one or more of the input sender cells. To see which cell population expresses which of these top-ranked ligands, you can run the following:  
 
+```{r}
+DotPlot(seuratObj, features = nichenet_ouput[["top_ligands"]], cols = "RdYlBu") +
+    RotatedAxis()
+```
 
+As you can see, most of the top-ranked ligands seem to be mainly expressed by dendritic cells and monocytes.  
 
+It could also be interesting to see whether some of these ligands are differentially expressed after LCMV infection.  
 
+```{r}
+VlnPlot(seuratObj, features = nichenet_ouput[["top_ligands"]], 
+        split.by = "aggregate", 
+        pt.size = 0, 
+        combine = FALSE)
+```
+
+### Inferred active ligand-target links  
+NicheNet also infers active target genes of these top-ranked ligands. To see which top-ranked ligands are predicted to have regulated the expression of which differentially expressed genes, you can run following command for a heatmap visualization:  
+
+```{r}
+nichenet_ouput[["ligand_target_heatmap"]]
+```
+
+This is a normal ggplot object that can be adapted likewise. For example if you want to change the color code to blue instead of purple, change the axis ticks of the legend, and change the axis labels of the heatmap, you can do the following:  
+
+```{r}
+nichenet_ouput[["ligand_target_heatmap"]] + 
+    scale_fill_gradient2(low = "whitesmoke", high = "royalblue", breaks = c(0, 0.0045, 0.009)) +
+    xlab("anti-LCMV response genes in CD8 T cells") +
+    ylab("Prioritzed immune cell ligands")
+```
+
+If you want, you can also extract the ligand-target links and their regulatory potential scores in matrix or data frame format (e.g. for visualization in other ways or output to a csv file).  
+
+```{r}
+nichenet_ouput[["ligand_target_matrix"]] %>% .[1:5, 1:5]
+```
+
+```{r}
+nichenet_ouput[['ligand_target_df']]
+```
+
+To get a list of the top-predicted target genes of the 20 top-ranked ligands.  
+
+```{r}
+nichenet_ouput[["top_targets"]]
+```
+
+You can visualize the expression of these as well. Because we only focus on CD8 T cells as receiver cells, we will only show expression in these cells. To emphasize that these target genes are differentially expressed, we split cells up in steadys-state cells and cells after response to LCMV infection.  
+
+```{r}
+DotPlot(seuratObj %>% subset(idents = "CD8 T"), 
+        features = nichenet_ouput[["top_targets"]] %>% rev(), 
+        split.by = "aggregate") +
+    theme(axis.text.y = element_text(size = 7)) +
+    scale_x_discrete(name = NULL) +
+    scale_y_discrete(name = NULL) +
+    coord_flip()
+```
 
 
 
