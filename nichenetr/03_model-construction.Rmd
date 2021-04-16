@@ -9,6 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Introduction  
 This vignette shows how ligand-target prior regulatory potential scores are inferred in the NicheNet framework. You can use the procedure shown here to develop your own model with inclusion of context-specific networks or removal of noisy irrelevant data sources.  
 
 ## Background information about NicheNet's prior ligand-target model  
@@ -43,13 +44,13 @@ library(tidyverse)
 
 In the NicheNet framework, ligand-target links are predicted based on collected biological knowledge on ligand-receptor, signaling and gene regulatory interactions.  
 ```{r}
-lr_network <- readRDS(file = "../../../Data/NicheNet/data/lr_network.rds")
+lr_network <- readRDS(file = "../../Data/NicheNet/lr_network.rds")
 # ligand receptor network
 
-sig_network <- readRDS(file = "../../../Data/NicheNet/data/signaling_network.rds")
+sig_network <- readRDS(file = "../../Data/NicheNet/signaling_network.rds")
 # receptor signaling network
 
-gr_network <- readRDS(file = "../../../Data/NicheNet/data/gr_network.rds")
+gr_network <- readRDS(file = "../../Data/NicheNet/gr_network.rds")
 # gene regulatory network
 ```
 
@@ -61,9 +62,10 @@ For the hyperparameters of the model (hub correction factors and damping factor)
 
 The ligand-signaling network hub correction factor and gene regulatory network hub correction factor were defined as hyperparameter of the model to mitigate the potential negative influence of over-dominant hubs on the final model.  
 
-The damping factor hyperparameter is the main parameter of the Personalized PageRank algorithm, which we used as network propagation algorithm to link ligands to downstream regulators.  
+**The damping factor hyperparameter is the main parameter of the Personalized PageRank algorithm, which we used as network propagation algorithm to link ligands to downstream regulators**.  
 
 aggregate the individual data sources in a weighted manner to obtain a weighted integrated signaling network  
+
 ```{r}
 weighted_networks <- construct_weighted_networks(lr_network = lr_network, 
                                                  sig_network = sig_network,
@@ -73,6 +75,7 @@ weighted_networks <- construct_weighted_networks(lr_network = lr_network,
 
 
 downweight the importance of signaling and gene regulatory hubs - use the optimized parameters of this  
+
 ```{r}
 weighted_networks <- apply_hub_corrections(weighted_networks = weighted_networks, 
                                            lr_sig_hub = hyperparameter_list$lr_sig_hub,
@@ -92,6 +95,8 @@ ligand_target_matrix <- construct_ligand_target_matrix(weighted_networks = weigh
 
 Show some top target genes of the ligand TNF and the ligand combination TNF + IL6  
 ```{r}
+# ligand_target_matrix[, "TNF"] %>% sort(decreasing = T) %>% head(10)
+
 extract_top_n_targets(ligand_oi = "TNF", 
                       top_n = 10, 
                       ligand_target_matrix = ligand_target_matrix)
@@ -134,7 +139,7 @@ ligand_target_matrix <- construct_ligand_target_matrix(
     ltf_cutoff = hyperparameter_list$ltf_cutoff
 )
 
-ligand_target_matrix %>% head()
+ligand_target_matrix %>% .[order(., decreasing = T), ]
 ```
 
 
