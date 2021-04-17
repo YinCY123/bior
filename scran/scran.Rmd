@@ -134,18 +134,115 @@ reducedDim(sce.grun, "PCAsub") <- reducedDim(sce.grun, "PCA")[, 1:npcs, drop = F
 ```
 
 # Graph-based clustering  
+Clustering of scRNA-seq data is commonly performed with graph-based methods due to their relative scalability and robustness. `scran` provides several graph construction methods based on shared nearest neighbors (Xu and Su 2015) through the  `buildSNNGraph()` function. This is most commonly generated from the selected PCs, after which community detection methods from the `igraph` package can be used to explicitly identify clusters.  
 
+```{r}
+# In this case, using the PCs that we chose from getClusteredPCs()
+g <- buildSNNGraph(x = sce.grun, use.dimred = "PCAsub")
+cluster <- igraph::cluster_walktrap(g)$membership
 
+# Assigning to the 'colLabels' of the 'sce'
+colLabels(sce.grun) <- factor(cluster)
+colLabels(sce.grun) %>% table
+```
 
+By default, `buildSNNGraph()` uses the mode of shared neighbor weighting described by Xu and Su (2015), but other weighting methods (e.g., the Jaccard index) are also available by setting `type=`. An unweighted k-nearest neighbor graph can also be constructed with `buildKNNGraph()`.  
 
+We can then use methods from `scater` to visualize this clustering on a t-SNE plot. Note that `colLabels()<-` will just add the cluster assignments to the "label" field of the  `colData`; however, any name can be used as long as downstream functions are adjusted appropriately.   
 
+```{r}
+sce.grun <- runTSNE(x = sce.grun, dimred = "PCAsub")
+plotTSNE(object = sce.grun, colour_by = "label", text_by = "label")
+```
 
+For graph-based methods, another diagnostic is to examine the ratio of observed to expected edge weights for each pair of clusters (closely related to the modularity score used in many `cluster_*` functions). We would usually expect to see high observed weights between cells in the same cluster with minimal weights between clusters, indicating that the clusters are well-separated. Off-diagonal entries indicate that some clusters are closely related, which is useful to know for checking that they are annotated consistently.  
 
+```{r}
+ratio <- bluster::pairwiseModularity(graph = g, 
+                                     clusters = cluster, 
+                                     as.ratio = T)
 
+library(pheatmap)
+pheatmap(log10(ratio + 1), 
+         cluster_cols = F, 
+         cluster_rows = F, 
+         col = rev(heat.colors(100)))
+```
 
+A more general diagnostic involves bootstrapping to determine the stability of the partitions between clusters. Given a clustering function, the `bootstrapCluster()` function uses bootstrapping to compute the co-assignment probability for each pair of original clusters, i.e., the probability that one randomly chosen cell from each cluster is assigned to the same cluster in the bootstrap replicate . Larger probabilities indicate that the separation between those clusters is unstable to the extent that it is sensitive to sampling noise, and thus should not be used for downstream inferences.  
 
+```{r}
+ass.prob <- bluster::bootstrapStability(sce.grun, FUN = function(x){
+  g <- buildSNNGraph(x, use.dimred = "PCAsub")
+  igraph::cluster_walktrap(g)$membership
+}, 
+clusters = sce.grun$cluster)
 
+pheatmap(ass.prob, cluster_cols = F, 
+         cluster_rows = F, 
+         col = colorRampPalette(c("white", "blue"))(100))
+```
 
+If necessary, further subclustering can be performed conveniently using the  `quickSubCluster()` wrapper function. This splits the input `SingleCellExperiment` into several smaller objects containing cells from each cluster and performs another round of clustering within that cluster, using a freshly identified set of HVGs to improve resolution for internal structure.  
+
+```{r}
+subout <- quickSubCluster(sce.grun, groups = colLabels(sce.grun))
+metadata(subout)$subcluster %>% table
+```
+
+# Identifying marker genes  
+The `findMarkers()` wrapper function will perform some simple differential expression tests between pairs of clusters to identify potential marker genes for each cluster. For each cluster, we perform t-tests to identify genes that are DE in each cluster compared to at least one other cluster. All pairwise tests are combined into a single ranking by simply taking the top genes from each pairwise comparison. For example, if we take all genes with `Top <= 5`, this is equivalent to the union of the top 5 genes from each pairwise comparison. This aims to provide a set of genes that is guaranteed to be able to distinguish the chosen cluster from all others.  
+
+```{r}
+# uses clustering information from 'colLabels(sce)' by default:  
+markers <- findMarkers(x = sce.grun)
+markers %>% length()
+markers %>% names
+```
+
+We can modify the tests by passing a variety of arguments to `findMarkers()`. For example, the code below will perform Wilcoxon tests instead of t-tests; only identify genes that are upregulated in the target cluster compared to each other cluster; and require a minimum log2-fold change of 1 to be considered significant.  
+
+```{r}
+markers[[1]][, 1:3]
+```
+
+We can also modify how the statistics are combined across pairwise comparisons. Setting  `pval.type="all"` requires a gene to be DE between each cluster and every other cluster (rather than any other cluster, as is the default with `pval.type="any"`). This is a more stringent definition that can yield a more focused set of markers but may also fail to detect any markers in the presence of overclustering.  
+
+```{r}
+markers <- findMarkers(x = sce.grun, pval.type = "all")
+markers[[1]][, 1:3]
+```
+
+# Detecting correlated genes  
+Another useful procedure is to identify significant pairwise correlations between pairs of HVGs. The idea is to distinguish between HVGs caused by random stochasticity, and those that are driving systematic heterogeneity, e.g., between subpopulations. Correlations are computed in the `correlatePairs` method using a slightly modified version of Spearman’s rho. Testing is performed against the null hypothesis of independent genes, using a permutation method in `correlateNull` to construct a null distribution.  
+
+```{r}
+# Using the first 200 HVGs, which are the most interesting.
+# also turning down the number of interests for spead
+of.interest <- top.hvgs[1:200]
+cor.pairs <- correlatePairs(x = sce.grun, subset.row = of.interest, iters = 1e5)
+cor.pairs
+```
+
+As with variance estimation, if uninteresting substructure is present, this should be blocked on using the `block=` argument in both `correlateNull` and  `correlatePairs`. This avoids strong correlations due to the blocking factor.  
+
+```{r}
+cor.pairs2 <- correlatePairs(x =sce.grun, 
+                             subset.row = of.interest, 
+                             block = sce.grun$donor, 
+                             iters = 1e5)
+```
+
+The pairs can be used for choosing marker genes in experimental validation, and to construct gene-gene association networks. In other situations, the pairs may not be of direct interest - rather, we just want to know whether a gene is correlated with any other gene. This is often the case if we are to select a set of correlated HVGs for use in downstream steps like clustering or dimensionality reduction. To do so, we use  `correlateGenes()` to compute a single set of statistics for each gene, rather than for each pair.  
+
+```{r}
+cor.genes <- correlateGenes(cor.pairs)
+cor.genes
+```
+
+Significant correlations are defined at a false discovery rate (FDR) threshold of, e.g., 5%. Note that the p-values are calculated by permutation and will have a lower bound. If there were insufficient permutation iterations, a warning will be issued suggesting that more iterations be performed.  
+
+# Converting to other formats
 
 
 
