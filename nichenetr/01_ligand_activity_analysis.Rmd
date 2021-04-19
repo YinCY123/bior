@@ -40,7 +40,7 @@ library(tidyverse)
 **Ligand-target model**:  
 This model denotes the prior potential that a particular ligand regulate the expression of a specific target gene.  
 ```{r}
-ligand_target_matrix <- readRDS('../../../Data/nichenet/ligand_target_matrix.rds')
+ligand_target_matrix <- readRDS('../../../git/Data/nichenet/ligand_target_matrix.rds')
 ligand_target_matrix %>% dim()
 ligand_target_matrix[1:5, 1:5] # target in rows, ligands in columns
 ```
@@ -48,7 +48,7 @@ ligand_target_matrix[1:5, 1:5] # target in rows, ligands in columns
 
 Expression data of interacting cells: publicly available single-cell data from CAF and malignant cells from HNSCC tumors.  
 ```{r}
-hnscc_expression <- readRDS(file = '../../../Data/NicheNet/data/hnscc_expression.rds')
+hnscc_expression <- readRDS(file = '../../../git/Data/nichenet/hnscc_expression.rds')
 
 expression <- hnscc_expression$expression
 expression %>% dim()
@@ -98,7 +98,7 @@ As gene set of interest, we consider the genes of which the expression is possib
 
 Because we here want to investigate how CAFs regulate the expression of p-EMT genes in malignant cells, we will use the p-EMT gene set defined by Puram et al. as gene set of interest and use all genes expressed in malignant cells as background of genes.  
 ```{r}
-geneset_oi <- read_tsv(file = "../../../Data/NicheNet/data/pemt_signature.txt", col_names = "genes") %>% 
+geneset_oi <- read_tsv(file = "../../../git/Data/nichenet/pemt_signature.txt", col_names = "genes") %>% 
   pull(genes) %>% 
   .[. %in% rownames(ligand_target_matrix)]
 
@@ -120,7 +120,7 @@ As potentially active ligands, we will use ligands that are:
 Putative ligand-receptor links were gathered from NicheNet's ligand-receptor data sources.  
 
 ```{r}
-lr_network <- readRDS(file = "../../../Data/NicheNet/data/lr_network.rds")
+lr_network <- readRDS(file = "../../../git/Data/nichenet/lr_network.rds")
 
 ligands <- lr_network %>% pull(from) %>% unique()
 expressed_ligands <- intersect(x = ligands, y = expressed_genes_sender)
@@ -203,6 +203,25 @@ active_ligand_target_links_df %>% dim()
 active_ligand_target_links_df %>% 
   arrange(-weight)
 ```
+
+```{r}
+active_ligand_target_links_df %>% 
+  spread(key = ligand, value = weight, fill = 0) %>% 
+  gather(key = "ligand", value = "weight", -target) %>% 
+  ggplot(aes(reorder(ligand, -weight), reorder(target, -weight))) +
+  geom_tile(aes(fill = weight), color = "white", size = 0.5) +
+  theme(panel.grid.minor = element_line(color = "grey"),
+        panel.grid.major = element_line(color = "transparent"),
+        panel.ontop = F,
+        panel.background = element_rect(fill = "transparent"),
+        axis.text.x = element_text(angle = -40, hjust = 1, size = 7),
+        axis.text.y = element_text(size = 7),
+        axis.ticks.y = element_blank(), legend.position = "top") +
+  scale_x_discrete(name = NULL, position = "top") +
+  scale_y_discrete(name = NULL) +
+  scale_fill_gradient(low = "whitesmoke", high = "purple")
+```
+
 
 ```{r}
 active_ligand_target_links_df %>% 
