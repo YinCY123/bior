@@ -1584,7 +1584,7 @@ sce.zeisel <- logNormCounts(sce.zeisel)
 # variance modeling
 dec.zeisel <- modelGeneVarWithSpikes(sce.zeisel, spikes = "ERCC")
 top.hvgs.zeisel=getTopHVGs(stats = dec.zeisel, prop = 0.1)
-str(top.hvgs)
+str(top.hvgs.zeisel)
 sce.zeisel
 ```
 
