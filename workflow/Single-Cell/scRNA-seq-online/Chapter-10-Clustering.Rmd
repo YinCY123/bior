@@ -11,8 +11,227 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 
 # Chapter 10 Clustering  
 ## Motivation  
+Clustering is an unsupervised learning procedure that is used in scRNA-seq data analysis to empirically define groups of cells with similar expression profiles. Its primary purpose is to summarize the data in a digestible format for human interpretation. This allows us to describe population heterogeneity in terms of discrete labels that are easily understood, rather than attempting to comprehend the high-dimensional manifold on which the cells truly reside. After annotation based on marker genes, the clusters can be treated as proxies for more abstract biological concepts such as cell types or states. Clustering is thus a critical step for extracting biological insights from scRNA-seq data. Here, we demonstrate the application of several commonly used methods with the 10X PBMC dataset.  
 
- 
+```{r}
+# loading 
+library(DropletUtils)
+
+fname <- "data/pbmc4k/raw_gene_bc_matrices/GRCh38/"
+sce.pbmc <- read10xCounts(samples = fname, col.names = T)
+
+# gene annotation
+library(scater)
+rownames(sce.pbmc) <- uniquifyFeatureNames(
+    ID = rowData(sce.pbmc)$ID, 
+    names = rowData(sce.pbmc)$Symbol
+)
+
+library(EnsDb.Hsapiens.v86)
+location <- mapIds(EnsDb.Hsapiens.v86, 
+                   keys = rowData(sce.pbmc)$ID, 
+                   keytype = "GENEID", 
+                   column = "SEQNAME")
+
+# cell detection 
+set.seed(100)
+e.out <- emptyDrops(counts(sce.pbmc))
+sce.pbmc <- sce.pbmc[, which(e.out$FDR <= 0.001)]
+
+# quality control
+stats <- perCellQCMetrics(sce.pbmc, subsets = list(Mito = which(location == "MT")))
+high.mito <- isOutlier(stats$subsets_Mito_percent, type = "higher")
+sce.pbmc <- sce.pbmc[, !high.mito]
+
+# normalization
+library(scran)
+set.seed(1000)
+clusters <- quickCluster(sce.pbmc)
+sce.pbmc <- computeSumFactors(sce.pbmc, cluster = clusters)
+sce.pbmc <- logNormCounts(sce.pbmc)
+
+# variance modelling
+set.seed(1001)
+dec.pbmc <- modelGeneVarByPoisson(x = sce.pbmc)
+top.pbmc <- getTopHVGs(stats = dec.pbmc, prop = 0.1)
+
+# dimensionality reduction
+set.seed(10000)
+sce.pbmc <- denoisePCA(x = sce.pbmc, subset.row = top.pbmc, technical = dec.pbmc)
+
+set.seed(100000)
+sce.pbmc <- runTSNE(sce.pbmc, dimred = "PCA")
+
+set.seed(1000000)
+sce.pbmc <- runUMAP(sce.pbmc, dimred = "PCA")
+```
+
+## What is the "true clustering"?  
+At this point, it is worth stressing the distinction between clusters and cell types. The former is an empirical construct while the latter is a biological truth (albeit a vaguely defined one). For this reason, questions like “what is the true number of clusters?” are usually meaningless. We can define as many clusters as we like, with whatever algorithm we like - each clustering will represent its own partitioning of the high-dimensional expression space, and is as “real” as any other clustering.  
+
+A more relevant question is “how well do the clusters approximate the cell types?” Unfortunately, this is difficult to answer given the context-dependent interpretation of biological truth. Some analysts will be satisfied with resolution of the major cell types; other analysts may want resolution of subtypes; and others still may require resolution of different states (e.g., metabolic activity, stress) within those subtypes. Moreover, two clusterings can be highly inconsistent yet both valid, simply partitioning the cells based on different aspects of biology. Indeed, asking for an unqualified “best” clustering is akin to asking for the best magnification on a microscope without any context.  
+
+It is helpful to realize that clustering, like a microscope, is simply a tool to explore the data. We can zoom in and out by changing the resolution of the clustering parameters, and we can experiment with different clustering algorithms to obtain alternative perspectives of the data. This iterative approach is entirely permissible for data exploration, which constitutes the majority of all scRNA-seq data analyses.  
+
+## Graph-based clustering  
+### Background  
+Popularized by its use in Seurat, graph-based clustering is a flexible and scalable technique for clustering large scRNA-seq datasets. We first build a graph where each node is a cell that is connected to its nearest neighbors in the high-dimensional space. Edges are weighted based on the similarity between the cells involved, with higher weight given to cells that are more closely related. We then apply algorithms to identify “communities” of cells that are more connected to cells in the same community than they are to cells of different communities. Each community represents a cluster that we can use for downstream interpretation.  
+
+The major advantage of graph-based clustering lies in its scalability. It only requires a k-nearest neighbor search that can be done in log-linear time on average, in contrast to hierachical clustering methods with runtimes that are quadratic with respect to the number of cells. Graph construction avoids making strong assumptions about the shape of the clusters or the distribution of cells within each cluster, compared to other methods like k-means (that favor spherical clusters) or Gaussian mixture models (that require normality). From a practical perspective, each cell is forcibly connected to a minimum number of neighboring cells, which reduces the risk of generating many uninformative clusters consisting of one or two outlier cells.
+
+The main drawback of graph-based methods is that, after graph construction, no information is retained about relationships beyond the neighboring cells1. This has some practical consequences in datasets that exhibit differences in cell density, as more steps through the graph are required to move the same distance through a region of higher cell density. From the perspective of community detection algorithms, this effect “inflates” the high-density regions such that any internal substructure or noise is more likely to cause formation of subclusters. The resolution of clustering thus becomes dependent on the density of cells, which can occasionally be misleading if it overstates the heterogeneity in the data.  
+
+### Implementation  
+There are several considerations in the practical execution of a graph-based clustering method: 
+
+- How many neighbors are considered when constructing the graph.  
+- What scheme is used to weight the edges.  
+- Which community detection algorithm is used to define the clusters.  
+
+For example, the following code uses the 10 nearest neighbors of each cell to construct a shared nearest neighbor graph. Two cells are connected by an edge if any of their nearest neighbors are shared, with the edge weight defined from the highest average rank of the shared neighbors (Xu and Su 2015). The Walktrap method from the igraph package is then used to identify communities. All calculations are performed using the top PCs to take advantage of data compression and denoising.  
+
+```{r}
+library(scran)
+
+g <- buildSNNGraph(sce.pbmc, k = 10, use.dimred = "PCA")
+clust <- igraph::cluster_walktrap(g)$membership
+table(clust)
+```
+
+Alternatively, users may prefer to use the `clusterRows()` function from the `bluster` package. This calls the exact same series of functions when run in graph-based mode with the `NNGraphParam()` argument; however, it is often more convenient if we want try out different clustering procedures, as we can simply change the second argument to use a different set of parameters or a different algorithm altogether.  
+
+```{r}
+library(bluster)
+clust2 <- clusterRows(x = reducedDim(sce.pbmc, "PCA"), BLUSPARAM = NNGraphParam())
+table(clust2)
+```
+
+We assign the cluster assignments back into our `SingleCellExperiment` object as a factor in the column metadata. This allows us to conveniently visualize the distribution of clusters in a t-SNE plot.  
+
+```{r}
+library(scater)
+colLabels(sce.pbmc) <- factor(clust)
+plotReducedDim(sce.pbmc, 
+               dimred = "TSNE", 
+               colour_by = "label")
+```
+
+One of the most important parameters is k, the number of nearest neighbors used to construct the graph. This controls the resolution of the clustering where higher k yields a more inter-connected graph and broader clusters. Users can exploit this by experimenting with different values of k to obtain a satisfactory resolution.  
+
+```{r}
+# more resolved
+g.5 <- buildSNNGraph(sce.pbmc, k = 5, use.dimred  = "PCA")
+clust.5 <- igraph::cluster_walktrap(g.5)$membership
+table(clust.5)
+
+# less resolved 
+g.50 <- buildSNNGraph(sce.pbmc, k = 50, use.dimred = "PCA")
+clust.50 <- igraph::cluster_walktrap(g.50)$membership
+table(clust.50)
+```
+
+```{r}
+reducedDim(sce.pbmc, "nicely") <- igraph::layout_nicely(g)
+plotReducedDim(sce.pbmc, dimred = "nicely", colour_by = "label")
+```
+
+### Other parameters  
+Further tweaking can be performed by changing the edge weighting scheme during graph construction. Setting `type="number"` will weight edges based on the number of nearest neighbors that are shared between two cells. Similarly, `type="jaccard"` will weight edges according to the Jaccard index of the two sets of neighbors. We can also disable weighting altogether by using `buildKNNGraph()`, which is occasionally useful for downstream graph operations that do not support weights.  
+
+```{r}
+g.num <- buildSNNGraph(sce.pbmc, use.dimred = "PCA", type = "number")
+g.jaccard <- buildSNNGraph(sce.pbmc, use.dimred = "PCA", type = "jaccard")
+g.none <- buildKNNGraph(sce.pbmc, use.dimred = "PCA")
+```
+
+All of these g variables are graph objects from the igraph package and can be used with any of the community detection algorithms provided by igraph. We have already mentioned the Walktrap approach, but many others are available to choose from.  
+
+```{r}
+clust.louvain <- igraph::cluster_louvain(graph = g)$membership
+clust.infomap <- igraph::cluster_infomap(graph = g)$membership
+clust.fast <- igraph::cluster_fast_greedy(graph = g)$membership
+clust.labprop <- igraph::cluster_label_prop(graph = g)$membership
+clust.eigen <- igraph::cluster_leading_eigen(graph = g)$membership
+```
+
+It is then straightforward to compare two clustering strategies to see how they differ. For example, Figure below suggests that Infomap yields finer clusters than Walktrap while fast-greedy yields coarser clusters.  
+
+```{r}
+library(pheatmap)
+
+# using a large pseudo-count for a smoother color transition between 0 and 1 cell in each 'tab'  
+
+tab <- table(paste("Infomap", clust.infomap), 
+             paste("Walktrap", clust))
+
+ivm <- pheatmap(log10(tab + 1), 
+                main = "Infomap vs Walktrap", 
+                color = viridis::viridis(100), 
+                silent = T)
+
+tab <- table(paste("Fast", clust.fast), 
+             paste("Walktrap", clust))
+fvw <- pheatmap(log10(tab + 10), 
+                main = "Fast-greedy vs Walktrap", 
+                color = viridis::viridis(100), 
+                silent = T)
+
+cowplot::plot_grid(plotlist = list(ivm[[4]], fvw[[4]]), 
+                   ncol = 2)
+```
+
+Pipelines involving `scran` default to rank-based weights followed by Walktrap clustering. In contrast, `Seurat` uses Jaccard-based weights followed by Louvain clustering. Both of these strategies work well, and it is likely that the same could be said for many other combinations of weighting schemes and community detection algorithms.  
+
+Some community detection algorithms operate by agglomeration and thus can be used to construct a hierarchical dendrogram based on the pattern of merges between clusters. The dendrogram itself is not particularly informative as it simply describes the order of merge steps performed by the algorithm; unlike the dendrograms produced by hierarchical clustering (Section 10.5), it does not capture the magnitude of differences between subpopulations. However, it does provide a convenient avenue for manually tuning the clustering resolution by generating nested clusterings using the `cut_at()` function, as shown below.  
+
+```{r}
+community.walktrap <- igraph::cluster_walktrap(g)
+igraph::cut_at(community.walktrap, n = 5) %>% table
+```
+
+```{r}
+igraph::cut_at(community.walktrap, n = 20) %>% table
+```
+
+If `cut_at()`-like functionality is desired for non-hierarchical methods, `bluster` provides a `mergeCommunities()` function to retrospectively tune the clustering resolution. This function will greedily merge pairs of clusters until a specified number of clusters is achieved, where pairs are chosen to maximize the modularity at each merge step.  
+
+```{r}
+community.louvain <- igraph::cluster_louvain(g)
+community.louvain$membership %>% table
+```
+
+```{r}
+try(igraph::cut_at(community.louvain, n=10)) 
+```
+
+
+```{r}
+merged <- mergeCommunities(graph = g, clusters = community.louvain$membership, number = 10)
+merged %>% table
+```
+
+### Assessing cluster separation  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
  
 
 
