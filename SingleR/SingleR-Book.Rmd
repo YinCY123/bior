@@ -19,7 +19,7 @@ The Bioconductor package SingleR implements an automatic annotation method for s
 ## Method description  
 SingleR can be considered a robust variant of nearest-neighbors classification, with some tweaks to improve resolution for closely related labels. For each test cell:  
 
-1. We compute the Spearman correlation between its expression profile and that of each reference sample. The use of Spearman's correlation provides a measure of robustness to batch effects across datasets. The calculation only uses the union of marker genes identified by pairwise between labels.  
+1. We compute the Spearman correlation between its expression profile and that of each reference sample. The use of Spearman's correlation provides a measure of robustness to batch effects across datasets. **The calculation only uses the union of marker genes identified by pairwise between labels**.  
 
 2. We define the per-label score as a fixed quantile (by default, 0.8) of the correlations across all samples with that label. This accounts for differences in the number of reference samples for each label, which interferes with simpler flavors of nearest neighbor classification; it also avoids penalizing classifications to heterogeneous labels by only requiring a good match to a minority of samples.  
 
@@ -62,6 +62,8 @@ For demonstration purposes, we will use the Grun et al. (2016) haematopoietic st
 ```{r}
 library(scRNAseq)
 
+ah <- AnnotationHub()
+sce.grun <- ah[["AH73905"]]
 sce.grun <- GrunHSCData(ensembl = TRUE)
 sce.grun
 ```
