@@ -1,0 +1,36 @@
+---
+title: "ddCt"
+author: "YinCY"
+date: "5/1/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Introduction to the ddCt method
+Both absolute and relative quantification have been used to analyse the data from the quantitative real-time PCR experiments. The $2^{-\Delta \Delta C_{T}}$ algorithm, also known as the delta-delta-Ct or ddCt algorithm, is a convenient method to analyse the relative changes in gene expression. It requires the assignment of one or more housekeeping genes, which are assumed to be uniformly and constantly expressed in all samples, as well as one or more reference samples. The expression of other samples is then compared to that in the reference sample.  
+
+## RT-PCR
+There are many variations in the experimental processes. Here we shortly summarize the general key steps in the TapMan assay to help the understanding of following discussions.  
+
+1. RNA preparation: total or specific type of RNA are extracted from cell lines, tissues, biopsies, etc.  
+2. RNA is Reversed Transcribed into DNA, which is also known as the RT-reaction.  
+3. qPCR probs (sometimes also known as 'primers') are added to the transcribed cDNA sample and the polymerase chain reaction takes place. This probe is an oligouncleotide with a reporter dye attached to the 5' end and a quencher and the fluorophore remain in proximity to each other, which does not completely quench the flouresence of the reporter dye and therefore only a background flourescence is observed.  
+4. During PCR, the probe anneals specifically between the foeward and reverse primer to an internal region of the PCR product. The polymerase then carries out the extension of the primer and replicates the template to which the Taqman is bound. The 5' exonuclease activity of the polymerase cleaves the prob, releasing the reporter molecule away from the close vicinity of the quencher. The fluorescence intensity of the reporter dye, as a result increase. This process repeats in every cycle.  
+5. 
+
+
+
+
+
+
+## Resources about RT-PCR  
+- Applied Biosystems. RT-PCR: The basics. http://www.ambion.com/techlib/basics/rtpcr/index.html.
+
+- Microbiology and immunology online, university of south carolina, school of medicine. http://pathmicro.med.sc.edu/pcr/realtime-home.htm.  
+
+- Taqman principles. http://www.med.unc.edu/anclinic/Tm.htm.  
+
