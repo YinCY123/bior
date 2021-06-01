@@ -1,0 +1,202 @@
+---
+title: "SCENIC"
+author: "YinCY"
+date: "6/1/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction to SCENIC
+SCENIC is a tool to simultaneously reconstruct gene regulatory networks and identify stable cell states from single-cell RNA-seq data. The gene regulatory network is inferred based on co-expression and DNA motif analysis, and then the network activity is analyzed in each cell to identify the recurrent cellular states.  
+
+# Requirements 
+## Species
+The current version of SCENIC supports human, mouse and fly (Drosophila melanogaster).
+
+To apply SCENIC to other species, it would require manual adjustments on the second step (e.g. create new RcisTarget databases or using a diferent motif-enrichment-analysis tool).  
+
+## Input: expression matrix
+The input to SCENIC is the single-cell expression matrix:
+
+- Each column corresponds to a sample and each row corresponds to a gene.  
+- The gene ID should be the **gene-symbol** and stored as `rownames` (for compatibility with `RcisTarget` annotation databases).  
+- Expression **units**: The preferred expression values are gene-summarized counts. There is currently not a strong recommendation towards using the *raw* counts, or counts *normalized* through single-cell specific methods. Other measurements, such as transcripts/counts per million (TPM) and FPKM/RPKM, are also accepted as input. However, note that some authors recommend avoiding with sample normalization (i.e., TPM) for coexpression analysis (first step of SCENIC) because they may induce artifical co-variariation (Crow et al. (2016)). The choice of input expression matrix might have some effect on the co-expression analysis to create the regulons (step 1). The other steps of the workflow are not directly affected by the input expression values: (2) The expression is not taken into account for the motif analysis, and (3) AUCell, which is used for scoring the regulons on the cells, is cell ranking-based (it works as implicit normalization). **Overall, SCENIC is quite robust to this choice, we have applied SCENIC to dataset using raw (logged) UMI counts, normalized UMI counts, and TPM and they all provided reliable results**.  
+
+
+# Installation
+The R implementation of SCENIC is based on three R packages:  
+
+1. `GENIE3` to infer the co-expression network (faster alternative: `GRNBoost2`)  
+2. `RcisTarget` for the analysis of transcript factor binding motifs  
+3. `AUCell` to identify cells with active gene sets (gene-network) in scRNA-seq data  
+
+## Species-specific databases  
+In addition to the R-packages, you will also need to download the species-specific databases for `RcisTarget` (the motif rankings). The links to all the available databases are available in our [website](https://resources.aertslab.org/cistarget/). By default, SCENIC uses the databases that score the motifs in the promoter of the genes (up to 500bp upstream the TSS), and in the 20kb around the TSS (+/-10kbp).  
+
+
+# Formatting input
+Reminder: SCENIC’s main input is a single-cell expression matrix with genes-symbols as row names.  
+
+Below there are several options to download and format this dataset (as example to format/import your own data).  
+
+## a) From .loom file  
+`.loom` file can be directly imported into SCENIC through `SCopeLoomR`.   
+
+```{r}
+# download
+download.file("http://loom.linnarssonlab.org/clone/Previously%20Published/Cortex.loom", "Cortex.loom")
+loomPath <- "Cortex.loom"
+```
+
+load the expression matrix and cell annotation
+```{r}
+library("SCopeLoomR")
+
+loom <- open_loom(loomPath, mode="r+") 
+exprMat <- get_dgem(loom)
+cellInfo <- get_cell_annotation(loom)
+close_loom(loom)
+```
+
+
+## b) From 10X/CellRanger output files
+10X/CellRanger matrices can be used as input for SCENIC. The tutorials on how to load the CellRanger output into R are available at 10X website (choose the appropriate CellRanger version)
+
+Some package, such `Seurat`, `DropletUtils` also provide functions to directly import 10X/CellRanger output.  
+
+```{r}
+singlecellmatrix <- Seurat::Read10X(data.dir = "data/pbmc3k/filtered_gene_bc_matrices/hg19/")
+```
+
+## c) From otherR object 
+Many R packages store the expression data in their own data strutures or Bioconductor classes (`SingleCellExperiment`, `SumarizedExperiment`, `ExpressionSet`).  
+
+Most of these objects have data acessprs to retrive the expression matrix and cell metadata (the function name depends on the object type or package).  
+
+```{r}
+library(SingleCellExperiment)
+
+exprMat <- counts(sce)
+cellInfo <- colData(sce)
+```
+
+
+to use Seurat clusters as cell annotation
+
+```{r}
+cellInfo <- data.frame(seuratCluster = Idents(seuratObject))
+```
+
+
+# Saving into loom 
+To run SCENIC in Python we recommend to save/export the expression matrix and cell metadata into a .loom file (for R, any R/Bioconductor object is also OK):
+
+```{r}
+loom <- build_loom(file.name = "mouseBrain.loom", 
+                   dgem = exprMat)
+loom <- add_cell_annotation(loom = loom, cellAnnotation = cellInfo)
+close_loom(loom = loom)
+```
+
+
+# Running SCENIC
+## SCENIC workflow
+This tutorial goes through the steps in the **SCENIC workflow**:  
+
+Building the **gene regulatory network (GRN)**  
+1. Identify potential targets for each TF based on co-expression.  
+- Filtering the expression matrix and running GENIE3/GRNBoost  
+- Formatting the targets from GENIE3/GRNBoost into co-expression modules.  
+
+2. Select potential direct-binding targets (regulons) based on DNA-motif analysis ( RcisTaeget: TF motif analysis).  
+
+Identify **cell states** and their regulons:  
+3. analyzing the network activity in each individual cell (AUCell)
+- Scoring regulons in the cells (calculate AUC)  
+- Optional: Convert the network activity into ON/OFF (binary activity matrix)  
+
+4. Identify stable cell states based on their gene regulatory activity (cell clustering) and exploring the results.  
+
+
+# Command list
+This is an overview of the main commands used to run the SCENIC workflow. (To be used as cheatsheet or template, it is not exhaustive). The commands are explained in the following sections.  
+
+```{r}
+# load data
+loompath <- system.file(package = "SCENIC", "examples/mouseBrain_toy.loom")
+library(SCopeLoomR)
+
+loom <- open_loom(loompath)
+exprMat <- get_dgem(loom = loom)
+cellInfo <- get_cell_annotation(loom)
+close_loom(loom = loom)
+
+# initialize settings
+library(SCENIC)
+
+scenicOptions <- initializeScenic(org = "mgi", 
+                                  dbDir = "cisTarget_databases", 
+                                  nCores = 10)
+
+saveRDS(ScenicOptions, file = "scenicOptions.Rds")
+
+
+# co-expression network
+genekept <- geneFiltering(exprMat = exprMat, scenicOptions = scenicOptions)
+exprMat_filtered <- exprMat[genekept, ]
+runCorrelation(exprMat_filtered = exprMat_filtered, scenicOptions = scenicOptions)
+exprMat_filtered_log <- log2(exprMat_filtered + 1)
+runGenie3(exprMat_filtered_log, scenicOptions)
+
+# Build and score the GRN
+exprMat_log <- log2(exprMat + 1)
+scenicOptions@settings$dbs <- scenicOptions@settings$dbs["10kb"]
+scenicOptions <- runSCENIC_1_coexNetwork2modules(scenicOptions)
+scenicOptions <- runSCENIC_2_createRegulons(scenicOptions, coexMethod = c("top5perTarget"))
+
+# toy run settings
+scenicOptions <- runSCENIC_3_scoreCells(scenicOptions, exprMat_log)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
