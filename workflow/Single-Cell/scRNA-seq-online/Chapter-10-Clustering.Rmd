@@ -516,9 +516,26 @@ clust.416b.again %>% table
 ```
 
 ### Assessing cluster separation
+We check the separation of the clusters using the silhouette width (Figure 10.14). For each cell, we compute the average distance to all cells in the same cluster. We also compute the average distance to all cells in another cluster, taking the minimum of the averages across all other clusters. The silhouette width for each cell is defined as the difference between these two values divided by their maximum. Cells with large positive silhouette widths are closer to other cells in the same cluster than to cells in different clusters.  
 
+Each cluster would ideally contain large positive silhouette widths, indicating that it is well-separated from other clusters. This is indeed the case in Figure 10.14 - and in fact, cluster 2 has the largest width of all, indicating that it is a more coherent cluster than portrayed in Figure 10.13. Smaller widths can arise from the presence of internal subclusters, which inflates the within-cluster distance; or overclustering, where cells at the boundary of a partition are closer to the neighboring cluster than their own cluster.  
 
+```{r}
+sil <- silhouette(clust.416b, dist = dist.416b)
+plot(sil)
+```
 
+For a more detailed examination, we identify the closest neighboring cluster for cells with negative widths. This provides a perspective on the relationships between clusters that is closer to the raw data than the dendrogram in Figure 10.12.  
+
+```{r}
+neg.widths <- sil[, 3] < 0
+table(Cluster = sil[neg.widths, 1], Neighbor = sil[neg.widths, 2]) 
+```
+
+The average silhouette width across all cells can also be used to choose clustering parameters. The aim is to maximize the average silhouette width in order to obtain well-separated clusters. This can be helpful to automatically obtain a “reasonable” clustering, though in practice, the clustering that yields the strongest separation often does not provide the most biological insight.  
+
+## General-purpose cluster diagnostics
+### Cluster separation, redux
 
 
  
