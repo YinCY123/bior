@@ -293,11 +293,15 @@ The overview of this slot can be obtained with `getSettings(scenicOptions)`.
 ```{r}
 library(SCENIC)
 org <- "mgi" # or hgnc, or dmel
-dbDir <- "cisTarget_databases" # RcisTarget databases location
+dbDir <- "f:/git/Data/cisTarget/mouse/mm10__refseq-r80__500bp_up_and_100bp_down_tss.mc9nr.feather" 
 myDatasetTitle <- "SCENIC example on Mouse brain" # choose a name for your analysis
 data(defaultDbNames)
-dbs <- defaultDbNames[[org]]
-scenicOptions <- initializeScenic(org=org, dbDir=dbDir, dbs=dbs, datasetTitle=myDatasetTitle, nCores=10) 
+db <- "mm10__refseq-r80__500bp_up_and_100bp_down_tss.mc9nr.feather"
+scenicOptions <- initializeScenic(org=org, 
+                                  dbDir=dbDir, 
+                                  datasetTitle = myDatasetTitle, 
+                                  nCores=1, 
+                                  db = db) 
 ```
 
 
