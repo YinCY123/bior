@@ -171,6 +171,10 @@ dgem[1:5, 1:5]
 ```
 
 
+```{r}
+ls("package:SCopeLoomR")
+```
+
 
 
 
