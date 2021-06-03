@@ -18,7 +18,7 @@ Clustering is an unsupervised learning procedure that is used in scRNA-seq data 
 library(DropletUtils)
 
 fname <- "/home/yincy/git/Data/Bioconductor/Single-Cell/osca/pbmc4k/raw_gene_bc_matrices/GRCh38/"
-sce.pbmc <- read10xCounts(samples = fname, col.names = T)
+sce.pbmc <- readRDS("../../../../Data/Bioconductor/osca/sce.pbmc.rds")
 
 # gene annotation
 library(scater)
@@ -389,7 +389,7 @@ As the PBMC dataset is too large, we will demonstrate on the 416B dataset instea
 
 ```{r}
 library(scRNAseq)
-
+sce.416b <- LunSpikeInData(which = "416b")
 sce.416b <- readRDS("/home/yincy/git/Data/Bioconductor/Single-Cell/osca/sce.416b.rds")
 sce.416b$block <- factor(sce.416b$block)
 
@@ -534,12 +534,166 @@ table(Cluster = sil[neg.widths, 1], Neighbor = sil[neg.widths, 2])
 
 The average silhouette width across all cells can also be used to choose clustering parameters. The aim is to maximize the average silhouette width in order to obtain well-separated clusters. This can be helpful to automatically obtain a “reasonable” clustering, though in practice, the clustering that yields the strongest separation often does not provide the most biological insight.  
 
+
 ## General-purpose cluster diagnostics
 ### Cluster separation, redux
+We previously introduced the silhouette width in the context of hierarchical clustering (Section 10.5.3). While this can be applied with other clustering algorithms, it requires calculation of all pairwise distances between cells and is not scalable for larger cdatasets. In such cases, we instead use an approximate approach that replaces the average of the distances with the distance to the average (i.e., centroid) of each cluster, with some tweaks to account for the distance due to the within-cluster variance. This is implemented in the `approxSilhouette()` function from `bluster`, allowing us to quickly identify poorly separate clusters with mostly negative widths.  
+
+```{r}
+# performing the calculations on the PC coordinates. like before
+sil.approx <- approxSilhouette(x = reducedDim(sce.pbmc, "PCA"), clusters = clust)
+sil.data <- as.data.fram(sil.approx)
+sil.data$closest <- factor(ifelse(sil.data$width > 0, clust, sil.data$other))
+sil.data$clust <- factor(clust)
+
+ggplot(sil.data, aes(cluster, width, colour = closest)) +
+    ggbeeswarm::geom_quasirandom(method = "smiley")
+```
+
+Alternatively, we can quantify the degree to which cells from multiple clusters intermingle in expression space. The “clustering purity” is defined for each cell as the proportion of neighboring cells that are assigned to the same cluster. Well-separated clusters should exhibit little intermingling and thus high purity values for all member cells, as demonstrated below in Figure 10.16. Median purity values are consistently greater than 0.9, indicating that most cells in each cluster are primarily surrounded by other cells from the same cluster.  
+
+```{r}
+pure.pbmc <- neighborPurity(x = reducedDim(sce.pbmc, "PCA"), clusters = clust)
+
+pure.data <- as.data.frame(pure.data)
+pure.data$maximum <- factor(pure.data$maximum)
+pure.data$cluster <- factor(clust)
+
+ggplot(pure.data, aes(cluster, purity, colour = maxium)) +
+    ggbeeswarm::geom_quasirandom(method = "smiley")
+```
+
+The main difference between these two methods is that the purity is ignorant of the intra-cluster variance. This may or may not be desirable depending on what level of heterogeneity is of interest. In addition, the purity will - on average - only decrease with increasing cluster number/resolution, making it less effective for choosing between different clusterings. However, regardless of the chosen method, it is worth keeping in mind that poor separation is not synonymous with poor quality. In fact, poorly separated clusters will often be observed in non-trivial analyses of scRNA-seq data where the aim is to characterize closely related subtypes or states. These diagnostics are best used to guide interpretation by highlighting clusters that require more investigation rather than to rule out poorly separated clusters altogether.  
 
 
- 
+### Comparing different clusterings
+As previously mentioned, clustering’s main purpose is to obtain a discrete summary of the data for further interpretation. The diversity of available methods (and the subsequent variation in the clustering results) reflects the many different “perspectives” that can be derived from a high-dimensional scRNA-seq dataset. It is helpful to determine how these perspectives relate to each other by comparing the clustering results. More concretely, we want to know which clusters map to each other across algorithms; inconsistencies may be indicative of complex variation that is summarized differently by each clustering procedure.   
 
+A simple yet effective approach for comparing two clusterings of the same dataset is to create a 2-dimensional table of label frequencies (Figure 10.3). We can further improve the interpretability of this table by computing the proportions of cell assignments, which avoids difficulties with dynamic range when visualizing clusters of differing abundances, For example, we may be interested in how our Walktrap clusters from Section 10.3 are redistributed when we switch to using Louvain community detection (Figure 10.17). Note that this heatmap is best interpreted on a row-by-row basis as the proportions are computed within each row and cannot be easily compared between rows.  
+
+```{r}
+tab <- table(Walktrap = clust, Louvain = clust.louvain)
+tab <- tab / rowSums(tab)
+
+pheatmap(tab, color = viridis(100), cluster_cols = F, cluster_rows = F)
+```
+
+For clusterings that differ primarily in resolution (usually from different parameterizations of the same algorithm), we can use the clustree package to visualize the relationships between them. Here, the aim is to capture the redistribution of cells from one clustering to another at progressively higher resolution, providing a convenient depiction of how clusters split apart. This approach is most effective when the clusterings exhibit a clear gradation in resolution but is less useful for comparisons involving theoretically distinct clustering procedures.  
+
+```{r}
+library(clustree)
+
+combined <- cbind(k.50 = clust.50, k.10 = clust, k.5 = clust.5)
+clustree(combined, prefix = "k.", edge_arrow  =F)
+```
+
+We can quantify the agreement between two clusterings by computing the Rand index with bluster’s pairwiseRand(). This is defined as the proportion of pairs of cells that retain the same status (i.e., both cells in the same cluster, or each cell in different clusters) in both clusterings. In practice, we usually compute the adjusted Rand index (ARI) where we subtract the number of concordant pairs expected under random permutations of the clusterings; this accounts for differences in the size and number of clusters within and between clusterings. A larger ARI indicates that the clusters are preserved, up to a maximum value of 1 for identical clusterings. In and of itself, the magnitude of the ARI has little meaning, and it is best used to assess the relative similarities of different clusterings (e.g., “Walktrap is more similar to Louvain than either are to Infomap”). Nonetheless, if one must have a hard-and-fast rule, experience suggests that an ARI greater than 0.5 corresponds to “good” similarity between two clusterings.  
+
+```{r}
+pairwiseRand(clust, clust.5, mode = "index")
+```
+
+The same function can also provide a more granular perspective with `mode="ratio"`, where the ARI is broken down into its contributions from each pair of clusters in one of the clusterings. This mode is helpful if one of the clusterings - in this case, `clust` - is considered to be a “reference”, and the aim is to quantify the extent to which the reference clusters retain their integrity in another clustering. In the breakdown matrix, each entry is a ratio of the adjusted number of concoordant pairs to the adjusted total number of pairs. Low values on the diagonal in Figure 10.19 indicate that cells from the corresponding reference cluster in `clust` are redistributed to multiple other clusters in `clust.5`. Conversely, low off-diagonal values indicate that the corresponding pair of reference clusters are merged together in `clust.5`.  
+
+```{r}
+breakdown <- pairwiseRand(ref = clust, alt = clust.5, mode = "ratio")
+pheatmap(breakdown, 
+         color = viridis(100, option = "B"), 
+         cluster_rows = F, 
+         cluster_cols = F)
+```
+
+
+### Evaluating cluster stability
+A desirable property of a given clustering is that it is stable to perturbations to the input data (Von Luxburg 2010). Stable clusters are logistically convenient as small changes to upstream processing will not change the conclusions; greater stability also increases the likelihood that those conclusions can be reproduced in an independent replicate study. `scran` uses bootstrapping to evaluate the stability of a clustering algorithm on a given dataset - that is, cells are sampled with replacement to create a “bootstrap replicate” dataset, and clustering is repeated on this replicate to see if the same clusters can be reproduced. We demonstrate below for graph-based clustering on the PCs of the PBMC dataset.  
+
+```{r}
+myClusterFUN <- function(x){
+    g = bluster::makeSNNGraph(x, type = "jaccard")
+    igraph::cluster_louvain(g)$membership
+}
+
+pcs <- reducedDim(sce.pbmc, "PCA")
+originals <- myClusterFUN(pcs)
+table(originals)
+```
+
+
+```{r}
+set.seed(0010010100)
+ratios <- bootstrapStability(x = pcs, FUN = myClusterFUN, clusters = originals)
+ratios %>% dim
+```
+
+The function returns a matrix of ARI-derived ratios for every pair of original clusters in · (Figure 10.20), averaged across bootstrap iterations. High ratios indicate that the clustering in the bootstrap replicates are highly consistent with that of the original dataset. More specifically, high ratios on the diagonal indicate that cells in the same original cluster are still together in the bootstrap replicates, while high ratios off the diagonal indicate that cells in the corresponding cluster pair are still separted.  
+
+```{r}
+pheatmap(ratios, 
+         cluster_rows = F, 
+         cluster_cols = F, 
+         color = viridis(100, oprion = "B"), 
+         breaks = seq(-1, 1, length.out = 101))
+```
+
+Bootstrapping is a general approach for evaluating cluster stability that is compatible with any clustering algorithm. The ARI-derived ratio between cluster pairs is also more informative than a single stability measure for all/each cluster as the former considers the relationships between clusters, e.g., unstable separation between X and Y does not penalize the stability of separation between X and another cluster Z. Of course, one should take these metrics with a grain of salt, as bootstrapping only considers the effect of sampling noise and ignores other factors that affect reproducibility in an independent study (e.g., batch effects, donor variation). In addition, it is possible for a poor separation to be highly stable, so highly stable cluster may not necessarily represent some distinct subpopulation.  
+
+## Subclustering
+Another simple approach to improving resolution is to repeat the feature selection and clustering within a single cluster. This aims to select HVGs and PCs that are more relevant to internal structure, improving resolution by avoiding noise from unnecessary features. Subsetting also encourages clustering methods to separate cells according to more modest heterogeneity in the absence of distinct subpopulations. We demonstrate with a cluster of putative memory T cells from the PBMC dataset, identified according to several markers.  
+
+```{r}
+g.full <- buildSNNGraph(sce.pbmc, use.dimred = "PCA")
+clust.full <- igraph::cluster_walktrap(graph = g.full)$membership
+
+plotExpression(sce.pbmc, 
+               features = c("CD3E", "CCR7", "CD69", "CD44"), 
+               x = I(factor(clust.full)), 
+               colour_by = I(factor(clust.full)))
+```
+
+```{r}
+# repeating modeling and PCA on the subset
+memory <- 10L
+sce.momory <- sce.pbmc[, clust.full == memory]
+dec.momory <- modelGeneVar(sce.momory)
+sce.momory <- denoisePCA(sce.momory, technical = dec.momory, 
+                         subset.row = getTopHVGs(dec.momory, n = 5000))
+```
+
+We apply graph-based clustering within this memory subset to obtain CD4+ and CD8+ subclusters (Figure 10.22). Admittedly, the expression of CD4 is so low that the change is rather modest, but the interpretation is clear enough.  
+
+```{r}
+g.memory <- buildSNNGraph(sce.momory, use.dimred = "PCA")
+clust.memory <- igraph::cluster_walktrap(g.memory)$membership
+
+plotExpression(sce.momory, 
+               features = c("CD8A", "CD4"), 
+               x = I(factor(clust.memory)))
+```
+
+For subclustering analyses, it is helpful to define a customized function that calls our desired algorithms to obtain a clustering from a given `SingleCellExperiment`. This function can then be applied multiple times on different subsets without having to repeatedly copy and modify the code for each subset. For example, `quickSubCluster()` loops over all subsets and executes this user-specified function to generate a list of `SingleCellExperiment` objects containing the subclustering results. (Of course, the downside is that this assumes that a similar analysis is appropriate for each subset. If different subsets require extensive reparametrization, copying the code may actually be more straightforward.)  
+
+```{r}
+set.seed(100010)
+subcluster.out <- quickSubCluster(x = sce.pbmc, groups = clust.full, 
+                                  prepFUN = function(x){
+                                      dec = modelGeneVar(x)
+                                      input <- denoisePCA(x, technical = dec, 
+                                                          subset.row = getTopHVGs(dec, prop = 0.1), 
+                                                          BSPARAM = BiocSingular::IrlbaParam())
+                                  }, 
+                                  clusterFUN = function(x){
+                                      g <- buildSNNGraph(x, use.dimred = "PCA", k = 20)
+                                      igraph::cluster_walktrap(g)$membership
+                                  })
+
+subcluster.out %>% names
+```
+
+```{r}
+subcluster.out[[1]]$subcluster %>% unique() %>% sort
+```
+
+Subclustering is a general and conceptually straightforward procedure for increasing resolution. It can also simplify the interpretation of the subclusters, which only need to be considered in the context of the parent cluster’s identity - for example, we did not have to re-identify the cells in cluster 10 as T cells. However, this is a double-edged sword as it is difficult for practitioners to consider the uncertainty of identification for parent clusters when working with deep nesting. If cell types or states span cluster boundaries, conditioning on the putative cell type identity of the parent cluster can encourage the construction of a “house of cards” of cell type assignments, e.g., where a subcluster of one parent cluster is actually contamination from a cell type in a separate parent cluster.  
 
 
 

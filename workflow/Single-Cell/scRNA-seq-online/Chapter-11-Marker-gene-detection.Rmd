@@ -1,0 +1,124 @@
+---
+title: "Chapter-11-Marker-gene-detection"
+author: "YinCY"
+date: "6/3/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Motivation
+To interpret our clustering results from Chapter 10, we identify the genes that drive separation between clusters. These marker genes allow us to assign biological meaning to each cluster based on their functional annotation. In the most obvious case, the marker genes for each cluster are a priori associated with particular cell types, allowing us to treat the clustering as a proxy for cell type identity. The same principle can be applied to discover more subtle differences between clusters (e.g., changes in activation or differentiation state) based on the behavior of genes in the affected pathways.  
+
+Identification of marker genes is usually based around the retrospective detection of differential expression between clusters. Genes that are more strongly DE are more likely to have caused separate clustering of cells in the first place. Several different statistical tests are available to quantify the differences in expression profiles, and different approaches can be used to consolidate test results into a single ranking of genes for each cluster. These choices parametrize the theoretical differences between the various marker detection strategies presented in this chapter.  
+
+
+## Pairwise tests between clusters
+## Motivation 
+Our general strategy is to perform DE tests between pairs of clusters and then combine results into a single ranking of marker genes for each cluster. We deliberately use pairwise comparisons rather than comparing each cluster to the average of all other cells; the latter approach is sensitive to the population composition, which introduces an element of unpredictability to the marker sets due to variation in cell type abundances. (In the worst case, the presence of one subpopulation containing a majority of the cells will drive the selection of top markers for every other cluster, pushing out useful genes that can distinguish between the smaller subpopulations.) Moreover, pairwise comparisons naturally provide more information to interpret of the utility of a marker, e.g., by providing log-fold changes to indicate which clusters are distinguished by each gene.  
+
+For this section, we will use the Welch t-test to perform our DE testing between clusters. This is an easy choice as it is quickly computed and has good statistical properties for large numbers of cells (Soneson and Robinson 2018). However, the same approach can also be applied with any pairwise statistical test, as discussed in Section 11.3.  
+
+### Combining pairwise statistics per cluster
+#### Looking for any differences
+We perform pairwise t-tests between clusters for each gene using the `findMarkers()` function, which returns a list of `DataFrames` containing ranked candidate markers for each cluster. The function will automatically retrieve the cluster identities from `sce.pbmc` using the `colLabels()` function, though we can easily specify other clustering schemes by explicitly supplying them via the `groups=` argument.  
+
+```{r}
+library(scran)
+markers.pbmc <- findMarkers(sce.pbmc)
+markers.pbmc
+```
+
+The default philosophy of `findMarkers()` is to identify a combination of marker genes that - together - uniquely define one cluster against the rest. To this end, we collect the top DE genes from each pairwise comparison involving a particular cluster to assemble a set of candidate markers for that cluster. We will demonstrate on cluster 7; the relevant `DataFrame` contains log2-fold changes of expression in cluster 7 over each other cluster, along with several statistics obtained by combining p-values (Simes 1986) across the pairwise comparisons involving 7.  
+
+```{r}
+chosen <- "7"
+interesting <- markers.pbmc[[chosen]]
+colnames(interesting)
+```
+
+Of particular interest is the `Top` field. The set of genes with `Top ≤ X` is the union of the top `X` genes (ranked by p-value) from each pairwise comparison involving cluster 7. For example, the set of all genes with `Top` values of 1 contains the gene with the lowest p-value from each comparison. Similarly, the set of genes with `Top` values less than or equal to 10 contains the top 10 genes from each comparison. The Top field represents `findMarkers()`’s approach to consolidating multiple pairwise comparisons into a single ranking for each cluster; each `DataFrame` produced by `findMarkers()` will order genes based on the Top value by default.  
+
+```{r}
+interesting[1:10, 1:4]
+```
+
+We use the `Top` field to identify a set of genes that is guaranteed to distinguish cluster 7 from any other cluster. Here, we examine the top 6 genes from each pairwise comparison (Figure 11.1). Some inspection of the most upregulated genes suggest that cluster 9 contains platelets or their precursors, based on the expression of platelet factor 4 (PF4) and pro-platelet basic protein (PPBP).  
+
+```{r}
+best.set <- interesting[interesting$Top <= 10, ]
+logFCs <- getMarkerEffects(x = best.set)
+
+library(pheatmap)
+pheatmap(logFCs, 
+         breaks = seq(-5, 5, length.out = 101),
+         fontsize_row = 6)
+```
+
+Each DataFrame also contains several other statistics that may be of interest. The summary.logFC field provides a convenient summary of the direction and effect size for each gene, and is defined here as the log-fold change from the comparison with the lowest p-value. The p.value field contains the combined p-value that is obtained by applying Simes’ method to the pairwise p-values for each gene and represents the evidence against the joint null hypothesis, i.e., that the gene is not DE between cluster 7 and any other cluster. Examination of these statistics permits a quick evaluation of the suitability of a candidate marker; if both of these metrics are poor (small log-fold change, large p-value), the gene can most likely be dismissed.  
+
+#### Finding cluster-specific markers
+By default, findMarkers() will give a high ranking to genes that are differentially expressed in any pairwise comparison. This is because a gene only needs a very low p-value in a single pairwise comparison to achieve a low `Top` value. A more stringent approach would only consider genes that are differentially expressed in all pairwise comparisons involving the cluster of interest. To achieve this, we set `pval.type="all"` in `findMarkers()` to use an intersection-union test (Berger and Hsu 1996) where the combined p-value for each gene is the maximum of the p-values from all pairwise comparisons. A gene will only achieve a low combined  
+p-value if it is strongly DE in all comparisons to other clusters.  
+
+```{r}
+# set direction = 'up' to only consider upregulated genes as potential markers
+
+markers.pbmc.up3 <- findMarkers(x = sce.pbmc, pval.type = "all", direction = "up")
+interesting.up3 <- markers.pbmc.up3[[chosen]]
+interesting.up3[1:10, 1:3]
+```
+
+This strategy will only report genes that are highly specific to the cluster of interest. When it works, it can be highly effective as it generates a small focused set of candidate markers. However, any gene that is expressed at the same level in two or more clusters will simply not be detected. This is likely to discard many interesting genes, especially if the clusters are finely resolved with weak separation. To give a concrete example, consider a mixed population of CD4+-only, CD8+-only, double-positive and double-negative T cells. With `pval.type="all"`, neither Cd4 or Cd8 would be detected as subpopulation-specific markers because each gene is expressed in two subpopulations. In comparison, `pval.type="any"` will detect both of these genes as they will be DE between at least one pair of subpopulations.  
+
+
+#### Balancing stringency and generality
+If `pval.type="all"` is too stringent yet `pval.type="any"` is too generous, a compromise is to set `pval.type="some"`. For each gene, we apply the Holm-Bonferroni correction across its p-values and take the middle-most value as the combined p-value. This effectively tests the global null hypothesis that at least 50% of the individual pairwise comparisons exhibit no DE. We then rank the genes by their combined p-values to obtain an ordered set of marker candidates. The aim is to improve the conciseness of the top markers for defining a cluster while mitigating the risk of discarding useful genes that are not DE to all other clusters. The downside is that taking this compromise position sacrifices the theoretical guarantees offered at the other two extremes.  
+
+```{r}
+markers.pbmc.up4 <- findMarkers(sce.pbmc, pval.type = "some", direction = "up")
+interesting.up4 <- markers.pbmc.up4[[chosen]]
+interesting.up4[1:10, 1:4]
+```
+
+In both cases, a different method is used to compute the summary effect size compared to `pval.type="any"`. For `pval.type="all"`, the summary log-fold change is defined as that corresponding to the pairwise comparison with the largest p-value, while for `pval.type="some"`, it is defined as the log-fold change for the comparison with the middle-most p-value. This reflects the calculation of the combined p-value and avoids focusing on genes with strong changes in only one comparison.  
+
+### Using the log-fold change
+The default findMarkers() call considers both up- and downregulated genes to be potential markers. However, downregulated genes are less appealing as markers as it is more difficult to interpret and experimentally validate an absence of expression. To focus on up-regulated markers, we can instead perform a one-sided t-test to identify genes that are upregulated in each cluster compared to the others. This is achieved by setting `direction="up"` in the `findMarkers()` call.  
+
+```{r}
+markers.pbmc.up <- findMarkers(sce.pbmc, direction = "up")
+interesting.up <- markers.pbmc.up[[chosen]]
+interesting.up[1:10, 1:4]
+```
+
+The t-test also allows us to specify a non-zero log-fold change as the null hypothesis. This allows us to consider the magnitude of the log-fold change in our p-value calculations, in a manner that is more rigorous than simply filtering directly on the log-fold changes (McCarthy and Smyth 2009). (Specifically, a simple threshold does not consider the variance and can enrich for genes that have both large log-fold changes and large variances.) We perform this by setting `lfc=` in our `findMarkers()` call - when combined with `direction=`, this tests for genes with log-fold changes that are significantly greater than 1:
+
+```{r}
+markers.pbmc.up2 <- findMarkers(sce.pbmc, direction = "up", lfc = 1)
+interesting.up2 <- markers.pbmc.up2[[chosen]]
+interesting.up2[1:10, 1:4]
+```
+
+```{r}
+best.set <- interesting.up2[interesting.up2$Top <= 5,]
+logFCs <- getMarkerEffects(best.set)
+
+pheatmap(logFCs, breaks = seq(-5, 5, length.out = 101))
+```
+
+Of course, this increased stringency is not without cost. If only upregulated genes are requested from `findMarkers()`, any cluster defined by downregulation of a marker gene will not contain that gene among the top set of features in its `DataFrame`. This is occasionally relevant for subtypes or other states that are defined by low expression of particular genes2. Similarly, setting an excessively high log-fold change threshold may discard otherwise useful genes. For example, a gene upregulated in a small proportion of cells of a cluster will have a small log-fold change but can still be an effective marker if the focus is on specificity rather than sensitivity.  
+
+## Alternative testing regimes
+
+
+
+## Furether comments
+One consequence of the DE analysis strategy is that markers are defined relative to subpopulations in the same dataset. Biologically meaningful genes will not be detected if they are expressed uniformly throughout the population, e.g., T cell markers will not be detected if only T cells are present in the dataset. In practice, this is usually only a problem when the experimental data are provided without any biological context - certainly, we would hope to have some a priori idea about what cells have been captured. For most applications, it is actually desirable to avoid detecting such genes as we are interested in characterizing heterogeneity within the context of a known cell population. Continuing from the example above, the failure to detect T cell markers is of little consequence if we already know we are working with T cells. Nonetheless, if “absolute” identification of cell types is necessary, we discuss some strategies for doing so in Chapter 12.  
+
+Alternatively, marker detection can be performed by treating gene expression as a predictor variable for cluster assignment. For a pair of clusters, we can find genes that discriminate between them by performing inference with a logistic model where the outcome for each cell is whether it was assigned to the first cluster and the lone predictor is the expression of each gene. Treating the cluster assignment as the dependent variable is more philosophically pleasing in some sense, as the clusters are indeed defined from the expression data rather than being known in advance. (Note that this does not solve the data snooping problem.) In practice, this approach effectively does the same task as a Wilcoxon rank sum test in terms of quantifying separation between clusters. Logistic models have the advantage in that they can easily be extended to block on multiple nuisance variables, though this is not typically necessary in most use cases. Even more complex strategies use machine learning methods to determine which features contribute most to successful cluster classification, but this is probably unnecessary for routine analyses.  
+
+
+
