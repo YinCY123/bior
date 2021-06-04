@@ -12,6 +12,7 @@ Imagine a world without a reference genome. Whenever we receive new RNA-seq data
 
 The solution is to perform automated cell type annotation, a.k.a. cell type classification (or occasionally, “label transfer”). These methods compare cells in a new dataset against curated reference profiles of known cell types, assigning each new cell to the reference type that its expression profile is most similar to. This allows users to skip the mundane annotation of their data and jump directly to the interesting questions - does my cell type change in abundance or expression across treatments? Is there interesting substructure within an existing population? In this respect, automated annotation methods are the single-cell field’s equivalent to genome aligners, and we anticipate that the former will also become standard procedure for single-cell data analysis.  
 
+
 # Chapter 1 Introduction  
 ## Motivation  
 The Bioconductor package SingleR implements an automatic annotation method for single-cell RNA sequencing (scRNA-seq) data (Aran et al. 2019). Given a reference dataset of samples (single-cell or bulk) with known labels, it assigns those labels to new cells from a test dataset based on similarities in their expression profiles. This provides a convenient way of transferring biological knowledge across datasets, allowing users to leverage the domain expertise implicit in the creation of each reference. The most common application of SingleR involves predicting cell type (or “state”, or “kind”) in a new dataset, a process that is facilitated by the availability of curated references and compatibility with user-supplied datasets. In this manner, the burden of manually interpreting clusters and defining marker genes only has to be done once, for the reference dataset, and this knowledge can be propagated to new datasets in an automated manner.  
@@ -26,6 +27,7 @@ SingleR can be considered a robust variant of nearest-neighbors classification, 
 3. We repeat the score calculation for all labels in the reference dataset. The label with the highest score is used as SingleR’s prediction for this cell.  
 
 4. We optionally perform a fine-tuning step to improve resolution between closely related labels. The reference dataset is subsetted to only include labels with scores close to the maximum; scores are recomputed using only marker genes for the subset of labels, thus focusing on the most relevant features; and this process is iterated until only one label remains.  
+
 
 ## Quick start  
 We will demonstrate the use of `SingleR()` on a well-known 10X Genomics dataset (Zheng et al. 2017) with the Human Primary Cell Atlas dataset (Mabbott et al. 2013) as the reference.  
@@ -51,7 +53,7 @@ table(predictions$labels)
 
 # Chapter 2 Using the classic mode
 ## Overview  
-SingleR detects markers in a pairwise manner between labels in the reference dataset. Specifically, for each label of interest, it performs pairwise comparisons to every other label in the reference and identifies the genes that are upregulated in the label of interest for each comparison. The initial score calculation is then performed on the union of marker genes across all comparisons for all label. This approach ensures that the selected subset of features will contain genes that distinguish each label from any other label. (In contrast, other approaches that treat the “other” labels as a single group do not offer this guarantee; see here for a discussion.) It also allows the fine-tuning step to aggressively improve resolution by only using marker genes from comparisons where both labels have scores close to the maximum.  
+SingleR detects markers in a pairwise manner between labels in the reference dataset. Specifically, for each label of interest, it performs pairwise comparisons to every other label in the reference and identifies the genes that are upregulated in the label of interest for each comparison. The initial score calculation is then performed on the union of marker genes across all comparisons for all label. This approach ensures that the selected subset of features will contain genes that distinguish each label from any other label. (In contrast, other approaches that treat the “other” labels as a single group do not offer this guarantee.) It also allows the fine-tuning step to aggressively improve resolution by only using marker genes from comparisons where both labels have scores close to the maximum.  
 
 The original (“classic”) marker detection algorithm used in Aran et al. (2019) identified marker genes based on their log-fold changes in each pairwise comparison. Specifically, it used the genes with the largest positive differences in the per-label median log-expression values between labels. The number of genes taken from each pairwise comparison was defined as  
 $500\frac{2}{3}^{log_{2}(n)}$, where `n` is the number of unique labels in the reference; this scheme aimed to reduce the number of genes (and thus the computational time) as the number of labels and pairwise comparisons increased. Classic mode is primarily intended for reference datasets that have little or no replication, a description that covers many of the bulk-derived references and precludes more complicated marker detection procedures (Chapter 3).
@@ -62,10 +64,8 @@ For demonstration purposes, we will use the Grun et al. (2016) haematopoietic st
 ```{r}
 library(scRNAseq)
 
-ah <- AnnotationHub()
-sce.grun <- ah[["AH73905"]]
 sce.grun <- GrunHSCData(ensembl = TRUE)
-sce.grun
+# saveRDS(sce.grun, "/home/yincy/git/Data/Bioconductor/scRNAseq/osca/sce.grun.rds")
 ```
 
 Our aim is to annotate each cell with the ImmGen reference dataset (Heng et al. 2008) from the `celldex` package. (Some further comments on the choice of reference are provided below in Section 2.5.) Calling the `ImmGenData()` function returns a `SummarizedExperiment` object containing a matrix of log-expression values with sample-level labels. We also set `ensembl=TRUE` to match the reference’s gene annotation with that in the `sce` object - the default behavior is to use the gene symbol.  
@@ -74,7 +74,7 @@ Our aim is to annotate each cell with the ImmGen reference dataset (Heng et al. 
 library(celldex)
 
 immgen <- ImmGenData(ensembl = TRUE)
-immgen
+# saveRDS(immgen, "/home/yincy/git/Data/Bioconductor/celldex/immgen.rds")
 ```
 
 Each `celldex` dataset actually has three sets of labels that primarily differ in their resolution. For the purposes of this demonstration, we will use the “fine” labels in the `label.fine` metadata field, which represents the highest resolution of annotation available for this dataset.  
@@ -86,10 +86,7 @@ head(immgen$label.fine)
 We perform annotation by calling `SingleR()` on our test (Grun) dataset and the reference (ImmGen) dataset, leaving the default of `de.method="classic"` to use the original marker detection scheme. This applies the algorithm described in Section 1.2, returning a `DataFrame` where each row contains prediction results for a single cell in the sce object. Labels are provided before fine-tuning (`first.labels`), after fine-tuning (`labels`) and after pruning (`pruned.labels`); some of the other fields are discussed in more detail in Chapter 4.  
 
 ```{r}
-library(SingleR)
-
 # see 'choice of assay data' for 'assay.type.test=' explanation
-
 pred <- SingleR(test = sce.grun, 
                 ref = immgen, 
                 labels = immgen$label.fine, 
@@ -98,11 +95,11 @@ pred <- SingleR(test = sce.grun,
 colnames(pred)
 ```
 
-# Interaction with quality control  
+## Interaction with quality control  
 Upon examining the distribution of assigned labels, we see that many of them are related to stem cells. However, there are quite a large number of more differentiated labels mixed in, which is not what we expect from a sorted population of HSCs.  
 
 ```{r}
-pred$labels %>% table %>% sort(decresing = T) %>% head
+pred$labels %>% table %>% sort(decreasing = T) %>% head
 ```
 
 This is probably because - despite what its name might suggest - the dataset obtained by GrunHSCData() actually contains more than HSCs. If we restrict our analysis to the sorted HSCs (obviously) and remove one low-quality batch (see the analysis here for the rationale) we can see that the distribution of cell type labels is more similar to what we might expect. Low-quality cells lack information for accurate label assignment and need to be removed to enable interpretation of the results.  
@@ -123,9 +120,36 @@ The exception to this rule occurs when comparing data from full-length technolog
 
 We demonstrate below using another HSC dataset that was generated using the Smart-seq2 protocol (Nestorowa et al. 2016). Again, we see that most of the predicted labels are related to stem cells, which is comforting.  
 
+```{r}
+sce.nest <- NestorowaHSCData()
+# saveRDS(sce.nest, "/home/yincy/git/Data/Bioconductor/scRNAseq/sce.nest.rds")
+# getting the exonic gene length
+library(EnsDb.Mmusculus.v79)
+mm.exons <- exonsBy(EnsDb.Mmusculus.v79, by = "gene")
+mm.exons <- reduce(mm.exons)
+mm.len <- sum(width(mm.exons))
+
+# computing the TPMs with a simple scaling by gene length
+library(scater)
+keep <- intersect(names(mm.len), rownames(sce.nest))
+tpm.nest <- calculateTPM(sce.nest[keep, ], lengths = mm.len[keep])
+
+# performing the assignment
+pred <- SingleR(test = tpm.nest, 
+                ref = immgen, 
+                labels = immgen$label.fine)
+
+pred$labels %>% table %>% sort(decreasing = T) %>% head(10)
+```
+
+## Comments on choice of references
+Unsurprisingly, the choice of reference has a major impact on the annotation results. We need to pick a reference that contains a superset of the labels that we expect to be present in our test dataset. Whether the original authors assigned appropriate labels to the reference samples is largely taken as a matter of faith; it is not entirely unexpected that some references are “better” than others depending on the quality of sample preparation. We would also prefer a reference that is generated from a similar technology or protocol as our test dataset, though this is usually not an issue when using SingleR() to annotate well-defined cell types.  
+
+Users are advised to read the relevant vignette for more details about the available references as well as some recommendations on which to use. (As an aside, the ImmGen dataset and other references were originally supplied along with `SingleR` itself but have since been migrated to the separate `celldex` package for more general use throughout Bioconductor.) Of course, as we shall see in the next Chapter, it is entirely possible to supply your own reference datasets instead; all we need are log-expression values and a set of labels for the cells or samples.  
 
 
-
+# Chapter 3 Controlling marker detection
+## Overview
 
 
 
