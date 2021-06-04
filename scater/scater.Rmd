@@ -12,11 +12,12 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(scRNAseq)
-sce.zeisel <- readRDS("../workflow/Single-Cell/scRNA-seq-online/data/sce.zeisel.rds")
+sce.zeisel <- ZeiselBrainData()
+# saveRDS(sce.zeisel, "f:/git/Data/Bioconductor/osca/sce.zeisel.rds")
 ```
 
 # Diagnostic plots for quality control  
-Quality control remove damaged cells and poorly sequenced libaries is a common step in single-cell analysis pipelines. We will use some utilities from the `scuttle` package (conveniently loaded for us when we load `scater`) to compute the ususal quality control metrics for this dataset.  
+Quality control remove damaged cells and poorly sequenced libraries is a common step in single-cell analysis pipelines. We will use some utilities from the `scuttle` package (conveniently loaded for us when we load `scater`) to compute the ususal quality control metrics for this dataset.  
 
 ```{r}
 library(scater)
@@ -25,7 +26,7 @@ sce.zeisel <- addPerCellQC(sce.zeisel,
                            subsets = list(Mito = grep("mt-", rownames(sce.zeisel))))
 ```
 
-Metadata variables can be plotted against each other using the `plotColData()` function, as shown below. We expect to see an increasing number of detected genes with increasing ttoal count. Each point represents a cell that is coloured according to its tissue of origin.  
+Metadata variables can be plotted against each other using the `plotColData()` function, as shown below. We expect to see an increasing number of detected genes with increasing total count. Each point represents a cell that is coloured according to its tissue of origin.  
 
 ```{r}
 colData(sce.zeisel) %>% colnames()
@@ -43,7 +44,7 @@ plotColData(sce.zeisel,
   facet_wrap(~ tissue)
 ```
 
-On the gene level, we can look at a plot that shows the top 50 (by default) most-expressed features. Each row in the plot below corresponds to a gene; each bar corresponds to the expression of a gene in a single cell; and the circle indicates the median expression of each gene, with which genes are sorted. We expect to see the “usual suspects”, i.e., mitochondrial genes, actin, ribosomal protein, MALAT1. A few spike-in transcripts may also be present here, though if all of the spike-ins are in the top 50, it suggests that too much spike-in RNA was added. A large number of pseudo-genes or predicted genes may indicate problems with alignment.  
+On the gene level, we can look at a plot that shows the top 50 (by default) most-expressed features. Each row in the plot below corresponds to a gene; each bar corresponds to the expression of a gene in a single cell; and the circle indicates the median expression of each gene, with which genes are sorted. We expect to see the “usual suspects”, i.e., mitochondrial genes, actin, ribosomal protein, MALAT1. **A few spike-in transcripts may also be present here, though if all of the spike-ins are in the top 50, it suggests that too much spike-in RNA was added. A large number of pseudo-genes or predicted genes may indicate problems with alignment**.  
 
 ```{r}
 plotHighestExprs(sce.zeisel, exprs_values = "counts")
@@ -197,7 +198,10 @@ to create a single `data.frame` for immediate use. In the example below, we crea
 ```{r}
 ggcells(x = sce.zeisel, mapping = aes(x = level1class, y = Snap25)) +
   geom_boxplot() +
-  facet_wrap(~tissue)
+  geom_jitter(alpha = 1/5, size = 1) +
+  facet_wrap(~tissue) +
+  scale_x_discrete(name = NULL) +
+  theme(axis.text.x = element_text(angle = -40, hjust = 0))
 ```
 
 Reduced dimension results are easily pulled in to create customized equivalents of the `plotReducedDim()` output. In this example, we create a t-SNE plot faceted by tissue and coloured by Snap25 expression:  
@@ -207,7 +211,7 @@ ggcells(sce.zeisel, mapping = aes(x = TSNE.1, y = TSNE.2, color = Snap25)) +
   geom_point() +
   stat_density_2d() +
   facet_wrap(~tissue) +
-  scale_color_distiller(direction = 1)
+  scale_color_viridis_c(option = "B")
 ```
 
 It is also straightforward to examine the relationship between the size factors on the normalized gene expression:  
