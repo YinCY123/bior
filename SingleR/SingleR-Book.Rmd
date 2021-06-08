@@ -150,6 +150,488 @@ Users are advised to read the relevant vignette for more details about the avail
 
 # Chapter 3 Controlling marker detection
 ## Overview
+One of the most important steps in `SingleR` (beyond the choice of reference, of course) is the derivation of the marker genes used in the score calculation. We have already introduced the classic approach in the previous chapter, but it is similarly straightforward to perform marker detection with conventional statistical tests. In particular, we identify top-ranked markers based on pairwise Wilcoxon rank sum tests or t-tests between labels; this allows us to account for the variability across cells to choose genes that are robustly upregulated in each label.  
+
+The availability of variance-aware marker detection methods is most relevant for reference datasets that contain a reasonable number (i.e., at least two) of replicate samples for each label. An obvious use case is that of single-cell datasets that are used as a reference to annotate other single-cell datasets. It is also possible for users to supply their own custom marker lists to `SingleR()`, facilitating incorporation of prior biological knowledge into the annotation process. We will demonstrate these capabilities below in this chapter.  
+
+## Annotation with test-based marker detection
+To demonstrate, we will use two human pancreas scRNA-seq datasets from the scRNAseq package. The aim is to use one pre-labelled dataset to annotate the other unlabelled dataset. First, we set up the Muraro et al. (2016) dataset to be our reference, computing log-normalized expression values as discussed in Section 2.4.  
+
+```{r}
+library(scRNAseq)
+
+sce.murao <- MuraroPancreasData()
+
+# removing unlabelled cells or cells without a clear label.
+sce.murao$label %>% table(useNA = "always")
+sce.murao <- sce.murao[, !is.na(sce.murao$label) & sce.murao$label != "unclear"]
+
+library(scater)
+sce.murao <- logNormCounts(sce.murao)
+sce.murao$label %>% table
+```
+
+We then set up our test dataset from Grun et al. (2016), applying some basic quality control.  
+
+```{r}
+sce.grun <- GrunPancreasData()
+# saveRDS(sce.grun, "/home/yincy/git/Data/Bioconductor/scRNAseq/sce.grun.rds")
+
+sce.grun <- addPerCellQC(sce.grun)
+qc <- quickPerCellQC(colData(sce.grun), 
+                           percent_subsets = "altexps_ERCC_percent", 
+                           batch = sce.grun$donor, 
+                           subset = sce.grun$donor %in% c("D17", "D7", "D2"))
+
+sce.grun <- sce.grun[, !qc$discard]
+sce.grun <- logNormCounts(sce.grun)
+```
+
+We run `SingleR()` as described previously but with a marker detection mode that considers the variance of expression across cells. Here, we will use the Wilcoxon ranked sum test to identify the top markers for each pairwise comparison between labels. This is slower but more appropriate for single-cell data compared to the default marker detection algorithm, as the latter may fail for low-coverage data where the median for each label is often zero.  
+
+```{r}
+library(SingleR)
+
+pred.grun <- SingleR(test = sce.grun, 
+                     ref = sce.murao, 
+                     labels = sce.murao$label, 
+                     de.method = "wilcox")
+
+pred.grun$labels %>% table
+```
+
+By default, the function will take the top `de.n` (default: 10) genes from each pairwise comparison between labels. A larger number of markers increases the robustness of the annotation by ensuring that relevant genes are not omitted, especially if the reference dataset has study-specific effects that cause uninteresting genes to dominate the top set. However, this comes at the cost of increasing noise and computational time.  
+
+```{r}
+pred.grun <- SingleR(test = sce.grun, 
+                     ref = sce.murao, 
+                     labels = sce.murao$label, 
+                     de.method = "wilcox", 
+                     de.n = 50)
+
+pred.grun$labels %>% table
+```
+
+## Defining custom markers
+The marker detection in `SingleR()` is built on top of the testing framework in scran, so most options in `?pairwiseWilcox` and friends can be applied via the `de.args=` option. For example, we could use the t-test and test against a log-fold change threshold with `de.args=list(lfc=1)`.  
+
+```{r}
+pred.grun2 <- SingleR(test = sce.grun, 
+                      ref = sce.murao, 
+                      labels = sce.murao$label, 
+                      de.method = "t", 
+                      de.args = list(lfc = 1))
+
+pred.grun2$labels %>% table
+```
+
+However, users can also construct their own marker lists with any DE testing machinery. For example, we can perform pairwise binomial tests to identify genes that are differentially detected (i.e., have differences in the proportion of cells with non-zero counts) between labels in the reference Muraro dataset. We then take the top 10 marker genes from each pairwise comparison, obtaining a list of lists of character vectors containing the identities of the markers for that comparison.  
+
+```{r}
+library(scran)
+out <- pairwiseBinom(x = counts(sce.murao), 
+                     groups = sce.murao$label, 
+                     direction = "up")
+
+markers <- getTopMarkers(de.lists = out$statistics, 
+                         pairs = out$pairs, 
+                         n = 10)
+# upregulated in each acinar compared to alpha
+markers$acinar$alpha
+```
+
+```{r}
+# upregulated in alpha compared to acinar
+markers$alpha$acinar
+```
+
+Once we have this list of lists, we supply it to `SingleR()` via the `genes=` argument, which causes the function to bypass the internal marker detection to use the supplied gene sets instead. The most obvious benefit of this approach is that the user can achieve greater control of the markers, allowing integration of prior biological knowledge to obtain more relevant genes and a more robust annotation.  
+
+```{r}
+pred.grun2b <- SingleR(test = sce.grun, 
+                       ref = sce.murao, 
+                       labels = sce.murao$label, 
+                       genes = markers)
+
+pred.grun2b$labels %>% table
+```
+
+In some cases, markers may only be available for specific labels rather than for pairwise comparisons between labels. This is accommodated by supplying a named list of character vectors to `genes`. Note that this is likely to be less powerful than the list-of-lists approach as information about pairwise differences is discarded.  
+
+```{r}
+# Creating label-specific markers
+label.markers <- lapply(markers, unlist)
+label.markers <- lapply(label.markers, unique)
+label.markers %>% str
+```
+
+```{r}
+pred.grun2c <- SingleR(test = sce.grun, 
+                       ref = sce.murao, 
+                       labels = sce.murao$label, 
+                       genes = label.markers)
+
+pred.grun2c$labels %>% table
+```
+
+## Pseudo-bulk aggregation
+Single-cell reference datasets provide a like-for-like comparison to our test single-cell datasets, yielding a more accurate classification of the cells in the latter (hopefully). However, there are frequently many more samples in single-cell references compared to bulk references, increasing the computational work involved in classification. We overcome this by aggregating cells into one “pseudo-bulk” sample per label (e.g., by averaging across log-expression values) and using that as the reference profile, which allows us to achieve the same efficiency as the use of bulk references.  
+
+The obvious cost of this approach is that we discard potentially useful information about the distribution of cells within each label. Cells that belong to a heterogeneous population may not be correctly assigned if they are far from the population center. To preserve some of this information, we perform k-means clustering within each label to create pseudo-bulk samples that are representative of a particular region of the expression space (i.e., vector quantization). We create $\sqrt{N}$ clusters given a label with N cells, which provides a reasonable compromise between reducing computational work and preserving the label’s internal distribution.
+
+To enable this aggregation, we simply set `aggr.ref=TRUE` in the `SingleR()` call. This uses the `aggregateReference()` function to perform k-means clustering within each label (typically after principal components analysis on the log-expression matrix, for greater speed) and average expression values for each within-label cluster. Note that marker detection is still performed on the unaggregated data so as to make full use of the distribution of expression values across cells.  
+
+```{r}
+set.seed(100)
+pred.grun3 <- SingleR(test = sce.grun, 
+                      ref = sce.murao, 
+                      labels = sce.murao$label, 
+                      de.method = "wilcox", 
+                      aggr.ref = TRUE)
+
+pred.grun3$labels %>% table
+```
+
+Obviously, the aggregation itself requires computational work so setting aggr.ref=TRUE in SingleR() itself may not improve speed. Rather, the real power of this approach lies in pre-aggregating the reference dataset so that it can be repeatedly applied to quickly annotate multiple test datasets.  
+
+
+# Chapter 4 Annotation diagnostics
+## Overview
+In addition to the labels, `SingleR()` returns a number of helpful diagnostics about the annotation process that can be used to determine whether the assignments are appropriate. Unambiguous assignments corroborated by expression of canonical markers add confidence to the results; conversely, low-confidence assignments can be pruned out to avoid adding noise to downstream analyses. This chapter will demonstrate some of these common sanity checks on the pancreas datasets.  
+
+## Based on the scores within cells
+The most obvious diagnostic reported by `SingleR()` is the nested matrix of per-cell scores in the `scores` field. The most obvious diagnostic reported by SingleR() is the nested matrix of per-cell scores in the scores field. This contains the correlation-based scores prior to any fine-tuning for each cell (row) and reference label (column). Ideally, we would see unambiguous assignments where, for any given cell, one label’s score is clearly larger than the others.  
+
+```{r}
+pred.grun$scores[1:10, ]
+```
+
+To check whether this is indeed the case, we use the plotScoreHeatmap() function to visualize the score matrix. Here, the key is to examine the spread of scores within each cell, i.e., down the columns of the heatmap. Similar scores for a group of labels indicates that the assignment is uncertain for those columns, though this may be acceptable if the uncertainty is distributed across closely related cell types. (Note that the assigned label for a cell may not be the visually top-scoring label if fine-tuning is applied, as the only the pre-tuned scores are directly comparable across all labels.)  
+
+```{r}
+plotScoreHeatmap(pred.grun)
+```
+
+We can also display other metadata information for each cell by setting clusters= or annotation_col=. This is occasionally useful for examining potential batch effects, differences in cell type composition between conditions, relationship to clusters from an unsupervised analysis and so on,. Below displays the donor of origin for each cell; we can see that each cell type has contributions from multiple donors, which is reassuring as it indicates that our assignments are not (purely) driven by donor effects.  
+
+```{r}
+plotScoreHeatmap(pred.grun, 
+                 annotation_col = as.data.frame(colData(sce.grun)[, "donor", drop = F]))
+```
+
+The `scores` matrix has several caveats associated with its interpretation. Only the pre-tuned scores are stored in this matrix, as scores after fine-tuning are not comparable across all labels. This means that the label with the highest score for a cell may not be the cell’s final label if fine-tuning is applied. Moreover, the magnitude of differences in the scores has no clear interpretation; indeed, plotScoreHeatmap() dispenses with any faithful representation of the scores and instead adjusts the values to highlight any differences between labels within each cell.  
+
+## Based on the deltas across cells
+We identify poor-quality or ambiguous assignments based on the per-cell “delta”, i.e., the difference between the score for the assigned label and the median across all labels for each cell. Our assumption is that most of the labels in the reference are not relevant to any given cell. Thus, the median across all labels can be used as a measure of the baseline correlation, while the gap from the assigned label to this baseline can be used as a measure of the assignment confidence.  
+
+Low deltas indicate that the assignment is uncertain, possibly because the cell’s true label does not exist in the reference. An obvious next step is to apply a threshold on the delta to filter out these low-confidence assignments. We use the delta rather than the assignment score as the latter is more sensitive to technical effects. For example, changes in library size affect the technical noise and can increase/decrease all scores for a given cell, while the delta is somewhat more robust as it focuses on the differences between scores within each cell.  
+
+`SingleR()` will set a threshold on the delta for each label using an outlier-based strategy. Specifically, we identify cells with deltas that are small outliers relative to the deltas of other cells with the same label. This assumes that, for any given label, most cells assigned to that label are correct. We focus on outliers to avoid difficulties with setting a fixed threshold, especially given that the magnitudes of the deltas are about as uninterpretable as the scores themselves. Pruned labels are reported in the `pruned.labels` field where low-quality assignments are replaced with `NA`.  
+
+```{r}
+to.remove <- is.na(pred.grun$pruned.labels)
+table(Label = pred.grun$labels, Removed = to.remove)
+```
+
+However, the default pruning parameters may not be appropriate for every dataset. For example, if one label is consistently misassigned, the assumption that most cells are correctly assigned will not be appropriate. In such cases, we can revert to a fixed threshold by manually calling the underlying `pruneScores()` function with `min.diff.med=`. The example below discards cells with deltas below an arbitrary threshold of 0.2, where higher thresholds correspond to greater assignment certainty.  
+
+```{r}
+to.remove <- pruneScores(pred.grun, min.diff.med = 0.15)
+table(Label = pred.grun$labels, Removed = to.remove)
+```
+
+This entire process can be visualized using the `plotScoreDistribution()` function, which displays the per-label distribution of the deltas across cells (Figure 4.3). We can use this plot to check that outlier detection in `pruneScores()` behaved sensibly. Labels with especially low deltas may warrant some additional caution in their interpretation.  
+
+```{r}
+plotDeltaDistribution(pred.grun)
+```
+
+If fine-tuning was performed, we can apply an even more stringent filter based on the difference between the highest and second-highest scores after fine-tuning. Cells will only pass the filter if they are assigned to a label that is clearly distinguishable from any other label. In practice, this approach tends to be too conservative as assignments involving closely related labels are heavily penalized.  
+
+```{r}
+to.remove2 <- pruneScores(pred.grun, min.diff.next = 0.1)
+
+table(Label = pred.grun$labels, Removed = to.remove2)
+```
+
+## Based on marker gene expression
+Another simple yet effective diagnostic is to examine the expression of the marker genes for each label in the test dataset. The marker genes used for each label are reported in the `metadata()` of the `SingleR()` output, so we can simply retrieve them to visualize their (usually log-transformed) expression values across the test dataset. We use the `plotHeatmap()` function from `scater` to examine the expression of markers used to identify beta cells.  
+
+```{r}
+all.markers <- metadata(pred.grun)$de.genes
+beta.markers <- unique(unlist(all.markers$beta))
+sce.grun$labels <- pred.grun$labels
+
+library(scater)
+plotHeatmap(sce.grun, 
+            order_columns_by = "labels", 
+            features = beta.markers[1:50], 
+            fontsize_row =5)
+```
+
+If a cell in the test dataset is confidently assigned to a particular label, we would expect it to have strong expression of that label’s markers. We would also hope that those label’s markers are biologically meaningful; in this case, we do observe strong upregulation of insulin (INS) in the beta cells, which is reassuring and gives greater confidence to the correctness of the assignment. If the identified markers are not meaningful or not consistently upregulated, some skepticism towards the quality of the assignments is warranted.  
+
+In practice, the heatmap may be overwhelmingly large if there too many reference-derived markers. To resolve this, we can prune the set of markers to focus on the most interesting genes based on their test expression profiles. Below is limited to the top genes with the strongest evidence for upregulation in our test dataset using the assigned labels; such genes are effectively markers for beta cells in both the reference and test datasets. As a diagnostic plot, this is much more amenable to quick inspection to check that the expected genes are present.  
+
+```{r}
+library(scran)
+
+empirical.markers <- findMarkers(x = sce.grun, 
+                                 groups = sce.grun$labels, 
+                                 direction = "up")
+
+m <- match(beta.markers, rownames(empirical.markers$beta))
+m <- beta.markers[rank(m) <= 20]
+
+library(scater)
+plotHeatmap(sce.grun, 
+            order_columns_by = "labels", 
+            features = m)
+```
+
+It is straightforward to repeat this process for all labels by wrapping this code in a loop, as shown below in Figure 4.6. Note that `plotHeatmap()` is not the only function that can be used for this visualization; we could also use `plotDots()` to create a Seurat-style dot plot, or we could use other heatmap plotting functions such as `dittoHeatmap()` from `dittoSeq`.  
+
+```{r}
+collected <- list()
+
+for(lab in unique(sce.grun$labels)){
+    lab.markers <- unique(unlist(all.markers[[lab]]))
+    m <- match(label.markers, rownames(empirical.markers[[lab]]))
+    m <- lab.markers[rank(m) <= 20]
+    collected[[lab]] <- plotHeatmap(sce.grun, silent = T, 
+                                    order_columns_by = "labels", 
+                                    main = lab, 
+                                    features = m, 
+                                    fontsize_row = 3)[[4]]
+}
+
+cowplot::plot_grid(plotlist = collected, 
+                   ncol = 2)
+```
+
+In general, the heatmap provides a more interpretable diagnostic visualization than the plots of scores and deltas. However, it does require more effort to inspect and may not be feasible for large numbers of labels. It is also difficult to use a heatmap to determine the correctness of assignment for closely related labels.  
+
+## Comparing to unsupervised clustering
+It can also be instructive to compare the assigned labels to the groupings generated from unsupervised clustering algorithms. The assumption is that the differences between reference labels are also the dominant factor of variation in the test dataset; this implies that we should expect strong agreement between the clusters and the assigned labels. To demonstrate, we’ll use the sceG from Chapter 8 where clusters have generated using a graph-based method (Xu and Su 2015).  
+
+```{r}
+#--- loading-muraro ---#
+library(scRNAseq)
+sceM <- MuraroPancreasData()
+sceM <- sceM[,!is.na(sceM$label) & sceM$label!="unclear"] 
+
+#--- normalize-muraro ---#
+library(scater)
+sceM <- logNormCounts(sceM)
+
+#--- loading-grun ---#
+sceG <- GrunPancreasData()
+
+sceG <- addPerCellQC(sceG)
+qc <- quickPerCellQC(colData(sceG), 
+    percent_subsets="altexps_ERCC_percent",
+    batch=sceG$donor,
+    subset=sceG$donor %in% c("D17", "D7", "D2"))
+sceG <- sceG[,!qc$discard]
+
+#--- normalize-grun ---#
+sceG <- logNormCounts(sceG)
+
+#--- annotation ---#
+library(SingleR)
+pred.grun <- SingleR(test=sceG, ref=sceM, labels=sceM$label, de.method="wilcox")
+
+#--- clustering ---#
+library(scran)
+decG <- modelGeneVarWithSpikes(sceG, "ERCC")
+
+set.seed(1000100)
+sceG <- denoisePCA(sceG, decG)
+
+library(bluster)
+sceG$cluster <- clusterRows(reducedDim(sceG), NNGraphParam(k=5))
+```
+
+We compare these clusters to the labels generated by `SingleR`. Any similarity can be quantified with the adjusted rand index (ARI) with `pairwiseRand()` from the `bluster` package. Large ARIs indicate that the two partitionings are in agreement, though an acceptable definition of “large” is difficult to gauge; experience suggests that a reasonable level of consistency is achieved at ARIs above 0.5.  
+
+```{r}
+library(bluster)
+
+pairwiseRand(ref = sceG$cluster, alt = pred.grun$labels, mode = "index")
+```
+
+In practice, it is more informative to examine the distribution of cells across each cluster/label combination. Below shows that most clusters are nested within labels, a difference in resolution that is likely responsible for reducing the ARI. Clusters containing multiple labels are particularly interesting for diagnostic purposes, as this suggests that the differences between labels are not strong enough to drive formation of distinct clusters in the test.  
+
+```{r}
+tab <- table(cluster = sceG$cluster, label = pred.grun$labels)
+pheatmap::pheatmap(log10(tab + 10))
+```
+
+The underlying assumption is somewhat reasonable in most scenarios where the labels relate to cell type identity. However, disagreements between the clusters and labels should not be cause for much concern. The whole point of unsupervised clustering is to identify novel variation that, by definition, is not in the reference. It is entirely possible for the clustering and labels to be different without compromising the validity or utility of either; the former captures new heterogeneity while the latter facilitates interpretation in the context of existing knowledge.  
+
+
+# Chapter 5 Using multiple references
+## Overview
+In some cases, we may wish to use multiple references for annotation of a test dataset. This yields a more comprehensive set of cell types that are not covered by any individual reference, especially when differences in the resolution are considered. However, it is not trivial due to the presence of batch effects across references (from differences in technology, experimental protocol or the biological system) as well as differences in the annotation vocabulary between investigators.  
+
+Several strategies are available to combine inferences from multiple references:  
+
+- using reference-specific labels in a combined reference  
+- using harmonized labels in a combined reference  
+- combining scores across multiple reference  
+
+This chapter discusses the various strengths and weaknesses of each strategy and provides some practical demonstrations of each. Here, we will use the HPCA and Blueprint/ENCODE datasets as our references and (yet another) PBMC dataset as the test.  
+
+```{r}
+library(TENxPBMCData)
+pbmc <- TENxPBMCData("pbmc8k")
+# saveRDS(pbmc, file = "/home/yincy/git/Data/Bioconductor/TENxPBMCData/pbmc8k.rds")
+
+library(celldex)
+hpca <- HumanPrimaryCellAtlasData(ensembl = TRUE)
+bpe <- BlueprintEncodeData(ensembl = TRUE)
+
+# saveRDS(hpca, "/home/yincy/git/Data/Bioconductor/celldex/hpca.rds")
+# saveRDS(bpe, "/home/yincy/git/Data/Bioconductor/celldex/bpe.rds")
+```
+
+## Using reference-specific labels
+In this strategy, each label is defined in the context of its reference dataset. This means that a label - say, “B cell” - in reference dataset X is considered to be different from a “B cell” label in reference dataset Y. Use of reference-specific labels is most appropriate if there are relevant biological differences between the references; for example, if one reference is concerned with healthy tissue while the other reference considers diseased tissue, it can be helpful to distinguish between the same cell type in different biological contexts.  
+
+We can easily implement this approach by combining the expression matrices together and pasting the reference name onto the corresponding character vector of labels. This modification ensures that the downstream `SingleR()` call will treat each label-reference combination as a distinct entity.  
+
+```{r}
+hpca2 <- hpca
+hpca2$label.main <- paste("HPCA.", hpca2$label.main, sep = "")
+
+bpe2 <- bpe
+bpe2$label.main <- paste("BPE.", bpe2$label.main, sep = "")
+
+shared <- intersect(rownames(hpca2), rownames(bpe2))
+combined <- cbind(hpca2[shared, ], bpe2[shared, ])
+```
+
+It is then straightforward to perform annotation with the usual methods.  
+```{r}
+library(SingleR)
+
+com.res1 <- SingleR(test = pbmc, 
+                    ref = combined, 
+                    labels = combined$label.main, 
+                    assay.type.test = "counts")
+
+com.res1$labels %>% table
+```
+
+However, this strategy identifies markers by directly comparing expression values across references, meaning that the marker set is likely to contain genes responsible for uninteresting batch effects. This will increase noise during the calculation of the score in each reference, possibly leading to a loss of precision and a greater risk of technical variation dominating the classification results. The use of reference-specific labels also complicates interpretation of the results as the cell type is always qualified by its reference of origin.  
+
+## Comparing scores across references
+### Combining inferences from individual references
+Another strategy - and the default approach implemented in SingleR() - involves performing classification separately within each reference, and then collating the results to choose the label with the highest score across references. This is a relatively expedient approach that avoids the need for explicit harmonization while also reducing exposure to reference-specific batch effects.  
+
+To use this method, we simply pass multiple objects to the `ref=` and `label=` argument in `SingleR()`. The combining strategy is as follows:  
+
+1. The function first annotates the test dataset with each reference individually in the same manner as described in Section 1.2. This step is almost equivalent to simply looping over all individual references and running `SingleR()` on each.  
+
+2. For each cell, the function collects its predicted labels across all references. In doing so, it also identifies the union of markers that are upregulated in the predicted label in each reference.  
+
+3. The function identifies the overall best-scoring label as the final prediction for that cell. This step involves a recomputation of the scores across the identified marker subset to ensure that these scores are derived from the same set of genes (and are thus comparable across references).  
+
+The function will then return a `DataFrame` of combined results for each cell in the test dataset, including the overall label and the reference from which it was assigned.  
+
+```{r}
+com.res2 <- SingleR(test = pbmc, 
+                    assay.type.test = 1, 
+                    ref = list(BPE = bpe, HPCA = hpca), 
+                    labels = list(bpe$label.main, hpca$label.main))
+
+com.res2$labels %>% table
+```
+
+```{r}
+com.res2$reference %>% table
+```
+
+The main appeal of this approach lies in the fact that it is based on the results of annotation with individual references. This avoids batch effects from comparing expression values across references; it reduces the need for any coordination in the label scheme between references; and simultaneously provides the per-reference annotations in the results. The last feature is particularly useful as it allows for more detailed diagnostics, troubleshooting and further analysis.  
+
+```{r}
+com.res2$orig.results$BPE$labels %>% head
+```
+
+```{r}
+com.res2$orig.results$HPCA$labels %>% head
+```
+
+The main downside is that it is somewhat suboptimal if there are many labels that are unique to one reference, as markers are not identified with the aim of distinguishing a label in one reference from another label in another reference. The continued lack of consistency in the labels across references also complicates interpretation of the results, though we can overcome this by using harmonized labels as described below.  
+
+### Combined diagnostics 
+All of the diagnostic plots in `SingleR` will naturally operate on these combined results. For example, we can create a heatmap of the scores in all of the individual references as well as for the recomputed scores in the combined results. Note that scores are only recomputed for the labels predicted in the individual references, so all labels outside of those are simply set to `NA` - hence the swathes of grey.  
+
+```{r}
+plotScoreHeatmap(com.res2)
+```
+
+The deltas for each individual reference can also be plotted with `plotDeltaDistribution()`. No deltas are shown for the recomputed scores as the assumption described in Section 4.3 may not be applicable across the predicted labels from the individual references. For example, if all individual references suggest the same cell type with similar recomputed scores, any delta would be low even though the assignment is highly confident.  
+
+```{r}
+plotDeltaDistribution(com.res2)
+```
+
+We can similarly extract marker genes to use in heatmaps as described in Section 4.4. As annotation was performed to each individual reference, we can simply extract the marker genes from the nested DataFrames as shown in Figure 5.3.
+
+```{r}
+hpca.markers <- metadata(com.res2$orig.results$HPCA)$de.genes
+bpe.markers <- metadata(com.res2$orig.results$BPE)$de.genes
+mono.markers <- unique(unlist(hpca.markers$Monocyte, bpe.markers$Monocytes))
+
+library(scater)
+
+plotHeatmap(logNormCounts(pbmc), 
+            order_columns_by = list(I(com.res2$labels)), 
+            features = mono.markers)
+```
+
+## Using harmonized labels
+### Sharing information during marker detection
+One of the major problems with using multiple references is the presence of study-specific nomenclature. For example, the concept of a `B cell` may be annotated as `B cells` in one reference, B_cells in another reference, and then `B` and `B-cell` and so on in other references. We can overcome this by using harmonized labels where the same cell type is assigned as the same label across references, simplifying interpretation and ensuring that irrelevant discrepancies in labelling do not intefere with downstream analysis.  
+
+```{r}
+hpca.ont <- HumanPrimaryCellAtlasData(ensembl = TRUE, cell.ont = "nonna")
+bpe.ont <- BlueprintEncodeData(ensembl = TRUE, cell.ont = "nonna")
+
+# using the same set of genes
+shared <- intersect(rownames(hpca.ont), rownames(bpe.ont))
+hpca.ont <- hpca.ont[shared, ]
+bpe.ont <- bpe.ont[shared, ]
+
+# showing the top 10 most frequent terms
+hpca.ont$label.ont %>% table %>% sort(decreasing = T) %>% head(10)
+```
+
+```{r}
+bpe.ont$label.ont %>% table %>% sort(decreasing = T) %>% head(10)
+```
+
+The simplest way to take advantage of the standardization in terminology is to use label.ont in place of `label.main` in the previous section’s `SingleR()` call. This yields annotations that have follow the same vocabulary regardless of the reference used for assignment.  
+
+```{r}
+com.res3a <- SingleR(test = pbmc, 
+                     assay.type.test = 1, 
+                     ref = list(BPE = bpe.ont, HPCA = hpca.ont), 
+                     labels = list(bpe.ont$label.ont, hpca.ont$label.ont))
+
+table(Label = com.res3a$labels, Reference = com.res3a$reference)
+```
+
+A more advanced approach is to share information across references during the marker detection stage. This is done by favoring genes the exhibit upregulation consistently in multiple references, which increases the likelihood that those markers will generalize to other datasets. For classic marker detection, we achieve this by calling `getClassicMarkers()` to obtain markers for use in `SingleR()`; the same effect can be achieved for test-based methods in `scran` functions by setting `block=`. We then use these improved markers by passing them to `genes=` as described in Section 3.3. In this case, we specify `com.markers` twice in a list to indicate that we are using them for both of our references.   
+
+
+
+
+
+
+
+
 
 
 
