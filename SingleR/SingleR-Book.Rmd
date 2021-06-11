@@ -594,7 +594,7 @@ plotScoreHeatmap(com.res2)
 The deltas for each individual reference can also be plotted with `plotDeltaDistribution()`. No deltas are shown for the recomputed scores as the assumption described in Section 4.3 may not be applicable across the predicted labels from the individual references. For example, if all individual references suggest the same cell type with similar recomputed scores, any delta would be low even though the assignment is highly confident.
 
 ```{r}
-plotDeltaDistribution(com.res2)
+plotDeltaDistribution(com.res2, ncol = 3)
 ```
 
 We can similarly extract marker genes to use in heatmaps as described in Section 4.4. As annotation was performed to each individual reference, we can simply extract the marker genes from the nested DataFrames as shown in Figure 5.3.
@@ -617,6 +617,8 @@ plotHeatmap(logNormCounts(pbmc),
 
 One of the major problems with using multiple references is the presence of study-specific nomenclature. For example, the concept of a `B cell` may be annotated as `B cells` in one reference, B_cells in another reference, and then `B` and `B-cell` and so on in other references. We can overcome this by using harmonized labels where the same cell type is assigned as the same label across references, simplifying interpretation and ensuring that irrelevant discrepancies in labelling do not intefere with downstream analysis.
 
+Many of the `SingleR` reference datasets already have their labels mapped to the [Cell Ontology](https://www.ebi.ac.uk/ols/ontologies/cl), which provides a standard vocabulary to refer to the same cell type across diverse datasets. We will describe the utility of Cell Ontology terms in more detail in Chapter 6; at this point, the key idea is that the same term is used for the same conceptual cell type in each reference. To simplify interpretation, we set `cell.ont="nonna"` to remove all samples that could not be mapped to the ontology.  
+
 ```{r}
 hpca.ont <- HumanPrimaryCellAtlasData(ensembl = TRUE, cell.ont = "nonna")
 bpe.ont <- BlueprintEncodeData(ensembl = TRUE, cell.ont = "nonna")
@@ -634,7 +636,11 @@ hpca.ont$label.ont %>% table %>% sort(decreasing = T) %>% head(10)
 bpe.ont$label.ont %>% table %>% sort(decreasing = T) %>% head(10)
 ```
 
+<<<<<<< HEAD
 The simplest way to take advantage of the standardization in terminology is to use label.ont in place of `label.main` in the previous section's `SingleR()` call. This yields annotations that have follow the same vocabulary regardless of the reference used for assignment.
+=======
+The simplest way to take advantage of the standardization in terminology is to use `label.ont` in place of `label.main` in the previous section’s `SingleR()` call. This yields annotations that have follow the same vocabulary regardless of the reference used for assignment.  
+>>>>>>> 88d0d053ae458540691d878ae838f126dea9273c
 
 ```{r}
 com.res3a <- SingleR(test = pbmc, 
@@ -645,4 +651,279 @@ com.res3a <- SingleR(test = pbmc,
 table(Label = com.res3a$labels, Reference = com.res3a$reference)
 ```
 
+<<<<<<< HEAD
 A more advanced approach is to share information across references during the marker detection stage. This is done by favoring genes the exhibit upregulation consistently in multiple references, which increases the likelihood that those markers will generalize to other datasets. For classic marker detection, we achieve this by calling `getClassicMarkers()` to obtain markers for use in `SingleR()`; the same effect can be achieved for test-based methods in `scran` functions by setting `block=`. We then use these improved markers by passing them to `genes=` as described in Section 3.3. In this case, we specify `com.markers` twice in a list to indicate that we are using them for both of our references.
+=======
+A more advanced approach is to share information across references during the marker detection stage. This is done by favoring genes the exhibit upregulation consistently in multiple references, which increases the likelihood that those markers will generalize to other datasets. For classic marker detection, we achieve this by calling `getClassicMarkers()` to obtain markers for use in `SingleR()`; the same effect can be achieved for test-based methods in `scran` functions by setting `block=`. We then use these improved markers by passing them to `genes=` as described in Section 3.3. In this case, we specify `com.markers` twice in a list to indicate that we are using them for both of our references.   
+
+```{r}
+com.markers <- getClassicMarkers(ref = list(BPE = bpe.ont, HPCA = hpca.ont), 
+                                 labels = list(bpe.ont$label.ont, hpca.ont$label.ont))
+
+com.res3b <- SingleR(test = pbmc, 
+                     assay.type.test = 1, 
+                     ref = list(BPE = bpe.ont, HPCA = hpca.ont), 
+                     labels = list(bpe.ont$label.ont, hpca.ont$label.ont), 
+                     genes = list(com.markers, com.markers))
+
+table(Label = com.res3b$labels, Reference = com.res3b$reference)
+```
+
+It is worth noting that, in the above code, the DE genes are still identified within each reference and then the statistics are merged across references to identify the top markers. This ensures that we do not directly compare expression values across references, which reduces the susceptibility of marker detection to batch effects.  
+
+The most obvious problem with this approach is that it assumes that harmonized labels are available. This is usually not true and requires some manual mapping of the author-provided labels to a common vocabulary. The mapping process also runs the risk of discarding relevant information about the biological status (e.g., activation status, disease condition) if there is no obvious counterpart for that state in the ontology.  
+
+### Manual label harmonization  
+The `matchReferences()` function provides a simple approach for label harmonization between two references. Each reference is used to annotate the other and the probability of mutual assignment between each pair of labels is computed, i.e., for each pair of labels, what is the probability that a cell with one label is assigned the other and vice versa? Probabilities close to 1 indicate there is a 1:1 relation between that pair of labels; on the other hand, an all-zero probability vector indicates that a label is unique to a particular reference.  
+
+```{r}
+bp.se <- BlueprintEncodeData()
+hpca.se <- HumanPrimaryCellAtlasData()
+
+matched <- matchReferences(ref1 = bp.se, 
+                           ref2 = hpca.se, 
+                           labels1 = bp.se$label.main, 
+                           labels2 = hpca.se$label.main)
+
+pheatmap::pheatmap(matched, color = viridis(100, option = "B"))
+```
+
+This function can be used to guide harmonization to enforce a consistent vocabulary between two sets of labels. However, some manual intervention is still required in this process given the ambiguities posed by differences in biological systems and technologies. In the example above, neurons are considered to be unique to each reference while smooth muscle cells in the HPCA data are incorrectly matched to fibroblasts in the Blueprint/ENCODE data. CD4+ and CD8+ T cells are also both assigned to “T cells”, so some decision about the acceptable resolution of the harmonized labels is required here.  
+
+As an aside, we can also use this function to identify the matching clusters between two independent scRNA-seq analyses. This involves substituting the cluster assignments as proxies for the labels, allowing us to match up clusters and integrate conclusions from multiple datasets without the difficulties of batch correction and reclustering.  
+
+
+# Chapter 6 Exploting the cell ontology
+## Motivation
+As previously discussed in Section 5.4, SingleR maps the labels in its references to the Cell Ontology. The most obvious advantage of doing this is to provide a standardized vocabulary with which to describe cell types, thus facilitating integrated analyses with multiple references. However, another useful feature of the Cell Ontology is its hierarchical organization of terms, allowing us to adjust cell type annotations to the desired resolution. This represents a more dynamic alternative to the static label.main and label.fine options in each reference.  
+
+## Basic manipulation
+We use the `ontoProc` package to load in the Cell Ontology. This produces an `ontology_index` object (from the `ontologyIndex` package) that we can query for various pieces of information.  
+
+```{r}
+library(ontoProc)
+
+cl <- getCellOnto()
+```
+
+The most immediate use of this object lies in mapping ontology terms to their plain-English descriptions. We can use this to translate annotations produced by `SingleR()` from the label.ont labels into a more interpretable form. We demonstrate this approach using `celldex`’s collection of mouse RNA-seq references (Aran et al. 2019).  
+
+```{r}
+cl$name %>% head
+```
+
+```{r}
+cl$def %>% head
+```
+
+```{r}
+library(celldex)
+
+ref <- MouseRNAseqData(cell.ont = "nonna")
+translated <- cl$name[ref$label.ont]
+translated %>% head
+```
+
+Another interesting application involves examining the relationship between different terms. The ontology itself is a directed acyclic graph, so we can can convert it into `graph` object for advanced queries using the `igraph` package. Each edge represents an “is a” relationship where each vertex represents a specialized case of the concept of the parent node.  
+
+```{r}
+parents <- cl$parents
+self <- rep(names(parents), length(parents))
+
+library(igraph)
+g <- make_graph(rbind(unlist(parents), self))
+```
+
+One query involves identifying all descendents of a particular term of interest. This can be useful when searching for a cell type in the presence of variable annotation resolution; for example, a search for “epithelial cell” can be configured to pick up all child terms such as "endothelial cell" and "ependymal cell".  
+
+```{r}
+term <- "CL:0000624"
+cl$name[term]
+```
+
+```{r}
+all.kids <- names(subcomponent(graph = g, v = term, mode = "out"))
+cl$name[all.kids] %>% head
+```
+
+Alternatively, we might be interested in the last common ancestor (LCA) for a set of terms. This is the furthest term - or, in some cases, multiple terms - from the root of the ontology that is also an ancestor of all of the terms of interest. We will use this LCA concept in the next section to adjust resolution across multiple references.  
+
+```{r}
+terms <- c("CL:0000624", "CL:0000785", "CL:0000623")
+cl$name[terms]
+```
+
+```{r}
+all.ancestors <- lapply(terms, subcomponent, graph = g, mode = "in")
+all.ancestors <- lapply(all.ancestors, names)
+common.ancestors <- Reduce(intersect, all.ancestors)
+
+ancestors.of.ancestors <- lapply(common.ancestors, subcomponent, graph = g, mode = "in")
+ancestors.of.ancestors <- lapply(ancestors.of.ancestors, names)
+ancestors.of.ancestors <- mapply(setdiff, ancestors.of.ancestors, common.ancestors)
+
+latest.common.ancestors <- setdiff(common.ancestors, unlist(ancestors.of.ancestors))
+cl$name[latest.common.ancestors]
+```
+
+
+## Adjusting resolution
+We can use the ontology graph to adjust the resolution of the reference labels by rolling up overly-specific terms to their LCA. The `findCommonAncestors()` utility takes a set of terms and returns a list of potential LCAs for various subsets of those terms. Users can inspect this list to identify LCAs at the desired resolution and then map their descendent terms to those LCAs.  
+
+```{r}
+lca <- findCommonAncestors(ref$label.ont, g = g, names = cl$name)
+lca %>% head
+```
+
+We can also use this function to synchronize multiple sets of terms to the same resolution. Here, we consider the ImmGen dataset (Heng et al. 2008), which provides highly resolved annotation of immune cell types. The `findCommonAncestors()` function specifies the origins of the descendents for each LCA, allowing us to focus on LCAs that have representatives in both sets of terms.  
+
+```{r}
+ref2 <- ImmGenData(cell.ont = "nonna")
+lca2 <- findCommonAncestors(MouseRNA = ref$label.ont, 
+                            ImmGen = ref2$label.ont, 
+                            g = g, 
+                            names = cl$name)
+```
+
+For example, we might notice that the mouse RNA-seq reference only has a single “T cell” term. To synchronize resolution across references, we would need to roll up all of the ImmGen’s finely resolved subsets into that LCA as shown below. Of course, this results in some loss of precision and information; whether this is an acceptable price for simpler interpretation is a decision that is left to the user.  
+
+```{r}
+children <- lca2$`CL:0000084`$descendents
+```
+
+```{r}
+# Synchronization:
+synced.mm <- ref$label.ont
+synced.mm[synced.mm %in% rownames(children)] <- "CL:0000084"
+synced.ig <- ref2$label.ont
+synced.ig[synced.ig %in% rownames(children)] <- "CL:0000084"
+```
+
+
+# Chapter 7 Advanced options  
+Advanced users can split the `SingleR()` workflow into two separate training and classification steps. This means that training (e.g., marker detection, assembling of nearest-neighbor indices) only needs to be performed once for any reference. The resulting data structure can then be re-used across multiple classifications with different test datasets, provided the gene annotation in the test dataset is identical to or a superset of the genes in the training set. To illustrate, we will consider the DICE reference dataset (Schmiedel et al. 2018) from the `celldex` package.  
+
+```{r}
+library(celldex)
+
+dice <- DatabaseImmuneCellExpressionData(ensembl = TRUE)
+```
+
+
+```{r}
+table(dice$label.fine)
+```
+
+Let's say we want ot use the DICE reference to annotate the PBMC dataset.  
+
+```{r}
+library(TENxPBMCData)
+sce.pbmc <- TENxPBMCData("pbmc3k")
+```
+
+We use the `trainSingleR()` function to do all the necessary calculations that are independent of the test dataset. (Almost; see comments below about `common`.) This yields a list of various components that contains all identified marker genes and precomputed rank indices to be used in the score calculation. We can also turn on aggregation with `aggr.ref=TRUE` (Section @ref(pseudo-bulk aggregation)) to further reduce computational work.  
+
+```{r}
+common <- intersect(rownames(sce.pbmc), rownames(dice))
+
+library(SingleR)
+set.seed(2000)
+trained <- trainSingleR(dice[common, ], 
+                        labels = dice$label.fine, 
+                        aggr.ref = TRUE)
+```
+
+We then use the `trained` object to annotate our dataset of interest through the `classifySingleR()` function. As we can see, this yields exactly the same result as applying `SingleR()` directly. The advantage here is that trained can be re-used for multiple `classifySingleR()` calls - possibly on different datasets - without having to repeat unnecessary steps when the reference is unchanged.  
+
+```{r}
+pred <- classifySingleR(sce.pbmc, trained, assay.type = 1)
+
+pred$labels %>% table
+```
+
+The big caveat is that the universe of genes in the test dataset must be a superset of that the reference. This is the reason behind the intersection to `common` genes and the subsequent subsetting of dice. Practical use of preconstructed indices is best combined with some prior information about the gene-level annotation; for example, we might know that we always use a particular version of the Ensembl gene models, so we would filter out any genes in the reference dataset that are not in our test datasets.  
+
+## Parallelization
+Parallelization is an obvious approach to increasing annotation throughput. This is done using the framework in the `BiocParallel` package, which provides several options for parallelization depending on the available hardware. On POSIX-compliant systems (i.e., Linux and MacOS), the simplest method is to use forking by passing `MulticoreParam()` to the `BPPARAM=` argument:  
+
+```{r}
+library(BiocParallel)
+
+pred2a <- SingleR(test = sce.pbmc, 
+                  ref = dice, 
+                  assay.type.test = 1, 
+                  labels = dice$label.fine, 
+                  BPPARAM = MulticoreParam(2)) # 2 CPUs
+```
+
+
+Alternatively, one can use separate processes with `SnowParam()`, which is slower but can be used on all systems - including Windows, our old nemesis.  
+
+```{r}
+pred2b <- SingleR(test = sce.pbmc, 
+                  ref = dice, 
+                  assay.type.test = 1, 
+                  labels = dice$label.file, 
+                  BPPARAM = SnowParam(2))
+```
+
+When working on a cluster, passing `BatchtoolsParam()` to `SingleR()` allows us to seamlessly interface with various job schedulers like SLURM, LSF and so on. This permits heavy-duty parallelization across hundreds of CPUs for highly intensive jobs.  
+
+
+## Approximate algorithms
+It is possible to sacrifice accuracy to squeeze more speed out of `SingleR`. The most obvious approach is to simply turn off the fine-tuning with `fine.tune=FALSE`, which avoids the time-consuming fine-tuning iterations. **When the reference labels are well-separated, this is probably an acceptable trade-off**.  
+
+```{r}
+pred3a <- SingleR(test = sce.pbmc, 
+                  ref = dice, 
+                  assay.type.test = 1, 
+                  labels = dice$label.main, 
+                  fine.tune = F)
+```
+
+Another approximation is based on the fact that the initial score calculation is done using a nearest-neighbors search. By default, this is an exact seach but we can switch to an approximate algorithm via the `BNPARAM=` argument. In the example below, we use the Annoy algorithm via the BiocNeighbors framework, which yields mostly similar results. (Note, though, that the Annoy method does involve a considerable amount of overhead, so for small jobs it will actually be slower than the exact search.)  
+
+```{r}
+library(BiocNeighbors)
+
+pred3b <- SingleR(test = sce.pbmc, 
+                  ref = dice, 
+                  assay.type.test = 1, 
+                  labels = dice$label.main, 
+                  fine.tune = F, 
+                  BNPARAM = AnnoyParam())
+```
+
+## Cluster-level annotation
+The default philosophy of SingleR is to perform annotation of each individual cell in the test dataset. An alternative strategy is to perform annotation of aggregated profiles for groups or clusters of cells. To demonstrate, we will perform a quick-and-dirty clustering of our PBMC dataset with a variety of Bioconductor packages.  
+
+```{r}
+library(scuttle)
+sce.pbmc <- logNormCounts(sce.pbmc)
+
+library(scran)
+dec <- modelGeneVarByPoisson(sce.pbmc)
+sce.pbmc <- denoisePCA(sce.pbmc, dec, subset.row = getTopHVGs(dec, n = 5000))
+
+library(bluster)
+colLabels(sce.pbmc) <- clusterRows(reducedDim(sce.pbmc), NNGraphParam())
+
+library(scater)
+set.seed(117)
+sce.pbmc <- runTSNE(sce.pbmc, dimred = "PCA")
+plotTSNE(sce.pbmc, colour_by = "label")
+```
+
+By passing `clusters=` to `SingleR()`, we direct the function to compute an aggregated profile per cluster. Annotation is then performed on the cluster-level profiles rather than on the single-cell level. This has the major advantage of being much faster to compute as there are obviously fewer clusters than cells; it is also easier to interpret as it directly returns the likely cell type identity of each cluster.  
+
+```{r}
+SingleR(test = sce.pbmc, 
+        ref = dice, 
+        clusters = colLabels(sce.pbmc), 
+        labels = dice$label.main)
+```
+
+This approach assumes that each cluster in the test dataset corresponds to exactly one reference label. If a cluster actually contains a mixture of multiple labels, this will not be reflected in its lone assigned label. (We note that it would be very difficult to determine the composition of the mixture from the `SingleR()` scores.) Indeed, there is no guarantee that the clustering is driven by the same factors that distinguish the reference labels, decreasing the reliability of the annotations when novel heterogeneity is present in the test dataset. The default per-cell strategy is safer and provides more information about the ambiguity of the annotations, which is important for closely related labels where a close correspondence between clusters and labels cannot be expected.  
+
+
+
