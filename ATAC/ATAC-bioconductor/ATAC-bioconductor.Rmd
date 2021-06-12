@@ -1,0 +1,276 @@
+---
+title: "TACA-bioconductor"
+author: "yincy"
+date: "3/26/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## ATAC-seq, MNase-seq and DNase-seq  
+```{r}
+knitr::include_graphics(path = "/home/yincy/git/Bioconductor/workflow/ATAC/ATAC-bioconductor/figures/ATAC-MNase-DNase.png")
+```
+
+- DNase-seq: enzymatic digestion to extract signal from open chromatin around transcription factor binding sites.  
+
+- MNase-seq: enzymatic digestion to extract signal nucleosome position.  
+
+- ATAC-seq: Uses transposases and offers a method to simultaneously extract signal from transcription factors binding sites and nucleosome positions from a single sample.  
+
+## Working with ATAC-seq data in R/Bioconductor  
+**Contents**  
+- aligning ATAC-seq data  
+- plotting fragment lengths from ATAC-seq  
+- creation of nucleosome free regions  
+- peak calling for nucleosome free regions  
+- annotation and functional enrichment analysis of ATAC-seq  
+- differential nucleosome free regions from ATAC-seq data  
+
+**data source**  
+1. GEO: GSM1155958  
+2. ENCODE  
++ liver day 12: [ENCSR302LIV](https://www.encodeproject.org/experiments/ENCSR302LIV/)  
++ kidney day 15: [ENCSR023QZX](https://www.encodeproject.org/experiments/ENCSR023QZX/)  
++ Hindbrain day 12: [ENCSR088UYE](https://www.encodeproject.org/experiments/ENCSR088UYE/)  
+
+
+## Required R packages  
+```{r, message=FALSE, warning=F}
+library(tidyverse)
+library(Rsamtools)
+library(GenomicAlignments)
+library(rtracklayer)
+library(limma)
+library(soGGi)
+library(cowplot)
+library(ChIPQC)
+library(DT)
+```
+
+#### Creating a reference genome  
+```{r}
+buildindex(basename = "/home/yincy/git/Data/genome/subread_index/ENCODE/human/GRCh38.encode", 
+           reference = "/home/yincy/git/Data/genome/human/ENCODE/GRCh38.primary_assembly.genome.fa.gz")
+```
+
+CNP0000325
+#### Aligning Sequence Reads to the Genome  
+```{r}
+reads1 <- "/home/yincy/git/Data/ATAC-bioconductor/GSM1155958/fastq/SRR891269_1.fastq.gz"
+reads2 <- "/home/yincy/git/Data/ATAC-bioconductor/GSM1155958/fastq/SRR891269_2.fastq.gz"
+outBAM <- "/home/yincy/git/Data/ATAC-bioconductor/GSM1155958/BAM/ATAC_50k_2.bam"
+align(
+  index = "/home/yincy/git/Data/genome/subread_index/ENCODE/human/GRCh38.encode", 
+  readfile1 = reads1, 
+  readfile2 = reads2, 
+  output_file = outBAM, 
+  nthreads = 10, 
+  type = "dna",
+  unique = TRUE, 
+  maxFragLength = 2000, 
+  sortReadsByCoordinates = TRUE # if set to TRUE, can skip the below step 
+)
+```
+
+#### Sorting and Indexing  
+```{r}
+sortedBAM <- file.path(dirname(outBAM), paste0("Sorted_", basename(outBAM)))
+sortBam(file = outBAM, destination = paste(dirname(outBAM), gsub("\\.bam", "", basename(sortedBAM)), sep = "/"))
+indexBam(sortedBAM)
+```
+
+#### number of mapped reads  
+```{r}
+map_prop <- propmapped(file = sortedBAM)
+```
+
+#### Distrubution of mapped reads across genome  
+ATAC-seq is known have high signal on the mitochondrial chromosomes.  
+```{r}
+idxstatsBam(file = sortedBAM) %>% 
+  filter(seqnames %in% paste("chr", c(1:22, "X", "Y", "M"), sep = "")) %>% 
+  ggplot(aes(seqnames, mapped, fill = seqnames)) +
+  geom_bar(stat = "identity") + 
+  coord_flip()
+```
+
+## Post-alignment processing  
+#### Reading in mapped reads  
+only reads mapped to Chromosome 20  
+```{r}
+atacReads <- readGAlignmentPairs(
+  file = sortedBAM, 
+  param = ScanBamParam(mapqFilter = 1, flag = scanBamFlag(isPaired = TRUE, isProperPair = TRUE), 
+                       what = c("qname", "mapq", "isize"), 
+                       which = GRanges(seqnames = "chr20", 
+                                       ranges = IRanges(start = 1, end = 63025520)))
+)
+```
+
+#### Retrieving insert sizes  
+```{r}
+atacReads_read1 <- GenomicAlignments::first(x = atacReads)
+insertSizes <- abs(elementMetadata(x = atacReads_read1)$isize)
+insertSizes %>% head()
+```
+
+#### Plotting insert sizes  
+ATAC-seq should represent a mix of fragment lengths corresponding to nucleosome free, mononucleosome and poly-nucleosome fractions.  
+
+We can use the newly acquired insert lengths for chromosome 20 to plot the distribution of all fragment lengths.  
+```{r, message=FALSE, warning=FALSE}
+table(insertSizes) %>% 
+  data.frame() %>% 
+  rename(InsertSize = insertSizes, Count = Freq) %>% 
+  mutate(InsertSize = as.numeric(as.vector(InsertSize)), 
+         Count = as.numeric(Count)) %>% 
+  ggplot(aes(InsertSize, Count)) +
+  geom_line() + 
+  theme_bw() +
+  scale_y_continuous(limits = c(0, 3000)) +
+  geom_vline(xintercept = c(149, 294), linetype = 2, color = "blue") + 
+  scale_x_continuous(breaks = c(0, 149, 294, 500, 1000, 1500, 2000))
+```
+
+#### Plotting insert sizes with open mono-and di-nucleosome profiles  
+nucleosome: < 100bp  
+mono-nucleosome: 180 - 247bp  
+di-nucleosome: 315 - 437bp  
+from Greenleaf study  
+```{r}
+table(insertSizes) %>% 
+  data.frame() %>% 
+  rename(InsertSize = insertSizes, Count = Freq) %>% 
+  mutate(InsertSize = as.numeric(as.vector(InsertSize)), 
+         Count = as.numeric(Count)) %>% 
+  ggplot(aes(InsertSize, Count)) +
+  geom_line() + 
+  theme_bw() +
+  scale_y_continuous(limits = c(0, 3000)) +
+  geom_vline(xintercept = c(100, 180, 247, 315, 437), linetype = 2, color = "blue") + 
+  scale_x_continuous(breaks = c(0, 100, 180, 247, 315, 437, 1000, 1500, 2000))
+```
+
+#### Plotting ATAC-seq2 signal of TSSs (Retrieving TSSs regions)  
+```{r}
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+
+TSSs <- resize(x = genes(TxDb.Hsapiens.UCSC.hg38.knownGene), 
+               width = 1, 
+               fix = 'start')
+```
+
+
+```{r}
+# nucleosome free  
+nucFree <- regionPlot(bamFile = sortedBAM, 
+                      testRanges = TSSs, 
+                      style = "point", 
+                      format = "bam", 
+                      paired = TRUE, 
+                      minFragmentLength = 0, 
+                      maxFragmentLength = 100, 
+                      forceFragment = 50)
+
+# mononucleosome  
+monoNuc <- regionPlot(bamFile = sortedBAM, 
+                      testRanges = TSSs, 
+                      style = "point", 
+                      format = "bam", 
+                      paired = TRUE, 
+                      minFragmentLength = 180, 
+                      maxFragmentLength = 240, 
+                      forceFragment = 80)
+
+# dinucleosome 
+diNuc <- regionPlot(bamFile = sortedBAM, 
+                    testRanges = TSSs, 
+                    style = "point", 
+                    format = "bam", 
+                    paired = TRUE, 
+                    minFragmentLength = 315, 
+                    maxFragmentLength = 437, 
+                    forceFragment = 160)
+```
+
+```{r}
+p1 <- plotRegion(object = nucFree, outliers = 0.01)
+p2 <- plotRegion(object = monoNuc, outliers = 0.01)
+p3 <- plotRegion(object = diNuc, outliers = 0.01)
+
+plot_grid(plotlist = list(p1, p2, p3), ncol = 3)
+```
+
+#### Subsetting ATAC-seq reads files by insert sizes  
+```{r}
+atacReads_open <- atacReads[insertSizes < 100, ]
+atacReads_MonoNuc <- atacReads[between(insertSizes, 180, 240), ]
+atacReads_diNuc <- atacReads[between(insertSizes, 315, 437), ]
+```
+
+```{r}
+openRegionBam <- gsub("\\.bam", "_openRegions\\.bam", sortedBAM)
+monoNucBam <- gsub("\\.bam", "_monoNuc\\.bam", sortedBAM)
+diNucBam <- gsub("\\.bam", "_diNuc\\.bam", sortedBAM)
+
+export(object = atacReads_open, con = openRegionBam, format = "bam")
+export(object = atacReads_MonoNuc, con = monoNucBam, format = "bam")
+export(object = atacReads_diNuc, con = diNucBam, format = "bam")
+```
+
+
+#### Creating an open region bigWig  
+```{r}
+openRegionBigWig <- gsub("\\.bam", "_openRegions\\.bw", sortedBAM)
+openRegionRPMBigWig <- gsub("\\.bam", "_openRegionRPM\\.wb", sortedBAM)
+atacFragments_open <- granges(atacReads)
+
+export.bw(object = coverage(atacFragments_open), openRegionBigWig)
+```
+
+
+## Finding Open Regions  
+A common goal in ATAC-seq is to identify open chromatin regions/nucleosome free regions.  
+
+### Peak calling for nucleosome free regions  
+#### Peak calling using MACS2  
+One very popular and standard peak caller for ATAC-seq is MACS2.  
+
+MAC2 is well established for identifying punctate peaks found in ChIP-seq data from transcription factors.  
+
+#### Single end peak calling  
+with single end sequencing from ATAC-seq we do not know how long the fragments are.  
+
+To identify open regions therefore requires some different parameters for MACS2 peak calling.  
+
+One strategy employed is to shift read 5' ends by -100 and then extend from this by 200bp. Considering the expected size of our nucleosome free fragments this should provide a pile-up nucleosome regions suitable for MACS2 window size.  
+
+
+#### QC for low quality, duplicates and signal distribution  
+Before we remove any data we can get a quick assessment of our reads in peaks, duplication rate, low quality reads and reads in artefact regions from ChIPQC.  
+```{r}
+blacklist <- import.bed("/home/yincy/git/Data/Annotation-data/blacklist/GRCh38-blacklist-region.gz")
+openRegionPeaks <- "/home/yincy/git/Data/ATAC-bioconductor/GSM1155958/BAM/paired_peaks_peaks.narrowPeak"
+qcRes <- ChIPQCsample(
+  reads = openRegionPeaks, 
+  annotation = "hg38", 
+  chromosomes = "chr20", 
+  blacklist = blacklist, 
+  verboseT = F
+)
+```
+
+
+
+
+
+
+
+
+
+
+
+
