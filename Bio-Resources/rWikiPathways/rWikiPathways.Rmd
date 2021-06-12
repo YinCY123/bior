@@ -1,0 +1,407 @@
+---
+title: "rWikiPathways"
+author: "yincy"
+date: "9/22/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Overview  
+*WikiPathways* is a well-known repository for biological pathways that provides unique tools to the research community for content creation, editing and utilization.  
+
+*rWikiPathways* leverages the WikiPathways API to communicate between R and WikiPathways, allowing any pathway to be queried, interrogated and downloaded in both data and image formats. Queries are typically performed based on "Xrefs", standardized identifiers for genes, proteins and metabolites. Once you can identified a pathway, you can use the WPID (WikiPathways identifiers) to make additional queries.  
+
+
+## Getting started  
+to check which species are currently supported by WikiPathways  
+```{r, message=FALSE, warning=FALSE}
+library(rWikiPathways)
+library(magrittr)
+
+listOrganisms()
+```
+
+How many pathways are available for human  
+```{r}
+hs.pathways <- listPathways(organism = "Homo sapiens")
+hs.pathways %>% dim()
+hs.pathways %>% head()
+```
+
+get sepcific information from pathways:  
+
+- `listPathwayIds`  
+- `listPathwayNames`  
+- `listPathwaysUrls`  
+
+```{r}
+listPathwayIds(organism = "Homo sapiens") %>% head()
+listPathwayNames(organism = "Homo sapiens") %>% head()
+listPathwayUrls(organism = "Homo sapiens") %>% head()
+```
+
+Finally, there's another way to find pathways of interest: by `Xref`. An `Xref` is simply a standardized identifier form an official source. WikiPathways relies on `BridgeDb` to provide dosens of `Xref` sources for genes, proteins and metabolites.  
+
+With **rWikiPathways**, the approach is simple. Take a supported identifier for molecule of interest, "TNF" and check the system code for the datasource, e.g., HGNC = H (this comes from the second column in the datasources.txt table linked to above), and then form your query.  
+
+```{r}
+datasources <- readr::read_tsv(file = "datasources.tsv", col_names = T)
+datasources %>% 
+    dplyr::filter(Affy == "MGI")
+
+tnf.pathways <- findPathwaysByXref(identifier = "C1QA", systemCode = "H")
+tnf.pathways
+```
+
+It's also provides search result score in case you want to rank results. If you are interested in is WPIDs, names or URLs, then there are these handly alternatives that will just return simple lists.  
+
+- `findPathwayIdsByXref`  
+- `findPathwayNamesByXref`  
+- `findPathwayUrlsByXref`  
+
+## Retrive pathways  
+Let's assume we interested in "WP554", the Ace Inhibitor Pathway. We will use its WPID (WP554) in subsequent queries.  
+
+get information abotu the pathway  
+
+```{r}
+getPathwayInfo(pathway = "WP3937")
+```
+
+Get all the Xrefs contained in the pathway, mapped to a datasource of our choice. For example if we want all the genes listed as Entrez Gene from this pathway.  
+
+```{r}
+getXrefList(pathway = "WP3937", systemCode = "H")
+```
+
+list the genes as ensembl id  
+
+```{r}
+getXrefList(pathway = "WP3937", systemCode = "En")
+```
+
+if we want the metabolites, drugs and other small molecules associated with the pathways, then we'd simply provide the system code of a chemical database, e.g., Ch (HMDB), Ce(ChEBI) or Cs(Chemspider).  
+
+HMDB  
+```{r}
+getXrefList(pathway = "WP3937", systemCode = "Ch")
+```
+
+ChEBI  
+```{r}
+getXrefList(pathway = "WP3937", systemCode = "Ce")
+```
+
+Chemspider  
+```{r}
+getXrefList(pathway = "WP3937", systemCode = "Cs")
+```
+
+
+## Get more information  
+We also provide methods for retrieving pathways as data files and as images. The native file format for WikiPathways is GPML, a custom XML specification. You can retrive this format by   
+```{r}
+gpml <- getPathway(pathway = "WP3937", revision = 0)
+```
+
+
+WikiPathways also provides a monthly data release archived at http://data.wikipathways.org/. The archive includes GPML, GMT and SVG collections by organism and timestamped. There's an R function for grabbing files from the archive.  
+
+```
+downloadPathwayArchive()
+```
+
+This will simply open the archive in your default browser so you can look around (in case you don't know what you are looking for). By default, it opens to the latest collection of GPML files. However, if you provide an organism, then it will downlaod that file to your current working directory or specified **destpath**. For example, here's how you'd get the last GMT file for mouse.  
+
+```{r}
+downloadPathwayArchive(organism = "Mus musculus", format = "gmt")
+```
+
+And if you might want to specify an archive date so that you can easily share and reproduce your script at any time in the future and get the same result. Remember, new pathways are being added to WikiPathways every month and existing pathways are improved continuously!  
+
+```{r}
+downloadPathwayArchive(date = "20171010", organism = "Mus musculus", format = "gmt")
+```
+
+
+# rWikiPathways and BridgeDbR  
+`BridgeDbR` leverages the BridgeDb API to provide a number of functions related to ID mapping and identifiers in general for gene, proteins and metabolites.  
+
+Together, *BridgeDbR* provides convience to the typical *rWikiPathways* user by supplying formal names and codes defined by BridgeDb and used by WikiPathways.  
+
+## Getting started  
+```{r}
+library(BridgeDbR)
+```
+
+Lets first check some of the most basic functions from each package. For example, here's how you check to see which species are currently supported by WikiPathways.  
+
+```{r}
+orgNames <- listOrganisms()
+orgNames
+```
+
+However, some function want the organism code, rather than the full name. Using BridgeDbR's *getOrganismCode* function, we can get those.  
+
+```{r}
+BridgeDbR::getOrganismCode(name = orgNames[1])
+```
+
+## Identifier System Names and Codes  
+Even more obscure are the various datasources providing offical identifiers and how they are named and coded. Fortunately, BridgeDb defines these clearly and simply. And WikiPathways relies on these BridgeDb definitions.  
+
+find system code for Ensembl  
+```{r}
+BridgeDbR::getSystemCode(name = "Ensembl")
+```
+
+```{r}
+BridgeDbR::getSystemCode(name = "Entrez Gene")
+```
+
+
+## How to use BridgeDbR with rWikiPathways  
+Here are some specific combo functions that are useful. Thet let you skip worrying about system codes altogether.  
+
+1. Getting all the pathways containing the HGNC symbols "TNF"  
+
+```{r}
+tnf.pathways <- findPathwayIdsByXref(identifier = "TNF", systemCode = getSystemCode(name = "HGNC"))
+tnf.pathways
+```
+
+2. Getting all the genes from a pathway as Ensembl identifiers  
+
+```{r}
+getXrefList(pathway = "WP3937", systemCode = getSystemCode(name = "Ensembl"))
+```
+
+3. Getting all the metabolites from a pathway as ChEBI  
+
+```{r}
+getXrefList(pathway = "WP3937", systemCode = getSystemCode(name = "HGNC"))
+```
+
+
+## Other Tips  
+And if you ever find yourself with a system code, e.g., from a rWikiPathways return result and you're not sure what it is, then you can use this function  
+
+```{r}
+BridgeDbR::getFullName(syscode = "Ce")
+```
+
+
+# rWikiPathways and RCy3  
+RCy3 leverage the CyREST API to provide a number of functions related to network visualization and analysis.  
+
+```{r}
+library(RCy3)
+```
+
+
+
+# Pathway Analysis  
+This vignette will cover a wide range of analytical and visualization techniques involved in a typical pathway analysis. The Overview section will go into more detail on the particulars, but note that this vignette is designed to be modular and carefully considered. Please do not simply run the entire script and expect to get anything meaningful from the final output.  
+
+required packages  
+```{r, message=FALSE, warning=FALSE}
+library(DOSE)
+library(GO.db)
+library(GSEABase)
+library(org.Hs.eg.db)
+library(clusterProfiler)
+library(tidyverse)
+library(RColorBrewer)
+library(rWikiPathways)
+library(RCy3)
+```
+
+
+test if can connect to Cytoscape  
+```{r}
+cytoscapePing()
+```
+
+
+install add-ons (only for Cytoscape >= 3.7.0)  
+```{r}
+installApp(app = "WikiPathways")
+installApp(app = "CyTargetLinker")
+installApp(app = "stringApp")
+```
+
+
+## Overview  
+In this vignette, we will be performing functional enrichment analysis on a differential gene expression dataset. The dataset compares the expression of transcripts in lung cancer biopses versus normal tissue. Differential expression analysis has already been performed, generating log2foldchange and P-values for each gene. The enrichment analysis will be performed against Gene Ontology, as an introduction to the most common type of enrichment, commonly referred to as GO Analysis. This will serve as the foundation for more advanced enrichment analysis against a pathway database, which is called Pathway Analysis.  
+
+Working with pathways opens up unique analysis and visualization options. We will query WikiPathways for relevant content and import pathway models into Cytoscape. In Cytoscape, we will perform data overlays, add drug interactions and generate high-quality images for publication.  
+
+## Dataset  
+```{r}
+lung.expr <- read.csv(file = system.file("extdata", 
+                                         "data-lung-cancer.csv", 
+                                         package = "rWikiPathways"), 
+                      stringsAsFactors = F)
+
+nrow(lung.expr)
+head(lung.expr)
+```
+
+```{r}
+up.genes <- lung.expr[lung.expr$log2FC > 1 & lung.expr$adj.P.Value < 0.05, 1]
+dn.genes <- lung.expr[lung.expr$log2FC < -1 & lung.expr$adj.P.Value < 0.05, 1]
+
+bkgd.genes <- lung.expr[, 1]
+```
+
+## Enrichment  
+```{r}
+# get the available keytype
+keytypes(org.Hs.eg.db)
+
+up.genes.entrez <- mapIds(x = org.Hs.eg.db, 
+                          keys = up.genes, 
+                          keytype = "ENSEMBL", 
+                          column = "ENTREZID") %>% 
+    data.frame(ensembl = names(.), entrez = .) %>%  
+    as_tibble() 
+
+up.genes.entrez %>% head()
+```
+
+```{r}
+dn.genes.entrez <- mapIds(
+    x = org.Hs.eg.db, 
+    keys = dn.genes, 
+    keytype = "ENSEMBL", 
+    column = "ENTREZID"
+) %>% 
+    data.frame(ensembl = names(.), entrez = .) %>% 
+    as_tibble()
+
+dn.genes.entrez %>% head()
+```
+
+```{r}
+bkgd.genes.entrez <- mapIds(
+    x = org.Hs.eg.db, 
+    keys = bkgd.genes, 
+    keytype = "ENSEMBL", 
+    column = "ENTREZID"
+) %>% 
+    data.frame(ensembl = names(.), entrez = .) %>% 
+    as_tibble()
+
+bkgd.genes.entrez %>% head()
+```
+
+
+### Gene Ontology  
+```{r}
+egobp <- clusterProfiler::enrichGO(
+    gene = up.genes.entrez[[2]], 
+    universe = bkgd.genes.entrez[[2]], 
+    OrgDb = org.Hs.eg.db, 
+    ont = "BP", 
+    pAdjustMethod = "fdr", 
+    pvalueCutoff = 0.05, 
+    readable = T
+)
+
+egobp %>% class()
+egobp %>% head()
+```
+
+```{r}
+egobp %>% as.data.frame() %>% 
+    arrange(p.adjust) %>% 
+    head(n = 20) %>% 
+    ggplot(aes(x = Count, y = reorder(Description, -p.adjust), fill = -p.adjust)) +
+    geom_bar(stat = "identity") +
+    scale_fill_gradient(low = "blue", high = "red") +
+    scale_x_continuous(name = NULL) +
+    scale_y_discrete(name = NULL)
+```
+
+
+```{r}
+barplot(egobp, showCategory = 20)
+dotplot(egobp, showCategory = 20)
+emapplot(egobp, showCategory = 20)
+goplot(egobp)
+```
+
+
+### WikiPathways  
+The clusterProfiler package doesn’t include built-in support for WikiPathways (yet), but it does support the GMT standard file format and so does WikiPathways! It just takes a few commands to prepare WikiPathways data for clusterProfiler’s enricher function, which is the generic analog of enrichGO.  
+
+The first step is to retreive the latest GMT file listing all the genes in each of the human pathways. WikiPathways releases a GMT file per species every month and archives them for reproducible research.   
+
+```{r}
+wp.hs.gmt <- rWikiPathways::downloadPathwayArchive(organism = "Homo sapiens", 
+                                                   format = "gmt")
+```
+
+```{r}
+wp2gene <- clusterProfiler::read.gmt(gmtfile = wp.hs.gmt)
+wp2gene <- wp2gene %>% tidyr::separate(col = term, into = c("name", "version", "wpid", "org"), sep = "%")
+wpid2gene <- wp2gene %>% dplyr::select(wpid, gene)
+wpid2name <- wp2gene %>% dplyr::select(wpid, name)
+wpid2gene
+wpid2name
+```
+
+
+```{r}
+ewp.up <- clusterProfiler::enricher(gene = up.genes.entrez[[2]], 
+                                    pvalueCutoff = 0.1, 
+                                    universe = bkgd.genes.entrez[[2]], 
+                                    pAdjustMethod = "fdr", 
+                                    TERM2GENE = wpid2gene, 
+                                    TERM2NAME = wpid2name)
+
+ewp.up %>% head()
+```
+
+add symbol id to the result  
+
+```{r}
+ewp.up <- DOSE::setReadable(x = ewp.up, OrgDb = org.Hs.eg.db, keyType = "ENTREZID")
+head(ewp.up)
+```
+
+```{r}
+barplot(ewp.up, showCategory = 20)
+dotplot(ewp.up, showCategory = 20)
+emapplot(ewp.up, showCategory = 20)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
