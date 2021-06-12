@@ -1,0 +1,208 @@
+---
+title: "KEGGgraph"
+author: "yincy"
+date: "9/15/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Abstract   
+`KEGGgraph` maintains the pathway topology and allows further analysis or dissection of pathway graphs. It parses the regularly updated KGML (KEGG XML) files into graph models maintaining all essential pathway attributes.  
+
+
+# Introduction  
+Pathways are stored and presented as graphs on the KEGG server side, where nodes are molecules (protein, compound, etc) and edges represent relation types between the nodes, e.g. activation or phposphorylation. The package requires KGML (KEGG XML) files, which can be downloaded from KEGG FTP site (ftp://ftp.genome.jp/pub/kegg/xml) without license permission for academic purposes.  
+
+
+# Software features  
+`KEGGgraph` offers the following functionalities:  
+
+- *Parsing*: It should be noted that, one 'node' in KEGG pathway does not nessensarily map to merely one gene product, for example the node 'ERK' in the human TGF-Beta signaling pathway contains two homologous, MAPK1 and MAPK3. Therefore, among serveral parsing options, user can set whether to expand these nodes topologically. Beyond facilitating the interpretation of pathways in a gene-oriented manner, the approach also entitles unique identifiers to nodes, enabling merging graphs from different pathways.  
+
+- *Graph operations*: Two common operations on graphs are subset and merge. A sub-graph of selected nodes and the edges in between are returned when subsetting, while merging produces a new graph that contains nodes and edges of individual ones. Both are implemented in `KEGGgraph`.  
+
+- *Visualization*: `KEGGgraph` provides functions to visualize KEGG graphs with custom style. Nervertheless users are not restricted by them, alternatively they are free to render the graph with other tools like the one `Rgraphvis`.  
+
+Besides the functionalities described above, `KEGGgraph` also has tools fro remote KGML file retrieval, graph feature study and other related tasks.   
+
+
+# Case studies  
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+library(KEGGgraph)
+library(KEGG.db)
+library(magrittr)
+```
+
+
+## Get KGML files  
+There are at least two possibilities to get KGML (KEGG XML) files:  
+
+- manual download from KEGG FTP site at ftp://ftp.genome.jp/pub/kegg/xml/.
+
+- Automatic retrieval from KEGG FP site with function `retrieveKGML`.  
+
+To retrieve KGML file automatically from KEGG FTP site, one has to known the pathway identifier (in the form [a-z]3[0-9]5, where the three-alphabet code represent the organism and the five digits represent pathway). One method to find the mapping between pathway name and identifier is use `KEGGPATHNAME2ID` environment in *KEGG.db*. For example, the following codes retrieve p53 signaling pathway of *C.elegans* from KEGG FTP site.  
+
+```{r}
+pName <- "p53 signaling pathway"
+pID <- mget(x = pName, envir = KEGGPATHNAME2ID)[[1]]
+retrieveKGML(pathwayid = pID, organism = "cel", destfile = tempfile(), method = "wget")
+```
+
+Note: `retriveKGML` uses a *try-download* mechanism (since the `KEGGgraph` version 1.1.2) to retrieve the KGML file from different subdirectories depending on whether they record metabolic or non-metabolic pathways. Since from the KEGG pathway accession ID alone it is not possible to determine its content, the `retrieceKGML` first tries to download the file from the non-metabolic subdirectory and tries the metabolic directory in case no file is found in the non-metabolic category (the try step). In case the corresponding file is found, it is downloaded. Even if the file is found in the first try round, it is still needs to be downloaded in the `download` step. However, this does not actually need to the network overhand, since thanks to the common cache system the file is only downloaded once.  
+
+
+## Parsing and graph feature query  
+```{r}
+mapkKGML <- system.file("extdata/hsa04010.xml", 
+                        package = "KEGGgraph")
+
+```
+
+Once the file is ready, we can either parse them into an object of KEGGPathway or an object of graph. KEGGPathway object maintains the information of the pathway (title, link, organism, etc), while graph objects are more natural approach and can be directly plugged in many other tools.  
+
+```{r}
+mapKG <- parseKGML2Graph(file = mapkKGML, expandGenes = T)
+mapKG
+```
+
+
+```{r}
+mapkpathway <- parseKGML(file = mapkKGML)
+mapkpathway
+```
+
+```{r}
+mapkG2 <- KEGGpathway2Graph(pathway = mapkpathway, expandGenes = T)
+mapkG2
+```
+
+There is no difference between graph objects derived from two approaches.  
+
+**extract node and edge information**  
+```{r}
+mapkNodes <- nodes(object = mapKG)
+mapkNodes %>% class()
+mapkNodes %>% length()
+mapkNodes[1:10]
+```
+
+
+```{r}
+mapkEdges <- edges(object = mapKG)
+mapkEdges %>% class()
+mapkEdges %>% length()
+mapkEdges[1]
+```
+
+Edges in KEGG pathways are directional.  
+
+When listing edges, a list indexed with node names is returned. Each item in the list records the nodes pointed to.  
+
+
+**extract node attributes**  
+
+```{r}
+mapkGnodedata <- getKEGGnodeData(graph = mapKG)
+
+mapkGnodedata %>% class()
+mapkGnodedata %>% length()
+mapkGnodedata[1]
+```
+
+```{r}
+getKEGGnodeData(graph = mapKG, n = "hsa:5923")
+```
+
+
+```{r}
+mapkGedgedata <- getKEGGedgeData(graph = mapKG)
+
+mapkGedgedata %>% class()
+mapkGedgedata %>% length()
+mapkGedgedata[1]
+```
+
+```{r}
+getKEGGedgeData(graph = mapKG, n = "hsa:5923~hsa:22800")
+```
+
+
+For KEGGNode and KEGGedge objects, methods are implemented of fetch their attributes, for example `getName`, `getType` and `getDisplayName`.   
+
+**get in and out degreees of nodes**  
+
+```{r}
+mapkGoutdegrees <- sapply(edges(mapKG), length)
+mapkGindegrees <- sapply(inEdges(mapKG), length)
+
+topouts <- sort(mapkGoutdegrees, decreasing = T)
+topins <- sort(mapkGindegrees, decreasing = T)
+
+topouts[1:5]
+topins[1:5]
+```
+
+
+## Graph subset and merge  
+```{r}
+library(Rgraphviz)
+set.seed(123)
+```
+
+
+```{r}
+randomNodes <- sample(nodes(mapKG), size = 25)
+mapkGsub <- subGraph(snodes = randomNodes, graph = mapKG)
+mapkGsub
+```
+
+```{r}
+mapKG %>% class()
+methods(class = "graphNEL")
+```
+
+
+```{r}
+wntKGML <- system.file("extdata/hsa04310.xml", package = "KEGGgraph")
+wntG <- parseKGML2Graph(wntKGML)
+
+graphs <- list(mapk = mapKG, wnt = wntG)
+merged <- mergeGraphs(list = graphs)
+merged
+
+plot(merged)
+```
+
+
+## Using other graph tools  
+```{r}
+library(RBGL)
+
+bcc <- brandes.betweenness.centrality(g = mapKG)
+rbccs <- bcc$relative.betweenness.centrality.vertices[1, ]
+toprbccs <- sort(rbccs, decreasing = T)[1:4]
+toprbccs
+```
+
+
+# Application Examples  
+## Parse created or edited pathway  
+```{r}
+library(KEGGgraph)
+
+toyKGML <- system.file("extdata/kgml-ed-toy.xml", 
+                       package = "KEGGgraph")
+
+toyGraph <- parseKGML2Graph(file = toyKGML, genesOnly = F)
+toyGraph
+
+nodes(toyGraph)
+```
+
+
+
+
