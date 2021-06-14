@@ -1,0 +1,121 @@
+---
+title: "scHOT"
+author: "yincy"
+date: "8/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(SingleCellExperiment)
+library(ggplot2)
+library(scHOT)
+library(scater)
+library(matrixStats)
+library(magrittr)
+```
+
+
+
+## Tesing variability changes along liver trajectory  
+```{r}
+data(liver)
+liver %>% class()
+lapply(liver, class)
+```
+
+```{r}
+liver_pseudotime_hep <- liver$liver_pseudotime_hep
+liver_branch_hep <- liver$liver_branch_hep
+first_branch_cells <- liver$first_branch_cells
+
+gene_to_test <- as.matrix(x = c("Birc5", "H2afz", "Tacc3"))
+```
+
+
+## Build the `scHOT` object  
+First we build the `scHOT` object, which is based on the `SingleCellExperiment` object class. scHOT objects can be built either from a matrix format or from an existing `SingleCellExperiment` object. In this case, we have matrix data so we build the `scHOT` object using `scHOT_buildFromMatrix`. Since the liver data represents a trajectory, we set the `positionType` as `trajectory`, and provide the column name of the cell metadata (argument `cellData`) for which the cells should be ordered.  
+
+```{r}
+scHOT_traj <- scHOT_buildFromMatrix(
+    mat = liver_branch_hep[, first_branch_cells], 
+    cellData = list(pseudotime = liver_pseudotime_hep[first_branch_cells]), 
+    positionType = "trajectory", 
+    positionColData = "pseudotime"
+)
+
+scHOT_traj
+```
+
+`scHOT_traj` is a `scHOT` object, but mehtods associated with `SingleCellExperiment` can also be used. For example, we use the `scater` package to plot the expression of the hepatoblast marker `Sall4` along pseudotime, and note that this decreases as pseudotime increases.  
+
+```{r}
+scater::plotExpression(object = scHOT_traj, 
+                       features = "Sall4", 
+                       exprs_values = "expression", 
+                       x = "pseudotime")
+```
+
+
+## scHOT wrapper function  
+Now using the `scHOT` wrapper function, we can perform higher order testing on the selected genes, provided as a one-column matrix. To do this, we also need to set underlying higher order function, which in this case we use weighted variance as implemented in the `matrixStats` package. For basic implementation, no other parameters need to be specified (for speed, we set `numberPermutations` to a small value).  
+
+```{r}
+scHOT_traj_wrap <- scHOT(scHOT = scHOT_traj, 
+                         testingScaffold = gene_to_test, 
+                         higherOrderFunction = matrixStats::weightedVar, 
+                         higherOrderFunctionType = "weighted", 
+                         numberPermutations = 50)
+```
+
+Output is saved as a `DataFrame` in the `scHOT_output` slot, accessible either using the `slot` function, or using the `@` accessor. In particular, we can interrogate the higher order sequence, the sequence of locally weighted variances along the trajectory. We can see from the plot that each of these genes increases in variability along pseudotime. Note that the plots are based on `ggplot2` and so can be customised as desired.  
+
+```{r}
+slotNames(scHOT_traj_wrap)
+slot(scHOT_traj_wrap, "scHOT_output") %>% .[, "higherOrderSequence"]
+```
+
+```{r, warning=FALSE, message=FALSE}
+plotHigherOrderSequence(scHOT = scHOT_traj_wrap, gene = gene_to_test)
+```
+
+```{r, message=FALSE, warning=FALSE}
+plotOrderedExpression(scHOT = scHOT_traj_wrap, genes = gene_to_test) +
+    facet_wrap(~gene, 
+               scales = "free_y")
+```
+
+
+## scHOT step-by-step  
+Now, we can perform the same testing but step-by-step, with description of the parameter selection at each step.  
+
+First, we add the testing scafflod. This is the set of genes for which we wich to perform higher order testing.  
+
+```{r}
+scHOT_traj@testingScaffold
+
+scHOT_traj <- scHOT_addTestingScaffold(scHOT = scHOT_traj, testingScaffold = gene_to_test)
+scHOT_traj@testingScaffold
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
