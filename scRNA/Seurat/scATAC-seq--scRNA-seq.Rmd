@@ -1,0 +1,270 @@
+---
+title: "scATAC-seq--scRNA-seq"
+author: "yincy"
+date: "2/28/2020"
+output: 
+    html_document: 
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_section: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Goal of this vignette  
+
+- Classify cells measured with scATAC-seq based on clustering results from scRNA-seq  
+- Co-embed scATAC-seq and scRNA-seq data  
+
+
+The integration procedure consists of the following steps:  
+
+- Estimate RNA-seq levels from ATAC-seq (quantify gene expression 'activity' from ATAC-seq reads)  
+
+- Learn the internal structure of the ATAC-seq data on its own (accomplished using LSI)  
+
+- Identify 'anchors' between the ATAC-seq and RNA-seq datasets  
+
+- Transfer data between datasets (either transfer labels for classification, or impute RNA levels in the ATAC-seq data to enable co-embedding).  
+
+
+## Gene activity quantification  
+First, we load in the provided peak matrix and collapse the peak matrix to a “gene activity matrix”. Here, we make the simplifying assumption that a gene’s activity can be quantified by simply summing all counts within the gene body + 2kb upstream but our method is compatible with any method that returns a gene by cell matrix.  
+
+```{r, message=FALSE}
+library(Seurat)
+library(ggplot2)
+library(magrittr)
+```
+
+```{r}
+peaks <- Read10X_h5(filename = "/home/yincy/git/Data/Seurat/scATAC--scRNA-seq/atac_v1_pbmc_10k_filtered_peak_bc_matrix.h5")
+
+# Create a gene activity matrix from the peak matrix and GTF, using chromosome 1:22, X, and Y.
+# Peaks that fall within gene bodies, or 2kb upstream of a gene, are considered 
+activity_matrix <- CreateGeneActivityMatrix(
+    peak.matrix = peaks, 
+    annotation.file = "/home/yincy/git/Data/genome/human/ENCODE/gencode.v32.chr_patch_hapl_scaff.annotation.gtf.gz", 
+    seq.levels = paste("chr", c(1:22, "X", "Y"), sep = ""), 
+    upstream = 2000, 
+    verbose = T
+)
+```
+
+
+## Object setup  
+Next, we'll setup the `Seurat` object and store both the original peak counts in the "ATAC" `Assay` and the gene activity matrix in the "RNA" `Assay`. As a QC step, we also filter out all cells here with fewer than 5K total counts in the scATAC-seq data, through you may need to modify this threshold for your experiment.  
+```{r}
+pbmc.atac <- CreateSeuratObject(
+    counts = peaks, 
+    assay = "ATAC", 
+    project = "10X_ATAC"
+)
+
+# add activity data
+pbmc.atac[["ACTIVITY"]] <- CreateAssayObject(counts = activity_matrix)
+
+# cell metadata
+meta <- read.table(file = "/home/yincy/git/Data/Seurat/scATAC--scRNA-seq/atac_v1_pbmc_10k_singlecell.csv",
+                   sep = ",", 
+                   header = TRUE, 
+                   row.names = 1, 
+                   stringsAsFactors = F)
+
+meta <- meta[colnames(pbmc.atac), ]
+pbmc.atac <- AddMetaData(object = pbmc.atac, metadata = meta)
+
+# keep cells with counts more than 5000
+pbmc.atac <- subset(pbmc.atac, subset = nCount_ATAC > 5000)
+pbmc.atac$tech <- "atac"
+```
+
+
+## Data preprocessing  
+Here, we process the gene activity matrix in order to find anchors between cells in the scATAC-seq dataset and the scRNA-seq dataset.  
+```{r}
+DefaultAssay(object = pbmc.atac) <- "ACTIVITY"
+pbmc.atac <- FindVariableFeatures(pbmc.atac)
+pbmc.atac <- NormalizeData(object = pbmc.atac)
+```
+
+We also process the peak matrix. Here we perform latent semantic indexing to reduce the dimensionality of the scATAC-seq data. This procedure learns an ‘internal’ structure for the scRNA-seq data, and is important when determining the appropriate weights for the anchors when transferring information.   
+
+We utilize Latent Semantic Indexing (LSI) to learn the structure of ATAC-seq data, as proposed in [Cusanovich et al, Science 2015](https://science.sciencemag.org/content/348/6237/910/tab-pdf) and implemented in the `RunLSI` function. LSI is implemented here by performing computing the term frequency-inverse document frequency (TF-IDF) followed by SVD.  
+
+```{r}
+DefaultAssay(object = pbmc.atac) <- "ATAC"
+VariableFeatures(object = pbmc.atac) <- names(which(Matrix::rowSums(pbmc.atac) > 100))
+pbmc.atac <- RunLSI(object = pbmc.atac, n = 50, scale.max = NULL)
+pbmc.atac <- RunUMAP(object = pbmc.atac, reduction = "lsi", dims = 1:50)
+```
+
+read in processed scRNA-seq data  
+```{r}
+pbmc.rna <- readRDS(file = "/home/yincy/git/Data/Seurat/scATAC--scRNA-seq/pbmc_10k_v3.rds")
+pbmc.rna$tech <- "rna"
+```
+
+
+```{r}
+p1 <- DimPlot(object = pbmc.atac, reduction = "umap") + NoLegend() + ggtitle("scATAC-seq")
+p2 <- DimPlot(object = pbmc.rna, label = TRUE, repel = TRUE, group.by = "celltype") + NoLegend() + ggtitle("scRNA-seq")
+p1 + p2
+```
+
+Now, we can identify anchors between the scATAC-seq dataset and the scRNA-seq dataset and use these anchors to transfer the celltype labels we learned from the 10K scRNA-seq data to the scATAC-seq cells.  
+```{r}
+transfer_anchors <- FindTransferAnchors(
+    reference = pbmc.rna, 
+    query = pbmc.atac, 
+    features = VariableFeatures(object = pbmc.rna), 
+    reference.assay = 'RNA', 
+    query.assay = "ACTIVITY", 
+    reduction = "cca"
+)
+```
+
+To transfer the cluster ids, we provide a vector of previously annotated cell type labels for the RNA to the refdata parameter. The output will contain a matrix with predictions and confidence scores for each ATAC-seq cell.  
+```{r}
+celltype.predictions <- TransferData(anchorset = transfer_anchors, 
+                                     refdata = pbmc.rna$celltype, 
+                                     weight.reduction = pbmc.atac[["lsi"]])
+
+pbmc.atac <- AddMetaData(object = pbmc.atac, 
+                         metadata = celltype.predictions)
+```
+
+In `FindTransferAnchors`, we typically project the PCA structure from the reference onto the query when transferring between scRNA-seq datasets. However, when transferring across modalities we find that CCA better captures the shared feature correlation structure and therefore set `reduction = 'cca'` here. Additionally, by default in `TransferData` we use the same projected PCA structure to compute the weights of the local neighborhood of anchors that influence each cell’s prediction. In the case of scRNA-seq to scATA-seq transfer, we use the low dimensional space learned by computing an LSI on the ATAC-seq data to compute these weights as this better captures the “internal” structure of the ATAC-seq data.  
+
+We can then examine the distribution of prediction scores and optionally filter out those cells with low scores. Here, we find that over 95% of the cells receive a score of 0.5 or greater.  
+
+```{r}
+celltype.predictions %>% 
+    .[, -1] %>% 
+    apply(1, max) %>% 
+    hist(breaks = 20, col = "orange", main = "Cell Type prediction score distribution", probability = F)
+abline(v = celltype.predictions %>% 
+           .[, -1] %>% 
+           apply(1, max) %>% 
+           quantile(), 
+       col = "red", lty = 2, lwd = 2)
+abline(v = 0.5, col = "black", lty = 2, lwd = 2)
+```
+
+
+```{r}
+table(celltype.predictions %>% .[, -1] %>% apply(1, max) > 0.5)
+```
+
+```{r}
+pbmc.atac.filtered <- subset(pbmc.atac, subset = prediction.score.max > 0.5)
+pbmc.atac.filtered$predicted.id <- factor(pbmc.atac.filtered$predicted.id, levels = levels(pbmc.rna))
+# to make the color match
+
+p1 <- DimPlot(pbmc.atac.filtered, group.by = "predicted.id", 
+              label = T, 
+              repel = T) +
+    ggtitle("scATAC-seq cells") +
+    NoLegend() +
+    scale_colour_hue(drop = T)
+
+p2 <- DimPlot(pbmc.rna, group.by = "celltype", 
+              label = T, 
+              repel = T) +
+    ggtitle("scRNA-seq cells") + 
+    NoLegend()
+
+p1 + p2
+```
+
+After transferring cell type labels, you can then perform downstream analyses on a cell type specific level. For example, you could find sets of enhancers that are specific for certain cell types and look for motif enrichment. While not all of these types of downstream analyses are directly supported in Seurat, stay tuned for updates in this space.  
+
+
+## Co-embedding  
+Finally, to visualize all the cells together, we can co-embed the scRNA-seq and scATAC-seq cells in the same low dimensional space. Here, we use the same anchors used earlier to transfer cell type labels to impute RNA-seq values for the scATAC-seq cells. We then merge the measured and imputed scRNA-seq data and run a standard UMAP analysis to visualize all the cells together. Note that this step is for visualization purposes only and is not a necessary part of the data transfer analysis. 
+
+```{r}
+# note that we restrict the imputation to variable genes from scRNA-seq, but could impute the
+# full transcriptome if we wanted to
+genes.use <- VariableFeatures(pbmc.rna)
+refdata <- GetAssayData(pbmc.rna, assay = "RNA", slot = "data")[genes.use, ]
+
+# refdata (input) contains a scRNA-seq expression matrix for the scRNA-seq cells.  imputation
+# (output) will contain an imputed scRNA-seq matrix for each of the ATAC cells
+imputation <- TransferData(anchorset = transfer_anchors, refdata = refdata, weight.reduction = pbmc.atac[["lsi"]])
+
+# this line adds the imputed data matrix to the pbmc.atac object
+pbmc.atac[["RNA"]] <- imputation
+coembed <- merge(x = pbmc.rna, y = pbmc.atac)
+
+# Finally, we run PCA and UMAP on this combined object, to visualize the co-embedding of both
+# datasets
+coembed <- ScaleData(coembed, features = genes.use, do.scale = FALSE)
+coembed <- RunPCA(coembed, features = genes.use, verbose = FALSE)
+coembed <- RunUMAP(coembed, dims = 1:30)
+coembed$celltype <- ifelse(!is.na(coembed$celltype), coembed$celltype, coembed$predicted.id)
+```
+
+Here we plot all cells colored by either their assigned cell type (from the 10K dataset) or their predicted cell type from the data transfer procedure.  
+```{r}
+p1 <- DimPlot(coembed, group.by = "tech")
+p2 <- DimPlot(coembed, group.by = "celltype", label = TRUE, repel = TRUE)
+p1 + p2
+```
+
+Upon inspection of the UMAP embeddings, there appeared several groups of cells that appeared to be present only in a single assay. First, the platelet cells appeared only in the scRNA-seq data. These cells are thought to be undergoing biogenesis from megakaryocytes to platelets and therefore either completely lack nuclear material or their chromatin state is uncoupled from their transcriptome. As a result, we would not expect these to align in this analysis.  
+```{r}
+DimPlot(coembed, split.by = "tech", group.by = "celltype", label = T, repel = T) + NoLegend()
+```
+
+Additionally, there appeared to be a population next to the B cell progenitors that is composed entirely of scATAC-seq cells and is not integrated well with the scRNA-seq cells. Further examination of the metadata for these cells revealed a high number of reads mapping to blacklisted regions (as provided by the 10x Genomics QC metrics). This suggests that these barcodes could represent dead or dying cells, ambient DNA, or another technical artifact not represented in the scRNA-seq dataset.  
+```{r}
+coembed$blacklist_region_fragments[is.na(coembed$blacklist_region_fragments)] <- 0
+FeaturePlot(coembed, features = "blacklist_region_fragments", max.cutoff = 500)
+```
+
+There are several lines of evidence here that give us confidence in this analysis.  
+
+-1. Overall, the prediction scores are high which suggest a high degree of confidence in our cell type assignments.  
+-2. We observe good agreement between the scATAC-seq only dimensional reduction (UMAP plot above) and the transferred labels.  
+-3. The co-embedding based on the same set of anchors gives good mixing between the two modalities.  
+-4. When we collapse the ATAC-seq reads on a per-cluster basis into “pseudo bulk” profiles, we observe good concordance with the chromatin patterns observed in bulk data[Supplementary Figure S3](https://doi.org/10.1016/j.cell.2019.05.031).  
+
+Additionally, we have performed a similar analysis, transferring cell type labels from scRNA-seq to scATAC-seq data in the context of the mouse brain and have observed good performance based on similar reasoning to the points above ( [Figure 3](https://doi.org/10.1016/j.cell.2019.05.031)). These analyses make the assumption that there is generally a positive correlation between chromatin accessibility and gene expression. In cases such as developing systems, where accessibility may not be a good indicator of transcription, the method demonstrated here may not be able to form good anchors and the resulting integration across these specific modalities may be of limited value.  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
