@@ -1,0 +1,277 @@
+---
+title: "15 Droplet-processing"
+author: "yincy"
+date: "6/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Motivation
+Droplet-based single-cell protocols aim to isolate each cell inside its own droplet in a water-in-oil emulsion, such that each droplet serves as a miniature reaction chamber for highly multiplexed library preparation (Macosko et al. 2015; Klein et al. 2015). Upon sequencing, reads are assigned to individual cells based on the presence of droplet-specific barcodes. This enables a massive increase in the number of cells that can be processed in typical scRNA-seq experiments, contributing to the dominance3 of technologies such as the 10X Genomics platform (Zheng et al. 2017). However, as the allocation of cells to droplets is not known in advance, the data analysis requires some special steps to determine what each droplet actually contains. This chapter explores some of the more common preprocessing procedures that might be applied to the count matrices generated from droplet protocols.  
+
+## Calling cells from empty droplets
+### Background
+An unique aspect of droplet-based data is that we have no prior knowledge about whether a particular library (i.e., cell barcode) corresponds to cell-containing or empty droplets. Thus, we need to call cells from empty droplets based on the observed expression profiles. This is not entirely straightforward as empty droplets can contain ambient (i.e., extracellular) RNA that can be captured and sequenced, resulting in non-zero counts for libraries that do not contain any cell. To demonstrate, we obtain the unfiltered count matrix for the PBMC dataset from 10X Genomics.  
+
+```{r}
+library(DropletTestFiles)
+raw.path <- getTestFile(path = "tenx-2.1.0-pbmc4k/1.0.0/raw.tar.gz")
+out.path <- file.path("/home/yincy/git/Data/Bioconductor/TENxPBMCData/", "pbmc4k")
+untar(raw.path, exdir = out.path)
+
+library(DropletUtils)
+fname <- file.path(out.path, "raw_gene_bc_matrices/GRCh38")
+sce.pbmc <- read10xCounts(fname, col.names = T)
+```
+
+The distribution of total counts exhibits a sharp transition between barcodes with large and small total counts, probably corresponding to cell-containing and empty droplets respectively. A simple approach would be to apply a threshold on the total count to only retain those barcodes with large totals. However, this unnecessarily discards libraries derived from cell types with low RNA content.  
+
+```{r, message=FALSE, warning=FALSE}
+bcrank <- barcodeRanks(counts(sce.pbmc))
+
+# only showing unique points for plotting speed
+uniq <- !duplicated(bcrank$rank)
+plot(bcrank$rank[uniq], 
+     bcrank$total[uniq], 
+     log = "xy", 
+     xlab = "Rank", 
+     ylab = "Total UMI count", 
+     cex.lab = 1.2)
+
+abline(h = metadata(bcrank)$inflection, col = "darkgreen", lty = 2)
+abline(h = metadata(bcrank)$knee, col = "dodgerblue", lty = 2)
+
+legend("bottomleft", 
+       legend = c("Inflection", "Knee"), 
+       col = c("darkgreen", "dodgerblue"), 
+       lty = 2, 
+       cex = 1.2)
+```
+
+### Testing for empty droplets
+We use the `emptyDrops()` function to test whether the expression profile for each cell barcode is significantly different from the ambient RNA pool (Lun et al. 2019). Any significant deviation indicates that the barcode corresponds to a cell-containing droplet. This allows us to discriminate between well-sequenced empty droplets and droplets derived from cells with little RNA, both of which would have similar total counts in Figure 15.1. We call cells at a false discovery rate (FDR) of 0.1%, meaning that no more than 0.1% of our called barcodes should be empty droplets on average.  
+
+```{r}
+# emptyDrops performs Monte Carlo simulations to compute p-values, so we need to set the seed to obtain reproducible results.  
+
+set.seed(100)
+e.out <- emptyDrops(counts(sce.pbmc))
+
+# See `?emptyDrops` for an explanation of why there are NA values
+summary(e.out$FDR <= 0.001)
+```
+
+`emptyDrops()` uses Monte Carlo simulations to compute p-values for the multinomial sampling transcripts from the ambient pool. The number of Monte Carlo iterations determines the lower bound for the p-values (Phipson and Smyth 2010). The `Limited` field in the output indicates whether or not the computed p-value for a particular barcode is bounded by the number of iterations. **If any non-significant barcodes are `TRUE` for `Limited`, we may need to increase the number of iterations**. A larger number of iterations will result in a lower p-value for these barcodes, which may allow them to be detected after correcting for multiple testing.  
+
+```{r}
+table(Sig = e.out$FDR <= 0.001, Limited = e.out$Limited)
+```
+
+As mentioned above, `emptyDrops()` assumes that barcodes with low total UMI counts are empty droplets. Thus, the null hypothesis should be true for all of these barcodes. We can check whether the hypothesis testing procedure holds its size by examining the distribution of p-values for low-total barcodes with `test.ambient=TRUE`. **Ideally, the distribution should be close to uniform. Large peaks near zero indicate that barcodes with total counts below lower are not all ambient in origin**. This can be resolved by decreasing `lower` further to ensure that barcodes corresponding to droplets with very small cells are not used to estimate the ambient profile.
+
+```{r}
+set.seed(100)
+
+limit <- 100
+all.out <- emptyDrops(counts(sce.pbmc), 
+                      lower = limit, 
+                      test.ambient = TRUE)
+
+hist(all.out$PValue[all.out$Total <= limit & all.out$Total > 0], 
+     xlab = "P-value", 
+     main = "", 
+     col = "grey80")
+```
+
+Once we are satisfied with the performance of `emptyDrops()`, we subset our `SingleCellExperiment` object to retain only the detected cells. Discerning readers will notice the use of `which()`, which conveniently removes the `NA`s prior to the subsetting.  
+
+```{r}
+sce.pbmc <- sce.pbmc[, which(e.out$FDR <= 0.001)]
+```
+
+It usually only makes sense to call cells using a count matrix involving libraries from a single sample. The composition of transcripts in the ambient solution will usually between samples, so the same ambient profile cannot be reused. If multiple samples are present in a dataset, their counts should only be combined after cell calling is performed on each matrix.  
+
+### Relationship with other QC metrics
+While `emptyDrops()` will distinguish cells from empty droplets, it makes no statement about the quality of the cells. It is entirely possible for droplets to contain damaged or dying cells, which need to be removed prior to downstream analysis. This is achieved using the same outlier-based strategy described in Section 6.3.2. Filtering on the mitochondrial proportion provides the most additional benefit in this situation, provided that we check that we are not removing a subpopulation of metabolically active cells.  
+
+```{r}
+library(scater)
+
+is.mito <- grepl("^MT-", rowData(sce.pbmc)$Symbol)
+pbmc.qc <- perCellQCMetrics(sce.pbmc, subsets = list(Mito = is.mito))
+discard.mito <- isOutlier(pbmc.qc$subsets_Mito_percent, type = "higher")
+
+summary(discard.mito)
+```
+
+```{r}
+plot(pbmc.qc$sum, 
+     pbmc.qc$subsets_Mito_percent, 
+     log = "x", 
+     xlab = "Total count", 
+     ylab = "Mitochondrial %", 
+     pch = 19, 
+     cex = 0.5)
+abline(h = attr(discard.mito, "thresholds")["higher"], col = "red", lty = 2)
+```
+
+`emptyDrops()` already removes cells with very low library sizes or (by association) low numbers of expressed genes. Thus, further filtering on these metrics is not strictly necessary. It may still be desirable to filter on both of these metrics to remove non-empty droplets containing cell fragments or stripped nuclei that were not caught by the mitochondrial filter. However, this should be weighed against the risk of losing genuine cell types as discussed in Section 6.3.2.2.  
+
+Note that CellRanger version 3 automatically performs cell calling using an algorithm similar to `emptyDrops()`. If we had started our analysis with the **filtered** count matrix, we could go straight to computing other QC metrics. We would not need to run `emptyDrops()` manually as shown here, and indeed, attempting to do so would lead to nonsensical results if not outright software errors. Nonetheless, it may still be desirable to load the **unfiltered** matrix and apply `emptyDrops()` ourselves, on occasions where more detailed inspection or control of the cell-calling statistics is desired.  
+
+## Removing ambient contamination
+For routine analyses, there is usually no need to remove the ambient contamination from each library. A consistent level of contamination across the dataset does not introduce much spurious heterogeneity, so dimensionality reduction and clustering on the original (log-)expression matrix remain valid. For genes that are highly abundant in the ambient solution, we can expect some loss of signal due to shrinkage of the log-fold changes between clusters towards zero, but this effect should be negligible for any genes that are so strongly upregulated that they are able to contribute to the ambient solution in the first place. This suggests that ambient removal can generally be omitted from most analyses, though we will describe it here regardless as it can be useful in specific situations.  
+
+Effective removal of ambient contamination involves tackling a number of issues. We need to know how much contamination is present in each cell, which usually requires some prior biological knowledge about genes that should not be expressed in the dataset (e.g., mitochondrial genes in single-nuclei datasets, see Section 19.4) or genes with mutually exclusive expression profiles (Young and Behjati 2018). Those same genes must be highly abundant in the ambient solution to have enough counts in each cell for precise estimation of the scale of the contamination. The actual subtraction of the ambient contribution also must be done in a manner that respects the mean-variance relationship of the count data. Unfortunately, these issues are difficult to address for single-cell data due to the imprecision of low counts.  
+
+Rather than attempting to remove contamination from individual cells, a more measured approach is to operate on clusters of related cells. The `removeAmbience()` function from *DropletUtils* will remove the contamination from the cluster-level profiles and propagate the effect of those changes back to the individual cells. Specifically, given a count matrix for a single sample and its associated ambient profile, `removeAmbience()` will:  
+
+1. Aggregate counts in each cluster to obtain an average profile per cluster.  
+
+2. Estimate the contamination proportion in each cluster with maximumAmbience() (see Section 14.4). This has the useful property of not requiring any prior knowledge of control or mutually exclusive expression profiles, albeit at the cost of some statistical rigor.  
+
+3. Subtract the estimated contamination from the cluster-level average.  
+
+4. Perform quantile-quantile mapping of each individual cell’s counts from the old average to the new subtracted average. This preserves the mean-variance relationship while yielding corrected single-cell profiles.  
+
+```{r}
+# quality control
+is.mito <- grepl("^MT-", rowData(sce.pbmc)$Symbol)
+sce.pbmc <- addPerCellQCMetrics(sce.pbmc, subsets = list(Mito = is.mito))
+high.mito <- isOutlier(colData(sce.pbmc)$subsets_Mito_percent, type = "higher")
+sce.pbmc <- sce.pbmc[, !high.mito]
+
+# normalization
+library(scran)
+set.seed(1000)
+clusters <- quickCluster(sce.pbmc)
+sce.pbmc <- computeSumFactors(sce.pbmc, clusters = clusters)
+sce.pbmc <- logNormCounts(sce.pbmc)
+
+# variance modelling
+dec.pbmc <- modelGeneVarByPoisson(sce.pbmc)
+hvgs.pbmc <- getTopHVGs(dec.pbmc, prop = 0.1)
+
+# dimensionality reduction
+sce.pbmc <- denoisePCA(sce.pbmc, subset.row = hvgs.pbmc, technical = dec.pbmc)
+
+set.seed(100000)
+sce.pbmc <- runTSNE(sce.pbmc, dimred = "PCA")
+
+set.seed(1000000)
+sce.pbmc <- runUMAP(sce.pbmc, dimred = "PCA")
+
+# clustering
+g <- buildSNNGraph(sce.pbmc, k = 10, use.dimred = "PCA")
+clust <- igraph::cluster_walktrap(g)$membership
+colLabels(sce.pbmc) <- factor(clust)
+```
+
+```{r}
+# not all genes are reported in the ambient profile from emptyDrops, as genes with counts of zero across all droplets are just removed. So for convenience, we will restrict our analysis to gene with non-zero counts in at least one droplet (empty or otherwise).  
+
+amb <- metadata(e.out)$ambient[, 1]
+stripped <- sce.pbmc[names(amb), ]
+
+out <- removeAmbience(counts(stripped), ambient = amb, groups = colLabels(stripped))
+out %>% dim
+```
+
+We can visualize the effects of ambient removal on a gene like IGKC, which presumably should only be expressed in the B cell lineage. This gene has some level of expression in each cluster in the original dataset but is “zeroed” in most clusters after removal.  
+
+```{r}
+library(scater)
+
+counts(stripped, withDimnames = F) <- out
+colData(stripped)
+stripped <- logNormCounts(stripped)
+
+library(patchwork)
+
+plotExpression(sce.pbmc, x = "label",
+               colour_by = "label", 
+               features = "ENSG00000211592") + ggtitle("Before") +
+plotExpression(stripped, 
+               x = "label", 
+               colour_by = "label", 
+               features = "ENSG00000211592") +
+    ggtitle("After")
+```
+
+We observe a similar phenomenon with the LYZ gene (Figure 15.5), which should only be expressed in macrophages and neutrophils. In fact, if we knew this beforehand, we could specify these two mutually exclusive sets - i.e., LYZ and IGKC and their related genes - in the `features=` argument to `removeAmbience()`. This knowledge is subsequently used to estimate the contamination in each cluster, an approach that is more conceptually similar to the methods in the `SoupX` package.  
+
+```{r}
+plotExpression(sce.pbmc, 
+               x = "label", 
+               colour_by = "label", 
+               features = "ENSG00000090382") +
+    ggtitle("Before") +
+plotExpression(stripped, 
+               x = "label", 
+               colour_by = "label",
+               features = "ENSG00000090382") +
+    ggtitle("After")
+```
+
+While these results look impressive, discerning readers will note that the method relies on having sensible clusters. This limits the function’s applicability to the end of an analysis after all the characterization has already been done. As such, the stripped matrix can really only be used in downstream steps like the DE analysis (where it is unlikely to have much effect beyond inflating already-large log-fold changes) or - most importantly - in visualization, where users can improve the aesthetics of their plots by eliminating harmless background expression. Of course, one could repeat the entire analysis on the stripped count matrix to obtain new clusters, but this seems unnecessarily circuituous, especially if the clusters were deemed good enough for use in `removeAmbience()` in the first place.  
+
+Finally, it may be worth considering whether a corrected per-cell count matrix is really necessary. In `removeAmbience()`, counts for each gene are assumed to follow a negative binomial distribution with a fixed dispersion. This is necessary to perform the quantile-quantile remapping to obtain a corrected version of each individual cell’s counts, but violations of these distributional assumptions will introduce inaccuracies in downstream models. Some analyses may have specific remedies to ambient contamination that do not require corrected per-cell counts (Section 14.4), so we can avoid these assumptions altogether if such remedies are available.  
+
+## Demultiplexing cell hashes
+### Background
+Cell hashing (Stoeckius et al. 2018) is a useful technique that allows cells from different samples to be processed in a single run of a droplet-based protocol. Cells from a single sample are first labelled with a unique hashing tag oligo (HTOs), usually via conjugation of the HTO to an antibody against a ubiquitous surface marker or a membrane-binding compound like cholesterol (McGinnis et al. 2019). Cells from different samples are then mixed together and the multiplexed pool is used for droplet-based library preparation; each cell is assigned back to its sample of origin based on its most abundant HTO. By processing multiple samples together, we can avoid batch effects and simplify the logistics of studies with a large number of samples.  
+
+Sequencing of the HTO-derived cDNA library yields a count matrix where each row corresponds to a HTO and each column corresponds to a cell barcode. This can be stored as an alternative Experiment in our `SingleCellExperiment`, alongside the main experiment containing the counts for the actual genes. We demonstrate on some data from the original Stoeckius et al. (2018) study, which contains counts for a mixture of 4 cell lines across 12 samples.  
+
+```{r}
+library(scRNAseq)
+
+hto.sce <- StoeckiusHashingData(type = "mixed")
+# saveRDS(hto.sce, "/home/yincy/git/Data/Bioconductor/scRNAseq/hto.sce.rds")
+```
+
+```{r}
+altExp(hto.sce)
+```
+
+```{r}
+counts(altExp(hto.sce))[, 1:3]
+```
+
+### Cell calling options
+Our first task is to identify the libraries corresponding to cell-containing droplets. This can be applied on the gene count matrix or the HTO count matrix, depending on what information we have available. We start with the usual application of `emptyDrops()` on the gene count matrix of `hto.sce`.  
+
+```{r}
+set.seed(10010)
+e.out.gene <- emptyDrops(counts(hto.sce))
+is.cell <- e.out.gene$FDR <= 0.001
+summary(is.cell)
+```
+
+```{r}
+par(mfrow = c(1, 2))
+r <- rank(-e.out.gene$Total)
+plot(r, e.out.gene$Total, 
+     log = "x", 
+     xlab = "Rank", 
+     ylab = "Total gene count", 
+     main = "", 
+     pch = 19, 
+     cex = 0.5)
+
+abline(h = metadata(e.out.gene)$retain, col = "darkgrey", lwd = 2, lty = 2)
+hist(log10(e.out.gene$Total[is.cell]), xlab = "Log10 gene count", main = "")
+```
+
+
+
+
+
+
+
+
+
+
