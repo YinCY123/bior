@@ -39,7 +39,8 @@ plot(bcrank$rank[uniq],
      log = "xy", 
      xlab = "Rank", 
      ylab = "Total UMI count", 
-     cex.lab = 1.2)
+     cex.lab = 0.8, 
+     pch = 19)
 
 abline(h = metadata(bcrank)$inflection, col = "darkgreen", lty = 2)
 abline(h = metadata(bcrank)$knee, col = "dodgerblue", lty = 2)
@@ -52,7 +53,7 @@ legend("bottomleft",
 ```
 
 ### Testing for empty droplets
-We use the `emptyDrops()` function to test whether the expression profile for each cell barcode is significantly different from the ambient RNA pool (Lun et al. 2019). Any significant deviation indicates that the barcode corresponds to a cell-containing droplet. This allows us to discriminate between well-sequenced empty droplets and droplets derived from cells with little RNA, both of which would have similar total counts in Figure 15.1. We call cells at a false discovery rate (FDR) of 0.1%, meaning that no more than 0.1% of our called barcodes should be empty droplets on average.  
+We use the `emptyDrops()` function to test whether the expression profile for each cell barcode is significantly different from the ambient RNA pool (Lun et al. 2019). Any significant deviation indicates that the barcode corresponds to a cell-containing droplet. This allows us to discriminate between well-sequenced empty droplets and droplets derived from cells with little RNA, both of which would have similar total counts. We call cells at a false discovery rate (FDR) of 0.1%, meaning that no more than 0.1% of our called barcodes should be empty droplets on average.  
 
 ```{r}
 # emptyDrops performs Monte Carlo simulations to compute p-values, so we need to set the seed to obtain reproducible results.  
@@ -64,7 +65,7 @@ e.out <- emptyDrops(counts(sce.pbmc))
 summary(e.out$FDR <= 0.001)
 ```
 
-`emptyDrops()` uses Monte Carlo simulations to compute p-values for the multinomial sampling transcripts from the ambient pool. The number of Monte Carlo iterations determines the lower bound for the p-values (Phipson and Smyth 2010). The `Limited` field in the output indicates whether or not the computed p-value for a particular barcode is bounded by the number of iterations. **If any non-significant barcodes are `TRUE` for `Limited`, we may need to increase the number of iterations**. A larger number of iterations will result in a lower p-value for these barcodes, which may allow them to be detected after correcting for multiple testing.  
+`emptyDrops()` uses Monte Carlo simulations to compute p-values for the multinomial sampling transcripts from the ambient pool. **The number of Monte Carlo iterations determines the lower bound for the p-values (Phipson and Smyth 2010). The `Limited` field in the output indicates whether or not the computed p-value for a particular barcode is bounded by the number of iterations. If any non-significant barcodes are `TRUE` for `Limited`, we may need to increase the number of iterations**. A larger number of iterations will result in a lower p-value for these barcodes, which may allow them to be detected after correcting for multiple testing.  
 
 ```{r}
 table(Sig = e.out$FDR <= 0.001, Limited = e.out$Limited)
