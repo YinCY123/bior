@@ -1,0 +1,136 @@
+---
+title: "16_Doublet-detection"
+author: "yincy"
+date: "6/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+In single-cell RNA sequencing (scRNA-seq) experiments, doublets are artifactual libraries generated from two cells. They typically arise due to errors in cell sorting or capture, especially in droplet-based protocols (Zheng et al. 2017) involving thousands of cells. Doublets are obviously undesirable when the aim is to characterize populations at the single-cell level. In particular, doublets can be mistaken for intermediate populations or transitory states that do not actually exist. Thus, it is desirable to identify and remove doublet libraries so that they do not compromise interpretation of the results.  
+
+Several experimental strategies are available for doublet removal. One approach exploits natural genetic variation when pooling cells from multiple donor individuals (Kang et al. 2018). Doublets can be identified as libraries with allele combinations that do not exist in any single donor. Another approach is to mark a subset of cells (e.g., all cells from one sample) with an antibody conjugated to a different oligonucleotide (Stoeckius et al. 2018). Upon pooling, libraries that are observed to have different oligonucleotides are considered to be doublets and removed. These approaches can be highly effective but rely on experimental information that may not be available.  
+
+A more general approach is to infer doublets from the expression profiles alone (Dahlin et al. 2018). In this workflow, we will describe two purely computational approaches for detecting doublets from scRNA-seq data. The main difference between these two methods is whether or not they need cluster information beforehand. We will demonstrate the use of these methods on 10X Genomics data from a droplet-based scRNA-seq study of the mouse mammary gland (Bach et al. 2017).  
+
+```{r}
+library(scRNAseq)
+sce.man <- BachMammaryData(samples = "G_1")
+
+# gene annotation
+library(scater)
+rownames(sce.man) <- uniquifyFeatureNames(
+    ID = rowData(sce.man)$Ensembl, 
+    names = rowData(sce.man)$Symbol
+)
+
+library(EnsDb.Mmusculus.v79)
+rowData(sce.man)$SEQNAME <- mapIds(EnsDb.Mmusculus.v79, 
+                                   keys = rowData(sce.man)$Ensembl, 
+                                   keytype = "GENEID", 
+                                   column = "SEQNAME")
+
+# quality control
+is.mito <- rowData(sce.man)$SEQNAME == "MT"
+stats <- perCellQCMetrics(sce.man, subsets = list(Mito = which(is.mito)))
+qc <- quickPerCellQC(stats, percent_subsets = "subsets_Mito_percent")
+sce.man <- sce.man[, !qc$discard]
+
+# normalization
+library(scran)
+set.seed(101000110)
+clusters <- quickCluster(sce.man)
+sce.man <- computeSumFactors(sce.man, clusters = clusters)
+sce.man <- logNormCounts(sce.man)
+
+# variance modelling
+set.seed(00010101)
+dec.man <-) modelGeneVarByPoisson(sce.man)
+top.man <- getTopHVGs(dec.man, prop = 0.1)
+
+# dimensionality reduction
+library(BiocSingular)
+set.seed(101010011)
+sce.man <- denoisePCA(sce.man, technical = dec.man, subset.row = top.man)
+sce.man <- runTSNE(sce.man, dimred = "PCA")
+
+# clustering
+snn.gr <- buildSNNGraph(sce.man, use.dimred = "PCA", k = 25)
+colLabels(sce.man) <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+```
+
+## Doublet detection with clusters
+The `findDoubletClusters()` function from the `scDblFinder` package identifies clusters with expression profiles lying between two other clusters (Bach et al. 2017). We consider every possible triplet of clusters consisting of a query cluster and two putative “source” clusters. Under the null hypothesis that the query consists of doublets from the two sources, we compute the number of genes (`num.de`) that are differentially expressed in the same direction in the query cluster compared to both of the source clusters. Such genes would be unique markers for the query cluster and provide evidence against the null hypothesis. For each query cluster, the best pair of putative sources is identified based on the lowest `num.de`. Clusters are then ranked by `num.de` where those with the few unique genes are more likely to be composed of doublets.
+
+```{r}
+# like 'findMarkers', this function will automatically retrieve cluster assignments from 'colLabels'.  
+
+library(scDblFinder)
+dbl.out <- findDoubletClusters(sce.man)
+```
+
+If a more concrete threshold is necessary, we can identify clusters that have unusually low num.de using an outlier-based approach.  
+
+```{r}
+library(scater)
+chosen.doublet <- rownames(dbl.out)[isOutlier(dbl.out$num.de, type = "lower", log = TRUE)]
+```
+
+```{r}
+plotTSNE(sce.man, 
+         colour_by = "label", 
+         text_by = "label") +
+    theme(legend.position = "none")
+```
+
+The function also reports the ratio of the median library size in each source to the median library size in the query (`lib.size` fields). Ideally, a potential doublet cluster would have ratios lower than unity; this is because doublet libraries are generated from a larger initial pool of RNA compared to libraries for single cells, and thus the former should have larger library sizes. The proportion of cells in the query cluster should also be reasonable - typically less than 5% of all cells, depending on how many cells were loaded onto the 10X Genomics device.  
+
+Examination of the `findDoubletClusters()` output indicates that cluster 6 has the fewest unique genes and library sizes that are comparable to or greater than its sources. We see that every gene detected in this cluster is also expressed in either of the two proposed source clusters.  
+
+```{r}
+library(scran)
+markers <- findMarkers(sce.man, direction = "up")
+dbl.markers <- markers[[chosen.doublet]]
+
+library(scater)
+chosen <- rownames(dbl.markers)[dbl.markers$Top <= 10]
+plotHeatmap(sce.man, 
+            order_columns_by = "label", 
+            features = chosen, 
+            center = T, 
+            # symmetric = T, 
+            zlim = c(-5, 5))
+```
+
+Closer examination of some known markers suggests that the offending cluster consists of doublets of basal cells (Acta2) and alveolar cells (Csn2) (Figure 16.2). Indeed, no cell type is known to strongly express both of these genes at the same time, which supports the hypothesis that this cluster consists solely of doublets rather than being an entirely novel cell type.   
+
+```{r}
+plotExpression(sce.man, 
+               features = c("Acta2", "Csn2"), 
+               x = "label", 
+               colour_by = "label")
+```
+
+The strength of `findDoubletClusters()` lies in its simplicity and ease of interpretation. Suspect clusters can be quickly flagged based on the metrics returned by the function. However, it is obviously dependent on the quality of the clustering. Clusters that are too coarse will fail to separate doublets from other cells, while clusters that are too fine will complicate interpretation. The method is also somewhat biased towards clusters with fewer cells, where the reduction in power is more likely to result in a low `N`. (Fortunately, this is a desirable effect as doublets should be rare in a properly performed scRNA-seq experiment.)  
+
+## Doublet detection by simulation
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
