@@ -1,0 +1,96 @@
+---
+title: "18 Trajectory Analysis"
+author: "yincy"
+date: "6/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+Many biological processes manifest as a continuum of dynamic changes in the cellular state. The most obvious example is that of differentiation into increasingly specialized cell subtypes, but we might also consider phenomena like the cell cycle or immune cell activation that are accompanied by gradual changes in the cell’s transcriptome. We characterize these processes from single-cell expression data by identifying a “trajectory”, i.e., a path through the high-dimensional expression space that traverses the various cellular states associated with a continuous process like differentiation. In the simplest case, a trajectory will be a simple path from one point to another, but we can also observe more complex trajectories that branch to multiple endpoints.  
+
+The “pseudotime” is defined as the positioning of cells along the trajectory that quantifies the relative activity or progression of the underlying biological process. For example, the pseudotime for a differentiation trajectory might represent the degree of differentiation from a pluripotent cell to a terminal state where cells with larger pseudotime values are more differentiated. This metric allows us to tackle questions related to the global population structure in a more quantitative manner. The most common application is to fit models to gene expression against the pseudotime to identify the genes responsible for generating the trajectory in the first place, especially around interesting branch events.  
+
+In this section, we will demonstrate several different approaches to trajectory analysis using the haematopoietic stem cell (HSC) dataset from Nestorowa et al. (2016).
+
+```{r}
+# loading
+library(scRNAseq)
+sce.nest <- NestorowaHSCData()
+
+# gene annotation
+library(AnnotationHub)
+ens.mm.v97 <- AnnotationHub()[["AH73905"]]
+anno <- select(ens.mm.v97, 
+               keys = rownames(sce.nest), 
+               keytype = "GENEID", 
+               columns = c("SYMBOL", "SEQNAME"))
+
+rowData(sce.nest) <- anno[match(rownames(sce.net), anno$GENEID), ]
+
+# quality control
+library(scater)
+stats <- perCellQCMetrics(sce.nest)
+qc <- quickPerCellQC(stats, percent_subsets = "altexps_ERCC_percent")
+sce.nest <- sce.nest[, !qc$discard]
+
+# normalization
+library(scran)
+set.seed(101000110)
+clusters <- quickCluster(sce.nest)
+sce.nest <- computeSumFactors(sce.nest, clusters = clusters)
+sce.nest <- logNormCounts(sce.nest)
+
+# variance modelling
+dec.nest <- modelGeneVarWithSpikes(sce.nest, spikes = "ERCC")
+top.nest <- getTopHVGs(dec.nest, prop = 0.1)
+
+# dimensionality reduction
+set.seed(101010011)
+sce.nest <- denoisePCA(sce.nest, technical = dec.nest, subset.row = top.nest)
+sce.nest <- runTSNE(sce.nest, dimred = "PCA")
+
+# clustering
+snn.gr <- buildSNNGraph(sce.nest, use.dimred = "PCA")
+colLabels(sce.nest) <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+```
+
+
+## Obtaining pseudotime orderings
+### Overview
+The pseudotime is simply a number describing the relative position of a cell in the trajectory, where cells with larger values are consider to be “after” their counterparts with smaller values. Branched trajectories will typically be associated with multiple pseudotimes, one per path through the trajectory; these values are not usually comparable across paths. It is worth noting that “pseudotime” is a rather unfortunate term as it may not have much to do with real-life time. For example, one can imagine a continuum of stress states where cells move in either direction (or not) over time but the pseudotime simply describes the transition from one end of the continuum to the other. In trajectories describing time-dependent processes like differentiation, a cell’s pseudotime value may be used as a proxy for its relative age, but only if directionality can be inferred (see Section 18.4).  
+
+The big question is how to identify the trajectory from high-dimensional expression data and map individual cells onto it. A massive variety of different algorithms are available for doing so (Saelens et al. 2019), and while we will demonstrate only a few specific methods below, many of the concepts apply generally to all trajectory inference strategies. A more philosophical question is whether a trajectory even exists in the dataset. One can interpret a continuum of states as a series of closely related (but distinct) subpopulations, or two well-separated clusters as the endpoints of a trajectory with rare intermediates. The choice between these two perspectives is left to the analyst based on which is more useful, convenient or biologically sensible.  
+
+### Cluster-based minimum spanning tree
+#### Basic steps
+The `TSCAN` algorithm uses a simple yet effective approach to trajectory reconstruction. It uses the clustering to summarize the data into a smaller set of discrete units, computes cluster centroids by averaging the coordinates of its member cells, and then forms the minimum spanning tree (MST) across those centroids. The MST is simply an undirected acyclic graph that passes through each centroid exactly once and is thus the most parsimonious structure that captures the transitions between clusters. We demonstrate below on the Nestorowa et al. (2016) dataset, computing the cluster centroids in the low-dimensional PC space to take advantage of data compaction and denoising (Chapter 9).  
+
+```{r}
+library(scater)
+by.cluster <- aggregateAcrossCells(sce.nest, ids = colLabels(sce.nest))
+centroids <- reducedDim(by.cluster, "PCA")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
