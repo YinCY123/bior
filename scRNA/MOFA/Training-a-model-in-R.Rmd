@@ -9,5 +9,254 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# loading libraries
+```{r, message=FALSE}
+library(data.table)
+library(MOFA2)
+```
+
+
+# Is MOFA the right method for my data?
+MOFA (and factor analysis models in general) are useful to uncover variation in complex data sets that contain multiple sources of heterogeneity. This requires a **relatively large sample size (at least ~15 samples)**. In addition, MOFA needs the multi-modal measurements to be derived **from the same samples**. It is fine if you have samples that are missing some data modality, but there has to be a significant degree of matched measurements.  
+
+# Preprocessing the data
+## Normalization
+Proper normalisation of the data is critical. **The model can handle three types of data**: `continuous` (modelled with a gaussian likelihood), `small counts` (modelled with a Poisson likelihood) and `binary measurements` (modelled with a bernoulli likelihood). Non-gaussian likelihoods give non-optimal results, **we recommend the user to apply data transformations to obtain continuous measurements**. For example, for count-based data such as RNA-seq or ATAC-seq we recommend size factor normalisation + variance stabilisation (i.e. a log transformation).  
+
+## Feature selection
+It is strongly recommended that you select **highly variable features (HVGs) per assay** before fitting the model. This ensures a faster training and a more robust inference procedure. Also, for data modalities that have very different dimensionalities we suggest a stronger feature selection fort he bigger views, with the aim of reducing the feature imbalance between data modalities.  
+
+
+# Create the MOFA object
+To create a MOFA object you need to specify three dimensions: samples, features and view(s). Optionally, a group can also be specified for each sample (no group structure by default). MOFA objects can be created from a wide range of input formats, including:  
+
+- **a list of matrices**: this is recommended for relatively simple data.  
+- **a long data.frame**: this is recommended for complex data sets with multiple views and/or groups.  
+- **MultiAssayExperiment**: to connect with Bioconductor objects.  
+- **Seurat**: for single-cell genomics users. See [this vignette](https://raw.githack.com/bioFAM/MOFA2/master/MOFA2/vignettes/scRNA_gastrulation.html)  
+
+## List of matrices
+A list of matrices, where each entry corresponds to one view. Samples are stored in columns and features in rows.  
+
+Lets simulate some data to start with  
+
+```{r}
+data <- make_example_data(
+    n_views = 2, 
+    n_samples = 200, 
+    n_features = 1000,
+    n_factors = 10
+)[[1]]
+
+lapply(data, dim)
+```
+
+Create the MOFA object:  
+```{r}
+MOFAobject <- create_mofa(data = data)
+```
+
+plot the data overview
+```{r}
+plot_data_overview(object = MOFAobject)
+```
+
+In case you are using the multi-group functionality, the groups can be specified using the groups argument as a vector with the group ID for each sample. Keep in mind that the multi-group functionality is a rather advanced option that we discourage for beginners. For more details on how the multi-group inference works, read the [FAQ section](https://biofam.github.io/MOFA2/faq.html) and [check this vignette](https://raw.githack.com/bioFAM/MOFA2/master/MOFA2/vignettes/scRNA_gastrulation.html).  
+
+```{r}
+N <- ncol(data[[1]])
+groups = c(rep("A", N/2), rep("B", N/2))
+MOFAobject <- create_mofa(data = data, groups = groups)
+```
+
+plot the data overview
+```{r}
+plot_data_overview(MOFAobject)
+```
+
+## Long data.frame
+A long data.frame with columns `sample`, `feature`, `view`, `group` (optional), `value` might be the best format for complex data sets with multiple omics and potentially multiple groups of data. Also, there is no need to add rows that correspond to missing data:  
+
+```{r}
+filepath <- system.file("extdata", "test_data.RData", package = "MOFA2")
+load(filepath)
+
+dt %>% head
+```
+
+Create the MOFA object
+
+```{r}
+MOFAobject <- create_mofa(dt)
+
+print(MOFAobject)
+```
+
+plot data overview
+```{r}
+plot_data_overview(MOFAobject)
+```
+
+# Define options
+## Define data options
+
+- **scale_groups**: if groups have different ranges/variances, it is good practice to scale each group to unit variance. Default is `FALSE`  
+
+- **scale_views**: if views have different ranges/variances, it is good practice to scale each view to unit variance. Default is `FALSE`  
+
+```{r}
+data_opts <- get_default_data_options(MOFAobject)
+data_opts %>% head
+```
+
+## Define model options
+- **num_factor**: number of factors  
+- **likelihoods**: likelihood per view (options are "gaussian", "poisson", "bernoulli"). Default is "gaussian".  
+- **spikeslab_factors**: use spike-slab sparsity prior in the factors? Default is `FALSE`.  
+- **spikeslab_weights**: use spike-slab sparsity prior in the weights? Default is `TRUE`.   
+- **ard_factors**: use ARD prior in the factors? Default is `TRUE` if using multiple groups.  
+- **ard_weights**: use ARD prior in the weights? Default is `TRUE` if using multiple views.  
+
+Only change the default model options if you are familiar with the underlying mathematical model.  
+
+```{r}
+model_opts <- get_default_model_options(MOFAobject)
+model_opts$num_factors = 10
+model_opts %>% head
+```
+
+## Define training options
+
+- **maxiter**: number of iterations. Default is 1000.  
+- **convergence_mode**: "fast"(default), "medium", "slow". For exploration, the fast mode is sufficient. For a final model, consider using medium" or even “slow”, but hopefully results should not change much.  
+- **gpu_mode**: use GPU mode? (needs `cupy` installed and a functional GPU).  
+- **verbose**: verbose mode?  
+
+```{r}
+train_opts <- get_default_training_options(MOFAobject)
+train_opts %>% head
+```
+
+# Build and train the MOFA object
+Prepare the MOFA object  
+
+```{r}
+MOFAobject <- prepare_mofa(
+    object = MOFAobject, 
+    data_options = data_opts, 
+    model_options = model_opts, 
+    training_options = train_opts
+)
+```
+
+Train the MOFA model. Remember that in this step the `MOFA2` R package connets with the `mofapy2` Python package using `reticulate`. This is the source of most problems when running MOFA. See our [FAQ section](https://biofam.github.io/MOFA2/faq.html) if you have issues. The output is saved in the file specified as `outfile`. If none is specified, the output is saved in a temporary location.  
+
+```{r}
+outfile = file.path(getwd(),"model.hdf5")
+MOFAobject.trained <- run_mofa(MOFAobject, outfile)
+```
+
+If everything is successful, you should observe an output analogous to the following:  
+
+```
+######################################
+## Training the model with seed 1 ##
+######################################
+
+Iteration 1: time=0.03, ELBO=-52650.68, deltaELBO=837116.802 (94.082647669%), Factors=10
+
+(...)
+
+Iteration 9: time=0.04, ELBO=-50114.43, deltaELBO=23.907 (0.002686924%), Factors=10
+
+#######################
+## Training finished ##
+#######################
+
+Saving model in `/var/folders/.../model.hdf5.../tmp/Rtmpp2ZiYa/model.hdf5.
+```
+
+
+# Downstream analysis
+## Introduction
+In the MOFA2 R package we provide a wide range of downstream analysis to visualise and interpret the model output. Here we provide a brief description of the main functionalities. This vignette is made of simulated data and we do not highlight biologically relevant results. Please see our [tutorials](https://biofam.github.io/MOFA2/tutorials.html) for real use cases.  
+
+## Load libraries
+```{r}
+library(ggplot2)
+library(MOFA2)
+```
+
+## Load trained model
+```{r}
+filepath <- system.file("extdata", "model.hdf5", package = "MOFA2")
+model <- load_model(filepath)
+```
+
+### Overview of data
+The function `plot_data_overview` can be used to obtain an overview of the input data. It shows how many views (rows) and how many groups (columns) exist, what are their corresponding dimensionalities and how many missing information they have (grey bars).  
+
+```{r}
+plot_data_overview(model)
+```
+
+## Add metadata to the model
+
+The metadata is stored as a data.frame object in `model@samples_metadata`, and it requires at least the column `sample`. The column `group` is required only if you are doing multi-group inference.  
+
+The number of rows must match the total number of samples in the model (`sum(model@dimensions$N)`).  
+
+Let's add some artifical metadata  
+```{r}
+Nsamples <- sum(get_dimensions(model)[["N"]])
+
+sample_metadata <- data.frame(
+    sample = samples_names(model)[[1]], 
+    condition = sample(c("A", "B"), size = Nsamples, replace = T),
+    age = sample(1:100, size = Nsamples, replace = T)
+)
+
+samples_metadata(model) <- sample_metadata
+samples_metadata(model) %>% head
+```
+
+## Variance decomposition
+The first step in the MOFA analysis is to quantify the amount of variance explained (R2) by each factor in each data modality.  
+
+The variance explained estimates are stored in the hdf5 file and loaded in `model@cache[["variance_explained"]]`:  
+
+```{r}
+# total variance explained per view
+get_variance_explained(model)$r2_total[[1]] 
+```
+
+```{r}
+# variance explained for every factor in per view
+get_variance_explained(model)$r2_per_factor[[1]]
+```
+
+Variance explained estimates can be plotted using `plot_variance_explained(model, ...)`. Options:  
+
+- **factors**: character vector with a factor name(s), or numeric vector with the index(es) of the factor(s). Default is "all".  
+- **x**: character specifying the dimension for the x-axis ("view", "factor", or "group").  
+- **y**: character specifying the dimension for the y-axis ("view", "factor", or "group").  
+- **split_by**: character specifying the dimension to be faceted ("view", "factor", or "group").  
+- **plot_total**: logical value to indicate if to plot the total variance explained (for the variable in the x-axis)  
+
+In this case we have 5 active factors that explain a large amount of variance in both data modalities.  
+
+```{r}
+plot_variance_explained(model, x = "view", y = "factor")
+```
+
+The model explains ~70% of the variance in both data modalities.  
+
+```{r}
+plot_variance_explained(model, x="view", y="factor", plot_total = TRUE)[[2]]
+```
+
+## Visualization of Factors
+
+
 
 
