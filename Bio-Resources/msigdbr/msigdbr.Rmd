@@ -1,0 +1,100 @@
+---
+title: "msigdbr"
+author: "YinCY"
+date: "6/24/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction to msigdbr
+## Overview
+Pathway analysis is a common task in genomics research and there are many available R-based software tools. Depending on the tool, it may be necessary to import the pathways, translate genes to the appropriate species, convert between symbols and IDs, and format the resulting object.  
+
+The `msigdbr` R package provides Molecular Signatures Database (MSigDB) gene sets typically used with the Gene Set Enrichment Analysis (GSEA) software:  
+
+- in an R-friendly tidy/long format with one gene per row  
+- for multiple frequently studied model organisms, such as mouse, rat, pig, zebrafish, fly, and yeast, in addition to the original human genes  
+- as gene symbols as well as NCBI Entrez and Ensembl IDs  
+- that can be installed and loaded as a package without requiring additional external files  
+
+Please be aware that the homologs were computationally predicted for distinct genes. The full pathways may not be well conserved across species.  
+
+## Usage
+```{r}
+library(msigdbr)
+library(magrittr)
+```
+
+All gene sets in the database can be retrieved without specifying a collection/category.  
+
+```{r}
+all_gene_sets <- msigdbr(species = "Mus musculus")
+all_gene_sets %>% head 
+```
+
+There is a helper function to show the available species. Either scientific or common names are acceptable.  
+
+```{r}
+msigdbr_species()
+```
+
+You can retrieve data for a specific collection, such as the hallmark gene sets.  
+```{r}
+h_gene_sets <- msigdbr(species = "mouse", category = "H")
+h_gene_sets %>% head
+```
+
+Retrieve mouse C2 (curated) CGP (chemical and genetic perturbations) gene sets.  
+
+```{r}
+cgp_gene_sets <- msigdbr(species = "mouse", category = "C2", subcategory = "CGP")
+cgp_gene_sets %>% head
+```
+
+There is a helper function to show the available collections.  
+
+```{r}
+msigdbr_collections()
+```
+
+The msigdbr() function output is a data frame and can be manipulated using more standard methods.  
+
+```{r}
+all_gene_sets %>% 
+  filter(gs_cat == "H") %>% 
+  head
+```
+
+# Pathway enrichment analysis
+The `msigdbr` output can be used with various popular pathway analysis packages.  
+
+Use the gene sets data frame for `clusterProfiler` with genes as Entrez Gene IDs.   
+
+```{r}
+msigdbr_t2g <- cgp_gene_sets %>% 
+  dplyr::distinct(gs_name, entrez_gene) %>% 
+  as.data.frame() 
+  
+clusterProfiler::enricher(gene = gene_ids_vector, 
+                          TERM2NAME = msigdbr_t2g, 
+                          ...)
+```
+
+Use the gene sets data frame for `clusterProfiler` with genes as gene symbols.  
+
+```{r}
+msigdbr_t2g <- msigdbr_df %>% 
+  dplyr::distinct(gs_name, gene_symbol) %>% 
+  as.data.frame()
+
+enrichr(gene = gene_symbols_vector, TERM2GENE = msigdbr_t2g)
+```
+
+
+
+
+
+
