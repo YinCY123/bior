@@ -215,21 +215,21 @@ library(clusterProfiler)
 library(tidyverse)
 library(RColorBrewer)
 library(rWikiPathways)
-library(RCy3)
+# library(RCy3)
 ```
 
 
 test if can connect to Cytoscape  
 ```{r}
-cytoscapePing()
+# cytoscapePing()
 ```
 
 
 install add-ons (only for Cytoscape >= 3.7.0)  
 ```{r}
-installApp(app = "WikiPathways")
-installApp(app = "CyTargetLinker")
-installApp(app = "stringApp")
+# installApp(app = "WikiPathways")
+# installApp(app = "CyTargetLinker")
+# installApp(app = "stringApp")
 ```
 
 
@@ -314,15 +314,18 @@ egobp %>% class()
 egobp %>% head()
 ```
 
+
 ```{r}
-egobp %>% as.data.frame() %>% 
+egobp %>% 
+    as.data.frame() %>% 
     arrange(p.adjust) %>% 
     head(n = 20) %>% 
-    ggplot(aes(x = Count, y = reorder(Description, -p.adjust), fill = -p.adjust)) +
+    ggplot(aes(x = reorder(Description, -p.adjust), y = -log10(p.adjust), fill = -p.adjust)) +
     geom_bar(stat = "identity") +
     scale_fill_gradient(low = "blue", high = "red") +
-    scale_x_continuous(name = NULL) +
-    scale_y_discrete(name = NULL)
+    scale_x_discrete(name = NULL) +
+    scale_y_continuous(name = "log10(p value adjusted)") +
+    coord_flip()
 ```
 
 
@@ -341,11 +344,14 @@ The first step is to retreive the latest GMT file listing all the genes in each 
 
 ```{r}
 wp.hs.gmt <- rWikiPathways::downloadPathwayArchive(organism = "Homo sapiens", 
-                                                   format = "gmt")
+                                                   format = "gmt", 
+                                                   destpath = "f:/git/Data/wikipathway")
+
+listOrganisms()
 ```
 
 ```{r}
-wp2gene <- clusterProfiler::read.gmt(gmtfile = wp.hs.gmt)
+wp2gene <- clusterProfiler::read.gmt(gmtfile = "f:/git/Data/wikipathway/wikipathways-20210610-gmt-Homo_sapiens.gmt")
 wp2gene <- wp2gene %>% tidyr::separate(col = term, into = c("name", "version", "wpid", "org"), sep = "%")
 wpid2gene <- wp2gene %>% dplyr::select(wpid, gene)
 wpid2name <- wp2gene %>% dplyr::select(wpid, name)
@@ -372,14 +378,63 @@ ewp.up <- DOSE::setReadable(x = ewp.up, OrgDb = org.Hs.eg.db, keyType = "ENTREZI
 head(ewp.up)
 ```
 
+
 ```{r}
-barplot(ewp.up, showCategory = 20)
-dotplot(ewp.up, showCategory = 20)
-emapplot(ewp.up, showCategory = 20)
+ewp.dn <- clusterProfiler::enricher(gene = dn.genes.entrez[[2]], 
+                                    universe = bkgd.genes.entrez[[2]], 
+                                    pAdjustMethod = "fdr", 
+                                    pvalueCutoff = 0.1, 
+                                    TERM2GENE = wpid2gene, 
+                                    TERM2NAME = wpid2name)
+
+ewp.dn <- DOSE::setReadable(ewp.dn, OrgDb = org.Hs.eg.db, keyType = "ENTREZID")
+ewp.dn %>% head()
 ```
 
+What we just did is also refered to as **Over-representation Analysis (ORA)**. Another approach is **Gene Set Enrichment Analysis (GSEA)**. One advantage of GSEA is that you don’t have to pick an arbitrary log2FC cutoff to define gene sets. Instead you provide a pre-ordered list of significant gene-named log2FC values at let the GSEA do the work. Here are the steps, see if you can follow along:  
 
+```{r}
+lung.expr$fcsign <- sign(lung.expr$log2FC)
+lung.expr$logfdr <- log10(lung.expr$P.Value)
+lung.expr$sig <- lung.expr$logfdr / lung.expr$fcsign
+sig.lung.expr.entrez <- merge(lung.expr, bkgd.genes.entrez, by.x = "GeneID", by.y = "ensembl")
+gsea.sig.lung.expr <- sig.lung.expr.entrez[, 8]
+names(gsea.sig.lung.expr) <- sig.lung.expr.entrez[, 9]
+gsea.sig.lung.expr <- sort(gsea.sig.lung.expr, decreasing = T)
 
+gwp.sig.lung.expr <- clusterProfiler::GSEA(geneList = gsea.sig.lung.expr, 
+                                           pAdjustMethod = "fdr", 
+                                           pvalueCutoff = 0.05, 
+                                           TERM2GENE = wpid2gene, 
+                                           TERM2NAME = wpid2name)
+
+gwp.sig.lung.expr_df <- gwp.sig.lung.expr %>% as.data.frame()
+
+gwp.sig.lung.expr_df[which(gwp.sig.lung.expr_df$NES > 1), ]
+```
+
+## Explore
+Turning again to the rWikiPathways package, let’s explore the content and some of our pathway hits so far. Since we are studying Lung Cancer here, let’s start with a search for relevant pathways.  
+
+```{r}
+lc.pathways <- findPathwaysByText(query = '"lung cancer"') # double quote
+human.lc.pathways <- lc.pathways %>% 
+    dplyr::filter(species == "Homo sapiens")
+```
+
+```{r}
+lc.wpids <- human.lc.pathways$id
+lc.wpids
+```
+
+```{r}
+ewp.up.wpids <- ewp.up$ID
+```
+
+```{r}
+url <- getPathwayInfo("WP179")$url
+browseURL(url)
+```
 
 
 
