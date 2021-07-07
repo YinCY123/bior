@@ -1,0 +1,170 @@
+---
+title: "19_Single-nuclei-RNA-seq-processing"
+author: "YinCY"
+date: "7/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+Single-nuclei RNA-seq (snRNA-seq) provides another strategy for performing single-cell transcriptomics where individual nuclei instead of cells are captured and sequenced. The major advantage of snRNA-seq over scRNA-seq is that the former does not require the preservation of cellular integrity during sample preparation, especially dissociation. We only need to extract nuclei in an intact state, meaning that snRNA-seq can be applied to cell types, tissues and samples that are not amenable to dissociation and later processing. The cost of this flexibility is the loss of transcripts that are primarily located in the cytoplasm, potentially limiting the availability of biological signal for genes with little nuclear localization.  
+
+The computational analysis of snRNA-seq data is very much like that of scRNA-seq data. We have a matrix of (UMI) counts for genes by cells that requires quality control, normalization and so on. (Technically, the columsn correspond to nuclei but we will use these two terms interchangeably in this chapter.) In fact, the biggest difference in processing occurs in the construction of the count matrix itself, where intronic regions must be included in the annotation for each gene to account for the increased abundance of unspliced transcripts. The rest of the analysis only requires a few minor adjustments to account for the loss of cytoplasmic transcripts. We demonstrate using a dataset from Wu et al. (2019) involving snRNA-seq on healthy and fibrotic mouse kidneys.
+
+```{r}
+library(scRNAseq)
+library(magrittr)
+
+sce.wu <- WuKidneyData()
+# saveRDS(sce.wu, "F:/git/Data/Bioconductor/osca/sce.wu.rds")
+sce.wu <- sce.wu[, sce.wu$Technology == "sNuc-10x"]
+```
+
+## Quality control for stripped nuclei
+The loss of the cytoplasm means that the stripped nuclei should not contain any mitochondrial transcripts. This means that the mitochondrial proportion becomes an excellent QC metric for the efficacy of the stripping process. Unlike scRNA-seq, there is no need to worry about variations in mitochondrial content due to genuine biology. High-quality nuclei should not contain any mitochondrial transcripts; the presence of any mitochondrial counts in a library indicates that the removal of the cytoplasm was not complete, possibly introducing irrelevant heterogeneity in downstream analyses.  
+
+```{r}
+library(scater)
+sce.wu <- addPerCellQC(sce.wu, subsets = list(Mito = grep("^MT-", rownames(sce.wu))))
+summary(sce.wu$subsets_Mito_percent == 0)
+```
+
+We apply a simple filter to remove libraries corresponding to incompletely stripped nuclei. The outlier-based approach described in Section 6 can be used here, but some caution is required in low-coverage experiments where a majority of cells have zero mitochondrial counts. In such cases, the MAD may also be zero such that other libraries with very low but non-zero mitochondrial counts are removed. This is typically too conservative as such transcripts may be present due to sporadic ambient contamination rather than incomplete stripping.  
+
+```{r}
+stats <- quickPerCellQC(colData(sce.wu), sub.fields = "subsets_Mito_percent")
+stats %>% as.matrix() %>% colSums()
+```
+
+Instead, we enforce a minimum difference between the threshold and the median in isOutlier() (Figure 19.1). We arbitrarily choose +0.5% here, which takes precedence over the outlier-based threshold if the latter is too low. In this manner, we avoid discarding libraries with a very modest amount of contamination; the same code will automatically fall back to the outlier-based threshold in datasets where the stripping was systematically less effective.  
+
+```{r}
+stats$high_subsets_Mito_percent <- isOutlier(sce.wu$subsets_Mito_percent, 
+                                             type = "higher", 
+                                             min.diff = 0.5)
+
+stats$discard <- Reduce("|", stats[, colnames(stats) != "discard"])
+stats %>% as.matrix() %>% colSums()
+```
+
+```{r}
+library(scater)
+colData(sce.wu)
+plotColData(sce.wu, 
+            x = "Status", 
+            y = "subsets_Mito_percent", 
+            colour_by = I(stats$high_subsets_Mito_percent))
+```
+
+## Comments on downstream analyses
+The rest of the analysis can then be performed using the same strategies discussed for scRNA-seq (Figure 19.2). Despite the loss of cytoplasmic transcripts, there is usually still enough biological signal to characterize population heterogeneity (Bakken et al. 2018; Wu et al. 2019). In fact, one could even say that snRNA-seq has a higher signal-to-noise ratio as sequencing coverage is not spent on highly abundant but typically uninteresting transcripts for mitochondrial and ribosomal protein genes. It also has the not inconsiderable advantage of being able to recover subpopulations that are not amenable to dissociation and would be lost by scRNA-seq protocols.  
+
+```{r}
+library(scran)
+set.seed(111)
+sce.wu <- logNormCounts(sce.wu[, !stats$discard])
+dec <- modelGeneVarByPoisson(sce.wu)
+sce.wu <- runPCA(sce.wu, subset_row = getTopHVGs(dec, n = 4000))
+sce.wu <- runTSNE(sce.wu, dimred = "PCA")
+
+
+library(bluster)
+colLabels(sce.wu) <- clusterRows(x = reducedDim(sce.wu, "PCA"), 
+                                 BLUSPARAM = NNGraphParam())
+
+library(patchwork)
+plotTSNE(sce.wu, colour_by = "label", text_by = "label") +
+plotTSNE(sce.wu, colour_by = "Status")
+```
+
+We can also apply more complex procedures such as batch correction (Section 13). Here, we eliminate the disease effect to identify shared clusters.  
+
+```{r}
+library(batchelor)
+set.seed(1101)
+
+merged <- multiBatchNorm(sce.wu, batch = sce.wu$Status)
+merged <- correctExperiments(merged, batch = merged$Status, PARAM = FastMnnParam())
+merged <- runTSNE(merged, dimred = "corrected")
+colLabels(merged) <- clusterRows(reducedDim(merged, "corrected"), NNGraphParam())
+
+plotTSNE(merged, colour_by = "label", text_by = "label") +
+plotTSNE(merged, colour_by = "batch")
+```
+
+Similarly, we can perform marker detection on the snRNA-seq expression values as discussed in Section 11. For the most part, interpretation of these DE results makes the simplifying assumption that nuclear abundances are a good proxy for the overall expression profile. This is generally reasonable but may not always be true, resulting in some discrepancies in the marker sets between snRNA-seq and scRNA-seq datasets. For example, transcripts for strongly expressed genes might localize to the cytoplasm for efficient translation and subsequently be lost upon stripping, while genes with the same overall expression but differences in the rate of nuclear export may appear to be differentially expressed between clusters. In the most pathological case, higher snRNA-seq abundances may indicate nuclear sequestration of transcripts for protein-coding genes and reduced activity of the relevant biological process, contrary to the usual interpretation of the effect of upregulation.  
+
+```{r}
+markers <- findMarkers(merged, block = merged$Status, direction = "up")
+markers[["1"]][1:10, 1:3]
+```
+
+```{r}
+plotTSNE(merged, colour_by = "Tfap2a")
+```
+
+Other analyses described for scRNA-seq require more care when they are applied to snRNA-seq data. Most obviously, cell type annotation based on reference profiles (Section 12) should be treated with some caution as the majority of existing references are constructed from bulk or single-cell datasets with cytoplasmic transcripts. Interpretation of RNA velocity results may also be complicated by variation in the rate of nuclear export of spliced transcripts.  
+
+## Tricks with ambient contamination
+The expected absence of genuine mitochondrial expression can also be exploited to estimate the level of ambient contamination (Section 14.4). We demonstrate on mouse brain snRNA-seq data from 10X Genomics (Zheng et al. 2017), using the raw count matrix prior to any filtering for nuclei-containing barcodes.   
+
+```{r}
+library(DropletTestFiles)
+
+raw.path <- getTestFile("tenx-2.0.1-nuclei_900/1.0.0/raw.tar.gz")
+out.path <- file.path(tempdir(), "nuclei")
+untar(raw.path, exdir = out.path)
+
+library(DropletUtils)
+fname <- file.path(out.path, "raw_gene_bc_matrices/mm10")
+sce.brain <- read10xCounts(fname, col.names = TRUE)
+```
+
+We call non-empty droplets using `emptyDrops()` as previously described.  
+
+```{r}
+library(DropletUtils)
+e.out <- emptyDrops(counts(sce.brain))
+summary(e.out$FDR <= 0.001)
+```
+
+If our libraries are of high quality, we can assume that any mitochondrial “expression” is due to contamination from the ambient solution. We then use the `controlAmbience()` function to estimate the proportion of ambient contamination for each gene, allowing us to mark potentially problematic genes in the DE results (Figure 19.4). In fact, we can use this information even earlier to remove these genes during dimensionality reduction and clustering. This is not generally possible for scRNA-seq as any notable contaminating transcripts may originate from a subpopulation that actually expresses that gene and thus cannot be blindly removed.  
+
+```{r}
+ambient <- estimateAmbience(m = counts(sce.brain), round = F, good.turing = F)
+nuclei <- rowSums(counts(sce.brain)[, which(e.out$FDR <= 0.001)])
+
+is.mito <- grepl("mt-", rowData(sce.brain)$Symbol)
+contam <- controlAmbience(y = nuclei, 
+                          ambient = ambient, 
+                          features = is.mito, 
+                          mode = "proportion")
+
+plot(log10(nuclei + 1), 
+     contam * 100, 
+     col = ifelse(is.mito, "red", "grey"), 
+     pch = 19, 
+     xlab = "log-nuclei expression", 
+     ylab = "Contamination (%)")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
