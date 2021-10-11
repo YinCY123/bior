@@ -1,0 +1,95 @@
+---
+title: "20_Integrating-with-protein-abundance"
+author: "yincy"
+date: "7/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Motivation
+Cellular indexing of transcriptomes and epitopes by sequencing (CITE-seq) is a technique that quantifies both gene expression and the abundance of selected surface proteins in each cell simultaneously (Stoeckius et al. 2017). In this approach, cells are first labelled with antibodies that have been conjugated to synthetic RNA tags. A cell with a higher abundance of a target protein will be bound by more antibodies, causing more molecules of the corresponding antibody-derived tag (ADT) to be attached to that cell. Cells are then separated into their own reaction chambers using droplet-based microfluidics (Zheng et al. 2017). Both the ADTs and endogenous transcripts are reverse-transcribed and captured into a cDNA library; the abundance of each protein or expression of each gene is subsequently quantified by sequencing of each set of features. This provides a powerful tool for interrogating aspects of the proteome (such as post-translational modifications) and other cellular features that would normally be invisible to transcriptomic studies.  
+
+How should the ADT data be incorporated into the analysis? While we have counts for both ADTs and transcripts, there are fundamental differences in nature of the data that make it difficult to treat the former as additional features in the latter. Most experiments involve only a small number of antibodies (<20) that are chosen by the researcher because they are of a priori interest, in contrast to gene expression data that captures the entire transcriptome regardless of the study. **The coverage of the ADTs is also much deeper as they are sequenced separately from the transcripts, allowing the sequencing resources to be concentrated into a smaller number of features**. And, of course, the use of antibodies against protein targets involves consideration of separate biases compared to those observed for transcripts.  
+
+In this chapter, we will describe some strategies for integrated analysis of ADT and transcript data in CITE-seq experiments. We will demonstrate using a PBMC dataset from 10X Genomics that contains quantified abundances for a number of interesting surface proteins. We conveniently obtain the dataset using the `DropletTestFiles` package, after which we can create a `SingleCellExperiment` as shown below.  
+
+```{r}
+library(DropletTestFiles)
+library(DropletUtils)
+library(magrittr)
+
+path <- getTestFile("tenx-3.0.0-pbmc_10k_protein_v3/1.0.0/filtered.tar.gz")
+dir <- tempfile()
+untar(path, exdir = dir)
+
+# loading it in as a SingleCellExperiment object.  
+sce <- read10xCounts(file.path(dir, "filtered_feature_bc_matrix"))
+```
+
+## Setting up the data
+The `SingleCellExperiment` class provides the concept of an “alternative Experiment” to store data for different sets of features but the same cells. This involves storing another `SummarizedExperiment` (or an instance of a subclass) inside our `SingleCellExperiment` where the rows (features) can differ but the columns (cells) are the same. In previous chapters, we were using the alternative Experiments to store spike-in data, but here we will use the concept to split off the ADT data. This isolates the two sets of features to ensure that analyses on one set do not inadvertently use data from the other set, and vice versa.  
+
+```{r}
+rowData(sce)
+sce <- splitAltExps(sce, rowData(sce)$Type)
+altExpNames(sce)
+```
+
+```{r}
+altExp(sce)
+```
+
+At this point, it is also helpful to coerce the sparse matrix for ADTs into a dense matrix. The ADT counts are usually not sparse so storage as a sparse matrix provides no advantage; in fact, it actually increases memory usage and computational time as the indices of non-zero entries must be unnecessarily stored and processed. From a practical perspective, this avoids unnecessary incompatibilities with downstream applications that do not accept sparse inputs.  
+
+```{r}
+counts(altExp(sce)) <- as.matrix(counts(altExp(sce)))
+
+counts(altExp(sce))[, 1:10]
+```
+
+## Quality control
+As with the endogenous genes, we want to remove cells that have failed to capture/sequence the ADTs. Recall that droplet-based libraries will contain contamination from ambient solution (Section 15.2), in this case containing conjugated antibodies that are either free in solution or bound to cell fragments. **As the ADTs are (relatively) deeply sequenced, we can expect non-zero counts for most ADTs in each cell due to contamination (Figure 20.1; if this is not the case, we might suspect some failure of ADT processing for that cell**. We thus remove cells that have unusually low numbers of detected ADTs, defined here as less than or equal to half of the total number of tags.  
+
+```{r}
+# applied on the alternative experiment containing the ADT counts  
+
+library(scater)
+df.ab <- perCellQCMetrics(altExp(sce))
+
+n.nonzero <- sum(!rowAlls(counts(altExp(sce)), value = 0L))
+ab.discard <- df.ab$detected <= n.nonzero / 2
+summary(ab.discard)
+```
+
+To elaborate on the filter above: we use n.nonzero to exclude ADTs with zero counts across all cells, which avoids inflation of the total number of ADTs due to barcodes that were erroniously included in the annotation. The use of the specific threshold of 50% aims to avoid zero size factors during median-based normalization (Section 20.4.3), though it is straightforward to use more stringent thresholds if so desired. We do not rely only on isOutlier() as the MAD is often zero in deeply sequenced datasets - where most cells contain non-zero counts for all ADTs - such that filtering would discard useful cells that only detect almost all of the ADTs.  
+
+Some experiments include isotype control (IgG) antibodies that have similar properties to a primary antibody but lack a specific target in the cell, thus providing a measure of non-specific binding. If we assume that the magnitude of non-specific binding is constant across cells, we could define low-quality cells as those with unusually low coverage of the control ADTs, presumably due to failed capture or sequencing. We use the outlier-based approach described in Chapter 6 to choose an appropriate filter threshold (Figure 20.2); hard thresholds are more difficult to specify due to experiment-by-experiment variation in the expected coverage of ADTs. Paradoxically, though, this QC metric becomes less useful in well-executed experiments where there is not enough non-specific binding to obtain meaningful coverage of the control ADTs.  
+
+```{r}
+# We could have specified subsets = in the above perCellQCMetrics call, but it's easier to explain on econcept at a time, so we'll just repeat it here.  
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

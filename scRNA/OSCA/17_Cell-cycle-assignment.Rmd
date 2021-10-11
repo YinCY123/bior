@@ -89,6 +89,11 @@ sce.416b
 The cyclins control progression through the cell cycle and have well-characterized patterns of expression across cell cycle phases. Cyclin D is expressed throughout but peaks at G1; cyclin E is expressed highest in the G1/S transition; cyclin A is expressed across S and G2; and cyclin B is expressed highest in late G2 and mitosis (Morgan 2007). The expression of cyclins can help to determine the relative cell cycle activity in each cluster (Figure 17.1). For example, most cells in cluster 1 are likely to be in G1 while the other clusters are scattered across the later phases.  
 
 ```{r}
+knitr::include_graphics("figures/fluction-of-cyclin-levels-during-cell-cycle.png")
+```
+
+
+```{r}
 library(scater)
 
 cyclin.genes <- grep("^Ccn[abde][0-9]{,1}$", rowData(sce.416b)$SYMBOL)

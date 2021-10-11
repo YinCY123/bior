@@ -491,9 +491,9 @@ In some cases, we may wish to use multiple references for annotation of a test d
 
 Several strategies are available to combine inferences from multiple references:
 
--   using reference-specific labels in a combined reference\
--   using harmonized labels in a combined reference\
--   combining scores across multiple reference
+- using reference-specific labels in a combined reference  
+- using harmonized labels in a combined reference  
+- combining scores across multiple reference  
 
 This chapter discusses the various strengths and weaknesses of each strategy and provides some practical demonstrations of each. Here, we will use the HPCA and Blueprint/ENCODE datasets as our references and (yet another) PBMC dataset as the test.
 
@@ -638,9 +638,8 @@ bpe.ont$label.ont %>% table %>% sort(decreasing = T) %>% head(10)
 
 <<<<<<< HEAD
 The simplest way to take advantage of the standardization in terminology is to use label.ont in place of `label.main` in the previous section's `SingleR()` call. This yields annotations that have follow the same vocabulary regardless of the reference used for assignment.
-=======
+
 The simplest way to take advantage of the standardization in terminology is to use `label.ont` in place of `label.main` in the previous section’s `SingleR()` call. This yields annotations that have follow the same vocabulary regardless of the reference used for assignment.  
->>>>>>> 88d0d053ae458540691d878ae838f126dea9273c
 
 ```{r}
 com.res3a <- SingleR(test = pbmc, 
