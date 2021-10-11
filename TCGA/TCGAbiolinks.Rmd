@@ -1,5 +1,5 @@
 ---
-title: "TCGA"
+title: "TCGAbiolinks"
 author: "YinCY"
 date: "9/15/2021"
 output: html_document
@@ -20,10 +20,10 @@ library(DT)
 # Searching GDC database
 **Different sources: Legacy vs Harmonized**  
 
-There are two available sources to download GDC data using TCGAbiolinks:  
-- GDC Legacy Archive: provides access to an unmodified copy of data that was previously stored in CGHub and in the TCGA Data Portal hosted by the TCGA Data Coordinating Center (DCC), in which uses as references GRCh37(hg19) and GRCh36(hg18).  
+There are two available sources to download GDC data using `TCGAbiolinks`:  
+- **GDC Legacy Archive**: provides access to an unmodified copy of data that was previously stored in CGHub and in the TCGA Data Portal hosted by the TCGA Data Coordinating Center (DCC), in which uses as references GRCh37(hg19) and GRCh36(hg18).  
 
-- GDC harmonized database: data available was harmonized against GRCh38 (hg38) using GDC Bioinformatics Pipelines which provides methods to the standardization of biospecimen and clinical data.  
+- **GDC harmonized database**: data available was harmonized against GRCh38 (hg38) using GDC Bioinformatics Pipelines which provides methods to the standardization of biospecimen and clinical data.  
 
 
 # Searching arguments
@@ -86,29 +86,15 @@ TCGAbiolinks::getGDCprojects()
 |11|NT|Solid Tissue Normal|
 |12|NBC|Buccal Cell Normal|
 |13|NEBV|EBV Immortalized Normal|
-|14|NBM|	Bone Marrow Normal|
+|14|NBM|Bone Marrow Normal|
 |20|CELLC|Control Analyte|
 |40|TRB|Recurrent Blood Derived Cancer - Peripheral Blood|
-|50|CELL|	Cell Lines|
-|60|XCL|	Cell Line Derived Xenograft Tissue|
+|50|CELL|Cell Lines|
+|60|XCL|Cell Line Derived Xenograft Tissue|
 
 
-# Examples
-```{r}
-query <- GDCquery(project = c("TCGA-GBM", "TCGA-LGG"), 
-                  data.category = "DNA Methylation", 
-                  legacy = F, 
-                  platform = c("Illumina Human Methylation 450"), 
-                  sample.type = "Recurrent Tumor")
-```
 
-```{r}
-query %>% getResults() %>% datatable(filter = "top", 
-                                     options = list(scrollX = T, keys = T, pageLength = 5), 
-                                     rownames = F)
-```
-
-# Summary of available files per patient
+## Summary of available files per patient
 ```{r}
 tab <- getSampleFilesSummary(project = "TCGA-ACC")
 datatable(head(tab), 
@@ -118,10 +104,25 @@ datatable(head(tab),
 ```
 
 
+# Download and preparing for analysis
+TCGAbiolinks has provided a few functions to download and prepare data from GDC for analysis. This section starts by explaining the different downloads methods and the SummarizedExperiment object, which is the default data structure used in TCGAbiolinks, followed by some examples.
 
 
 
 
+
+# kidney primary tumor
+```{r}
+kidney_tumor <- GDCquery(project = c("TARGET-WT", "TCGA-KIRP", "TCGA-KIRC", "TCGA-KICH", "TARGET-CCSK"), 
+                         data.category = "Transcriptome Profiling", 
+                         experimental.strategy = "RNA-Seq", 
+                         data.type = "Gene Expression Quantification", 
+                         sample.type = c("Primary Tumor", "Solid Tissue Normal"), 
+                         access = "open", 
+                         legacy = F)
+
+getResults(query = kidney_tumor)
+```
 
 
 
