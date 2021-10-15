@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-```{r, message=FALSE, warning=FALSE}
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
 library(TCGAbiolinks)
 library(dplyr)
 library(DT)
@@ -66,7 +66,7 @@ You can easily search GDC data using the `GDCquery` function.
 |sample.type|A sample type to filter the files to download||
 
 ## project options
-```{r}
+```{r, eval=FALSE}
 TCGAbiolinks::getGDCprojects()
 ```
 
@@ -95,7 +95,7 @@ TCGAbiolinks::getGDCprojects()
 
 
 ## Summary of available files per patient
-```{r}
+```{r, eval=F}
 tab <- getSampleFilesSummary(project = "TCGA-ACC")
 datatable(head(tab), 
           filter = "top", 
@@ -107,12 +107,124 @@ datatable(head(tab),
 # Download and preparing for analysis
 TCGAbiolinks has provided a few functions to download and prepare data from GDC for analysis. This section starts by explaining the different downloads methods and the SummarizedExperiment object, which is the default data structure used in TCGAbiolinks, followed by some examples.
 
+## Data download: Methods differences
+
+There are two methods to download GDC data using TCGAbiolinks:  
+
+- client: this method creates a MANIFEST file and download the data using GDC Data Transfer Tool this method is more reliable but it might be slower compared to the api method.  
+
+- api: this methods used the GDC Application Programming Interface (API) to download the data. This will create a MANIFEST file and the data downloaded will be compressed into a tar.gz file. If the size and the number of the files are too big this tar.gz will be too big which might have a high probability of download failure. To solve that we created the  files.per.chunk argument which will split the files into small chunks, for example, if chunks.per.download is equal to 10 we will download only 10 files inside each tar.gz.
+
+## Data prepared: SummarizedExperiment object
+A `SummarizedExperiment` object has three main matrices that can be accessed using the `SummarizedExperiment` package:  
+
+- Sample matrix information is accessed via  `colData(data)`: stores sample information. TCGAbiolinks will add indexed clinical data and subtype information from marker TCGA papers.  
+- Assay matrix information is accessed via `assay(data)`: stores molecular data.  
+- Feature matrix information (gene information) is accessed via `rowRanges(data)`: stores metadata about the features, including their genomic ranges.  
+
+## Summarized Experiment: annotation information
+When using the function `GDCprepare` there is an argument called `SummarizedExperiment` which defines the output type a Summarized Experiment (default option) or a data frame. To create a summarized Experiment object we annotate the data with genomic positions with last patch release version of the genome available. For legacy data (data aligned to hg19) TCGAbiolinks is using GRCh37.p13 and for harmonized data (data aligned to hg38) now it is using GRCh38.p7 (May 2017).  
+
+Unfortunately, some of the updates changes/remove gene symbols, change coordinates, etc. Which might introduce some loss of data. For example, if the gene was removed we cannot map it anymore and that information will be lost in the `SummarizedExperiment`.  
+
+If you set `SummarizedExperiment` to `FALSE`, you will get the data unmodified just as they are in the files and ad your own annotation.  
+
+Also, there are no updated for DNA methylation data. But the last metadata available can be found here: http://zwdzwd.github.io/InfiniumAnnotation
+
+
+## Arguments
+`GDCdownload`  
+
+|**Argument**|**Description**|
+|:--|:--|
+|query|A query for GDCquery function|
+|token.file|Token file to download controlled data (only for method = “client”)|
+|	Uses the API (POST method) or gdc client tool. Options “api”, “client”. API is faster, but the data might get corrupted in the download, and it might need to be executed again|
+|directory|Directory/Folder where the data was downloaded. Default: GDCdata|
+|file.per.chunk|This will make the API method only download n (files.per.chunk) files at a time. This may reduce the download problems when the data size is too large. Expected a integer number (example files.per.chunk = 6)|
+
+
+`GDCprepare`  
+
+|**Argument**|**Description**|
+|:--|:--|
+|query|A query for GDCquery function|
+|save|save results as RData object?|
+|save.filename|Name of the file to be save if empty an automatic will be created|
+|directory|Directory/Folder where the data was downloaded. Default: GDCdata|
+|summarizedExperiment|Create a summarizedExperiment? Default TRUE (if possible)|
+|remove.files.prepared|	Remove the files read? Default: FALSE This argument will be considered only if save argument is set to true|
+|add.gistic2.mut|If a list of genes (gene symbol) is given, columns with gistic2 results from GDAC firehose (hg19) and a column indicating if there is or not mutation in that gene (hg38) (TRUE or FALSE - use the MAF file for more information) will be added to the sample matrix in the summarized Experiment object.|
+|mut.pipline|If add.gistic2.mut is not NULL this field will be taken in consideration. Four separate variant calling pipelines are implemented for GDC data harmonization. Options: muse, varscan2, somaticsniper, MuTect2. For more information: https://gdc-docs.nci.nih.gov/Data/Bioinformatics_Pipelines/DNA_Seq_Variant_Calling_Pipeline/|
+|mutant_variant_classification|List of mutant_variant_classification that will be consider a sample mutant or not. Default: “Frame_Shift_Del”, “Frame_Shift_Ins”, “Missense_Mutation”, “Nonsense_Mutation”, “Splice_Site”, “In_Frame_Del”, “In_Frame_Ins”, “Translation_Start_Site”, “Nonstop_Mutation”|
+
+## Search and download data for two samples from database
+```{r}
+query <- GDCquery(project = "TCGA-GBM", 
+                  data.category = "Transcriptome Profiling", 
+                  data.type = "Gene Expression Quantification", 
+                  workflow.type = "HTSeq - FPKM-UQ", 
+                  barcode = c("TCGA-14-0736-02A-01R-2005-01",
+                              "TCGA-06-0211-02A-02R-2005-01"))
+
+GDCdownload(query = query, 
+            directory = "F:/git/Data/TCGA/")
+
+data <- GDCprepare(query = query, 
+                   directory = "F:/git/Data/TCGA/")
+```
+
+```{r}
+library(SummarizedExperiment)
+assay(data) %>% head
+```
+
+```{r}
+colData(data) %>% as_tibble()
+```
+
+```{r}
+rowRanges(data)
+```
+
+
+# Analyzing and visualizing TCGA data
+## `TCGAanalyze`: Analyze data from TCGA
+
+## `TCGAanalyze_Preprocessing`: Preprocessing of Gene Expression data
+```{r}
+listSamples <- c("TCGA-E9-A1NG-11A-52R-A14M-07","TCGA-BH-A1FC-11A-32R-A13Q-07",
+                 "TCGA-A7-A13G-11A-51R-A13Q-07","TCGA-BH-A0DK-11A-13R-A089-07",
+                 "TCGA-E9-A1RH-11A-34R-A169-07","TCGA-BH-A0AU-01A-11R-A12P-07",
+                 "TCGA-C8-A1HJ-01A-11R-A13Q-07","TCGA-A7-A13D-01A-13R-A12P-07",
+                 "TCGA-A2-A0CV-01A-31R-A115-07","TCGA-AQ-A0Y5-01A-11R-A14M-07")
+
+query <- GDCquery(project = "TCGA-BRCA", 
+                  data.category = "Gene expression", 
+                  data.type = "Gene expression quantification",
+                  experimental.strategy = "RNA-Seq", 
+                  platform = "Illumina HiSeq", 
+                  file.type = "results", 
+                  barcode = listSamples, 
+                  legacy = T)
+
+getResults(query = query)
+
+GDCdownload(query = query, directory = "F:/git/Data/TCGA/")
+
+BRCARnaseqSE <- GDCprepare(query = query, directory = "F:/git/Data/TCGA/")
+
+BRCAMatrix <- assay(BRCARnaseqSE, "raw_count")
+
+BRCARnaseqSE_CorOutliers <- TCGAanalyze_Preprocessing(BRCARnaseqSE)
+```
+
 
 
 
 
 # kidney primary tumor
-```{r}
+```{r, eval=FALSE}
 kidney_tumor <- GDCquery(project = c("TARGET-WT", "TCGA-KIRP", "TCGA-KIRC", "TCGA-KICH", "TARGET-CCSK"), 
                          data.category = "Transcriptome Profiling", 
                          experimental.strategy = "RNA-Seq", 
@@ -124,6 +236,11 @@ kidney_tumor <- GDCquery(project = c("TARGET-WT", "TCGA-KIRP", "TCGA-KIRC", "TCG
 getResults(query = kidney_tumor)
 ```
 
+```{r}
+GDCdownload(query = kidney_tumor, 
+            directory = "F:/git/Data/TCGA/kidney",
+            files.per.chunk = 10)
+```
 
 
 
