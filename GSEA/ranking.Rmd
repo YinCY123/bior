@@ -1,0 +1,140 @@
+---
+title: "ranking"
+author: "YinCY"
+date: "11/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# signal to noise ratio
+```{r}
+library(fgsea)
+
+kidney_macrophage <- readxl::read_xlsx("F:/git/sslab/kidney/data/20200530_DE_FDR_2.xlsx")
+
+# remove duplicated genes
+kidney_macrophage <- kidney_macrophage %>% 
+  rowwise() %>% 
+  mutate(m = mean(c(blood_mac_1, blood_mac_2, blood_mac_3, sm_mac_1, sm_mac_2, sm_mac_3))) %>% 
+  arrange(-m) %>% 
+  select(-m)
+kidney_macrophage <- kidney_macrophage[!duplicated(kidney_macrophage$geneID), ]
+
+kidney_macrophage <- kidney_macrophage %>% 
+  dplyr::mutate(rank = sign(logFC) * (- log10(PValue))) %>% 
+  arrange(-rank)
+```
+
+```{r}
+ranked <- kidney_macrophage$rank
+names(ranked) <- kidney_macrophage$geneID
+```
+
+```{r}
+library(msigdbr)
+msigdbr_collections()
+```
+
+```{r}
+H <- msigdbr(species = "mouse", category = "H")
+H_res <- fgseaMultilevel(pathways = split(H$gene_symbol, f = H$gs_name), 
+                         stats = ranked, 
+                         minSize = 15, 
+                         eps = 0)
+H_res %>% arrange(pval)
+OXIDATIVE_PHOSPHORYLATION <- H_res %>% arrange(pval) %>% pull(leadingEdge) %>% .[[1]]
+inter1 <- H_res %>% arrange(pval) %>% pull(leadingEdge) %>% .[2:3] %>% lapply(intersect, y = OXIDATIVE_PHOSPHORYLATION) %>% lapply(sort)
+
+intersect(inter1[[1]], inter1[[2]])
+```
+
+
+```{r}
+list2df <- function(list, coln = coln){ 
+  maxL <- sapply(list, length) %>% max()
+  for(i in seq_along(list)){
+    l = length(list[[i]])
+    if(l < maxL){
+      list[[i]] <- append(list[[i]], values = rep("", (maxL - l)))
+    }
+  }
+  list <- as.data.frame(list)
+  colnames(list) <- NULL
+  list <- t(list)
+  rownames(list) <- coln
+  return(as.data.frame(list))
+}
+
+leadingEdge <- list2df(H_res$leadingEdge, coln = H_res$pathway)
+
+gs <- c()
+for(i in seq_along(H_res$leadingEdge)){
+    gs = append(gs, H_res$leadingEdge[[i]])
+}
+gs  <- gs %>% unique() %>% sort()
+gs %>% head
+
+m <- matrix(0, nrow = length(H_res$pathway), 
+            ncol = length(gs))
+colnames(m) <- gs
+rownames(m) <- H_res$pathway
+
+for(i in seq_len(dim(H_res)[1])){
+  m[i, H_res$leadingEdge[[i]]] = 1
+}
+
+library(cluster)
+dis_H_res_leading <- daisy(x = m, metric = "gower")
+library(factoextra)
+fviz_dist(dist.obj = dis_H_res_leading, lab_size = 3)
+ggsave("dis_H_res.pdf")
+
+library(pheatmap)
+pdf("H_res.pdf")
+pheatmap(dis_H_res_leading %>% as.matrix(), 
+         show_rownames = T, 
+         show_colnames = T, 
+         fontsize = 2)
+dev.off()
+```
+
+```{r}
+c2 <- msigdbr(species = "mouse", category = "C2")
+
+c2_res <- fgseaMultilevel(pathways = split(c2$gene_symbol, c2$gs_name), 
+                          stats = ranked, 
+                          minSize = 15, 
+                          eps = 0)
+c2_res %>% arrange(pval)
+```
+
+
+```{r}
+all_genes <- select(org.Mm.eg.db, 
+                    keys = keys(org.Mm.eg.db), 
+                    keytype = "ENTREZID", 
+                    columns = c("ENTREZID", "SYMBOL"))
+all_genes <- all_genes %>% filter(!duplicated(SYMBOL))
+
+m <- matrix(0, nrow = dim(c2_res)[1], 
+            ncol = length(all_genes$SYMBOL))
+
+rownames(m) <- c2_res$pathway
+colnames(m) <- all_genes$SYMBOL
+m[1:10, 1:10]
+```
+
+
+```{r}
+mapply(FUN = function(x, y){
+  for(i in dim(x)[1]){
+    x[, y] = 1
+  }
+}, 
+m, c2_res$leadingEdge)
+```
+
+
