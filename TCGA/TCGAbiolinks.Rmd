@@ -105,7 +105,7 @@ datatable(head(tab),
 
 
 # Download and preparing for analysis
-TCGAbiolinks has provided a few functions to download and prepare data from GDC for analysis. This section starts by explaining the different downloads methods and the SummarizedExperiment object, which is the default data structure used in TCGAbiolinks, followed by some examples.
+`TCGAbiolinks` has provided a few functions to download and prepare data from GDC for analysis. This section starts by explaining the different downloads methods and the `SummarizedExperiment` object, which is the default data structure used in `TCGAbiolinks`, followed by some examples.
 
 
 
@@ -118,13 +118,22 @@ kidney_tumor <- GDCquery(project = c("TARGET-WT", "TCGA-KIRP", "TCGA-KIRC", "TCG
                          experimental.strategy = "RNA-Seq", 
                          data.type = "Gene Expression Quantification", 
                          sample.type = c("Primary Tumor", "Solid Tissue Normal"), 
+                         workflow.type = "HTSeq - FPKM",
                          access = "open", 
                          legacy = F)
-
+saveRDS(kidney_tumor, "/home/yincy/git/Data/Kidney/kidney_tumor.rds")
 getResults(query = kidney_tumor)
+
+kidney_tumor <- readRDS("/home/yincy/git/sslab/kidney/R/kidney_tunor_TCGA.rds")
+GDCdownload(query = kidney_tumor, 
+            directory = "/home/yincy/git/Data/Kidney/TCGA", 
+            files.per.chunk = 10)
 ```
 
-
+```{r}
+kidney_tumor_RNAseq <- GDCprepare(query = kidney_tumor, 
+                                  directory = "/home/yincy/git/Data/Kidney/TCGA/")
+```
 
 
 
