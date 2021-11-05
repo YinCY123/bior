@@ -14,6 +14,7 @@ The GSEABase package implements data structures and methods to represent, manipu
 
 ## GeneSet  
 A GeneSet stores a set of related gene identifiers. Important components of the gene set are a vector of identifiers, general description about the set, and information about how the gene set was constructed. To construct a gene set, use `GeneSet`. For example, to create a gene set from the identifiers in a subset of the sample ExpressionSet in the Biobase package use  
+
 ```{r}
 library(GSEABase)
 data(sample.ExpressionSet, package = "Biobase")

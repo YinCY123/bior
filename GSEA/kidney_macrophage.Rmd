@@ -1,0 +1,166 @@
+---
+title: "kidney macrophage"
+author: "YinCY"
+date: "11/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(fgsea)
+library(msigdbr)
+library(tidyverse)
+```
+
+```{r}
+kidney_macrophage <- readxl::read_xlsx("/home/yincy/git/sslab/kidney/data/20200530_DE_FDR_2.xlsx")
+
+# remove duplicated genes
+kidney_macrophage <- kidney_macrophage %>% 
+  rowwise() %>% 
+  mutate(m = mean(c(blood_mac_1, blood_mac_2, blood_mac_3, sm_mac_1, sm_mac_2, sm_mac_3))) %>% 
+  arrange(-m) %>% 
+  select(-m)
+kidney_macrophage <- kidney_macrophage[!duplicated(kidney_macrophage$geneID), ]
+```
+
+```{r}
+kidney_macrophage <- kidney_macrophage %>% 
+  dplyr::mutate(rank = - sign(logFC) * (- log10(PValue))) %>% 
+  arrange(-rank)
+ranked <- kidney_macrophage$rank
+names(ranked) <- kidney_macrophage$geneID
+```
+
+
+```{r}
+msigdbr_collections()
+
+H <- msigdbr(species = "mouse", category = "H")
+H_res <- fgseaMultilevel(pathways = split(H$gene_symbol, f = H$gs_name), 
+                         stats = ranked, 
+                         minSize = 15, 
+                         eps = 0)
+H_res <- H_res %>% 
+  mutate(pathway = gsub("^HALLMARK_", "", pathway), 
+         pathway = tolower(pathway))
+
+downs <- H_res %>% arrange(NES) %>% head(10) %>% pull(pathway)
+ups <- H_res %>% arrange(-NES) %>% head(15) %>% pull(pathway)
+
+H_res <- H_res %>% 
+  mutate(direction = ifelse(pathway %in% ups, "up", ifelse(pathway %in% downs, "down", NA)))
+
+H_res %>% 
+  filter(direction == "up") %>% 
+  arrange(pval) %>% 
+  ggplot(aes(-log10(padj), reorder(pathway, -pval))) +
+  geom_bar(stat = "identity") +
+  scale_y_discrete(name = NULL) +
+  theme_classic() +
+  labs(title = "over-represented gene sets", 
+       subtitle = "monocyte macrophage v.s. self-matintaining macrophage")
+
+ggsave("over-represented-gene-sets.png")
+```
+
+
+```{r}
+gs <- c()
+for(i in seq_along(H_res$leadingEdge)){
+    gs = append(gs, H_res$leadingEdge[[i]])
+}
+gs  <- gs %>% unique() %>% sort()
+gs %>% head
+
+m <- matrix(0, nrow = length(H_res$pathway), 
+            ncol = length(gs))
+colnames(m) <- gs
+rownames(m) <- H_res$pathway
+
+for(i in seq_len(dim(H_res)[1])){
+  m[i, H_res$leadingEdge[[i]]] = 1
+}
+m[, 1:10]
+```
+
+```{r}
+library(cluster)
+
+dis_H_res_leading <- daisy(x = m, metric = "gower", type = list(asymm = seq(1:dim(m)[2])))
+
+tiff("H_res_leadingedge_similarity.tiff", width = 900, height = 900)
+pheatmap::pheatmap(1 - as.matrix(dis_H_res_leading), 
+                   fontsize = 8, 
+                   clustering_method = "ward.D2", 
+                   angle_col = 315, 
+                   cutree_rows = 4, 
+                   cutree_cols = 4)
+dev.off()
+```
+
+```{r}
+inter <- m[c("oxidative_phosphorylation", "fatty_acid_metabolism", "adipogenesis"), ] %>% t() %>% 
+  apply(1, sum) %>% .[which(. == 3)] %>% names()
+
+AnnotationDbi::select(org.Mm.eg.db, 
+                      keys = inter, 
+                      keytype = "SYMBOL", 
+                      columns = c("SYMBOL", "GENENAME"))
+```
+
+```{r}
+kidney_macrophage %>% filter(geneID %in% inter)
+```
+
+
+
+```{r}
+c5 <- msigdbr(species = "mouse", category = "C5")
+c5_res <- fgseaMultilevel(pathways = split(c5$gene_symbol, c5$gs_name), 
+                          stats = ranked, 
+                          minSize = 15, 
+                          eps = 0)
+c5_res_filtered <- c5_res %>% arrange(NES) %>% 
+  filter(padj < 0.01, NES < 0) %>%
+  mutate(pathway = tolower(pathway))
+```
+
+```{r}
+gs <- c()
+for(i in seq_along(c5_res_filtered$leadingEdge)){
+    gs = append(gs, c5_res_filtered$leadingEdge[[i]])
+}
+
+gs <- gs %>% unique() %>% sort()
+gs %>% head
+
+m <- matrix(0, nrow = dim(c5_res_filtered)[1], 
+            ncol = length(gs))
+colnames(m) <- gs
+rownames(m) <- c5_res_filtered$pathway
+
+for(i in seq_len(dim(c5_res_filtered)[1])){
+  m[i, c5_res_filtered$leadingEdge[[i]]] = 1
+}
+```
+
+```{r}
+c5_res_dis <- daisy(x = m, 
+                    metric = "gower", 
+                    type = list(asymm = seq(1, dim(m)[2])))
+
+pdf("go.pdf")
+pheatmap::pheatmap(1 - as.matrix(c5_res_dis), 
+                   fontsize = 3, 
+                   angle_col = 315, 
+                   cutree_cols = 4, 
+                   cutree_rows = 4)
+dev.off()
+```
+
+
