@@ -10,17 +10,17 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-fgsea is an R-package for fast preranked gene set enrichment analysis (GSEA). The performance is achieved by using an algorithm for cumulative GSEA-statistic calculation. This allows to reuse samples between different gene set sizes.  
+`fgsea` is an R-package for fast preranked gene set enrichment analysis (GSEA). The performance is achieved by using an algorithm for cumulative GSEA-statistic calculation. This allows to reuse samples between different gene set sizes.  
 
 
 ## Loading necessary libraries  
 ```{r, message=F, warning=FALSE}
 library(fgsea)
 library(tidyverse)
-data(examplePathways) # a list 
+
+data(examplePathways)
 data(exampleRanks)
 ```
-
 
 ```{r}
 examplePathways[[1]]
@@ -31,7 +31,6 @@ exampleRanks %>% head()
 sapply(examplePathways, length) %>% sort(decreasing = F) %>% quantile(probs = seq(0, 1, 0.1))
 ```
 
-
 ```{r}
 fgseaRes <- fgsea(pathways = examplePathways, # list of gene set to check 
                   stats = exampleRanks, 
@@ -40,17 +39,14 @@ fgseaRes <- fgsea(pathways = examplePathways, # list of gene set to check
                   nperm = 10000)
 ```
 
-
 ```{r}
 fgseaRes %>% 
     arrange(pval)
 ```
 
-
 ```{r}
 sum(fgseaRes[, padj < 0.01])
 ```
-
 
 ```{r}
 plotEnrichment(pathway = examplePathways[["5990980_Cell_Cycle"]], 
@@ -59,7 +55,6 @@ plotEnrichment(pathway = examplePathways[["5990980_Cell_Cycle"]],
     labs(title = "Programmed Cell Death") +
     geom_vline(xintercept = 2000)
 ```
-
 
 ```{r}
 topPathwaysUp <- fgseaRes[ES > 0, ][head(order(pval), n=10), pathway]
@@ -71,8 +66,7 @@ plotGseaTable(pathways = examplePathways[topPathways],
               gseaParam = 0.5)
 ```
 
-
-From the plot above one can see that there are very similar pathways in the table (for example 5991502_Mitotic_Metaphase_and_Anaphase and 5991600_Mitotic_Anaphase). To select only independent pathways one can use collapsePathways function:  
+From the plot above one can see that there are very similar pathways in the table (for example `5991502_Mitotic_Metaphase_and_Anaphase` and `5991600_Mitotic_Anaphase`). To select only independent pathways one can use `collapsePathways` function:  
 ```{r}
 collaspsedPathways <- collapsePathways(fgseaRes = fgseaRes[order(pval), ][padj < 0.01, ], 
                                        pathways = examplePathways, 
@@ -86,9 +80,8 @@ plotGseaTable(examplePathways[mainPathways], exampleRanks,
 ```
 
 
-
 ## Using Reactome pathways  
-For convenience there is reactomePathways function that obtains pathways from Reactome for given set of genes. Package reactome.db is required to be installed.  
+For convenience there is `reactomePathways` function that obtains pathways from `Reactome` for given set of genes. Package `reactome.db` is required to be installed.  
 
 ```{r}
 pathways <- reactomePathways(genes = exampleRanks %>% names())
@@ -106,6 +99,82 @@ fgseaRes %>% arrange(padj) %>% head()
 ```
 
 
+```{r}
+kidney_macrophage <- readxl::read_xlsx("/home/yincy/git/sslab/kidney/data/20200530_DE_FDR_2.xlsx")
+kidney_macrophage <- kidney_macrophage %>% 
+    rowwise() %>% 
+    mutate(m = mean(c(blood_mac_1, blood_mac_2, blood_mac_3, sm_mac_1, sm_mac_2, sm_mac_3))) %>% 
+    arrange(-m) %>% 
+    select(-m)
+kidney_macrophage <- kidney_macrophage[!duplicated(kidney_macrophage$geneID), ]
+
+kidney_macrophage <- kidney_macrophage %>% 
+    mutate(rank = sign(logFC) * (-log10(PValue))) %>% 
+    arrange(rank) %>% 
+    column_to_rownames("geneID") 
+rank <- kidney_macrophage$rank 
+names(rank) <- rownames(kidney_macrophage)
+rank %>% head
+```
+
+```{r}
+library(msigdbr)
+msigdbr_collections()
+go_gene_sets <- msigdbr(species = "mouse", category = "C5")
+go_set_res <- fgseaMultilevel(pathways = split(go_gene_sets$gene_symbol, f = go_gene_sets$gs_name), 
+                              stats = rank, 
+                              minSize = 15, 
+                              eps = 0)
+
+go_set_res %>% arrange(pval) %>% 
+    .[grep("^GOBP", pathway, ignore.case = F), ] %>% 
+    mutate(pathway = tolower(pathway))
+
+h_set_res <- fgseaMultilevel(pathways = split(h_gene_sets$gene_symbol, f = h_gene_sets$gs_name), 
+                             stats = rank, 
+                             minSize = 15, 
+                             eps = 0)
+
+OXIDATIVE_PHOSPHORYLATION <- h_set_res %>% arrange(pval) %>% pull(leadingEdge) %>% .[[1]]
+ADIPOGENESIS <- h_set_res %>% arrange(pval) %>% pull(leadingEdge) %>% .[[2]]
+```
+
+```{r}
+h_set_res %>% arrange(pval)
+```
+
+```{r}
+plotEnrichment(pathway = h_gene_sets %>% filter(gs_name == "HALLMARK_ADIPOGENESIS") %>% pull(gene_symbol), 
+               stats = rank)
+```
+
+```{r}
+
+```
 
 
+```{r}
+kidney_macrophage[rownames(kidney_macrophage) %in% OXIDATIVE_PHOSPHORYLATION, ] %>% arrange(logFC)
+```
+
+
+```{r}
+c1_sets <- msigdbr(species = "mouse", category = "C1")
+c1_sets_res <- fgseaMultilevel(pathways = split(c1_sets$gene_symbol, f = c1_sets$gs_name), minSize = 15, stats = rank)
+c1_sets_res %>% arrange(pval)
+
+c7_set <- msigdbr(species = "mouse", category = "C7", subcategory = "IMMUNESIGDB")
+c7_set_res <- fgseaMultilevel(pathways = split(c7_set$gene_symbol, f = c7_set$gs_name), stats = rank, minSize = 15, eps = 0)
+c7_set_res %>% arrange(pval)
+c7_set_res[grep("LPS", c7_set_res$pathway, ignore.case = T)] %>% arrange(pval)
+```
+
+```{r}
+c3_sets <- msigdbr(species = "mouse", category = "C3")
+c3__sets_res <- fgseaMultilevel(pathways = split(c3_sets$gene_symbol, f = c3_sets$gs_name), 
+                                stats = rank, minSize = 15)
+
+c3__sets_res %>% arrange(pval) %>% pull(leadingEdge) %>% .[[1]] %>% intersect(OXIDATIVE_PHOSPHORYLATION) -> v
+kidney_macrophage[rownames(kidney_macrophage) %in% v, ] %>% arrange(logFC)
+```
 
