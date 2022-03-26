@@ -97,9 +97,9 @@ These classes seem very similar to standard `characters()` from base R, but ther
 Basic character functionality is supported:  
 - `length`, `names`.  
 - `c` and `rev` (reverse the sequence).  
-- `width`, `nchar` (number of characters in each sequence).  
+- `width`, `nchar` (number of characters in each sequence.  
 - `==`, `duplicated`, `unique`.  
-- `as.charcater` or `toString`: converts to a base character() vector.  
+- `as.charcater` or `toString`: converts to a base character vector.  
 - `sort`, `order`.  
 - `chartr`: convert some letters into other letters.  
 - `subseq`, `subseq<-`, `extractAt`, `replaceAt`.  
@@ -119,6 +119,7 @@ rev(dna2)
 ```
 
 ```{r}
+dd2 <- DNAString("AGCCGGGCCATAAGGCA")
 v4 <- Views(subject = dd2, start = 3:0, end = 5:8)
 v4
 ```
@@ -212,14 +213,16 @@ There are also functions with similar naming using `count` instead of match (eg.
 In many ways, these functions are similar to using short read aligners like Bowtie. But these functions are designed to be **comprehensive** (return all matches satisfying certain criteria).  
 
 ```{r}
-dnaseq <- DNAString(x = "CCACACCC")
-matchPattern(pattern = dnaseq, 
-             subject = BSgenome.Hsapiens.UCSC.hg38$chrY,
-             max.mismatch = 1)
+dnaseq <- DNAString(x = "GCCACCATGG")
+views <- matchPattern(pattern = dnaseq, 
+                      subject = BSgenome.Hsapiens.UCSC.hg38$chrY,
+                      max.mismatch = 0)
+views 
 ```
-note how the return object of matchPattern looks like an IRanges but is really something called a Views.  
+note how the return object of `matchPattern` looks like an `IRanges` but is really something called a Views.  
 
 ```{r}
+kozak <- "GCCACCATGG"
 for(i in seq_along(kozak)){
     BSgenome.Hsapiens.UCSC.hg38$chrY[start(kozak)[i]:(start(kozak)[i] + 10)] %>% print
 }
@@ -227,16 +230,18 @@ for(i in seq_along(kozak)){
 
 ```{r}
 countPattern(pattern = "GCCACCATGG", 
-             subject = BSgenome.Hsapiens.UCSC.hg38$chrY)
+             subject = BSgenome.Hsapiens.UCSC.hg38$chrY, 
+             max.mismatch = 0)
 ```
 
 
 ```{r}
+library(BSgenome.Scerevisiae.UCSC.sacCer2)
 vmatchPattern(pattern = dnaseq, subject = Scerevisiae)
 ```
 
 ```{r}
-vcountPattern(pattern = dnaseq, subject = BSgenome.Hsapiens.UCSC.hg38)
+vcountPattern(pattern = dnaseq, subject = Scerevisiae)
 ```
 
 First, note how the return object of `vmatchPattern` is a `GRanges` given the exact information of where the string matches.  
