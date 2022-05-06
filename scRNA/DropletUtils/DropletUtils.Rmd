@@ -70,7 +70,7 @@ A useful diagnostic for droplet-based data is the barcode rank plot, which shows
 
 ```{r}
 set.seed(0)
-
+my.counts <- DropletUtils::
 ```
 
 
