@@ -223,38 +223,6 @@ BRCARnaseqSE_CorOutliers <- TCGAanalyze_Preprocessing(BRCARnaseqSE)
 
 
 
-# kidney primary tumor
-```{r, eval=FALSE}
-kidney_tumor <- GDCquery(project = c("TARGET-WT", "TCGA-KIRP", "TCGA-KIRC", "TCGA-KICH", "TARGET-CCSK"), 
-                         data.category = "Transcriptome Profiling", 
-                         experimental.strategy = "RNA-Seq", 
-                         data.type = "Gene Expression Quantification", 
-                         sample.type = c("Primary Tumor", "Solid Tissue Normal"), 
-                         workflow.type = "HTSeq - FPKM",
-                         access = "open", 
-                         legacy = F)
-saveRDS(kidney_tumor, "/home/yincy/git/Data/Kidney/kidney_tumor.rds")
-getResults(query = kidney_tumor)
-
-<<<<<<< HEAD
-kidney_tumor <- readRDS("/home/yincy/git/sslab/kidney/R/kidney_tunor_TCGA.rds")
-GDCdownload(query = kidney_tumor, 
-            directory = "/home/yincy/git/Data/Kidney/TCGA", 
-=======
-```{r}
-GDCdownload(query = kidney_tumor, 
-            directory = "F:/git/Data/TCGA/kidney",
->>>>>>> a1387082070441ad09de0e1a249a0cf039691fc1
-            files.per.chunk = 10)
-```
-
-```{r}
-kidney_tumor_RNAseq <- GDCprepare(query = kidney_tumor, 
-                                  directory = "/home/yincy/git/Data/Kidney/TCGA/")
-```
-
-
-
 
 
 
