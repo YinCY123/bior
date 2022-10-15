@@ -59,7 +59,6 @@ In this step, we describe a local or gene-level measure that is used to rank gen
 knitr::include_graphics("figures/Local-statistic.png")
 ```
 
-> Figure 1. Deriving the GSEA local statistic: Rank metric. A pairwise comparison of gene expression for m total samples is depicted. RNA levels for each of n genes is determined. Differential expression testing assigns a p-value (P) to each gene and is used to derive the local statistic denoted the GSEA rank metric (s). A gene list (L) is ordered according to rank.
 
 An example of a rank metric is the product of the sign of the 'direction' in the expression change (up-regulation is positive and down-regulation is negative) and the p-value (P).  
 

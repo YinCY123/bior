@@ -14,59 +14,88 @@ knitr::opts_chunk$set(echo = TRUE)
 library(fgsea)
 library(msigdbr)
 library(tidyverse)
+library(GO.db)
+library(org.Mm.eg.db)
 ```
 
 ```{r}
-kidney_macrophage <- readxl::read_xlsx("/home/yincy/git/sslab/kidney/data/20200530_DE_FDR_2.xlsx")
+kidney_macrophage <- readxl::read_xlsx("../../sslab/kidney/data/20200530_DE_FDR_2.xlsx")
 
 # remove duplicated genes
 kidney_macrophage <- kidney_macrophage %>% 
   rowwise() %>% 
   mutate(m = mean(c(blood_mac_1, blood_mac_2, blood_mac_3, sm_mac_1, sm_mac_2, sm_mac_3))) %>% 
   arrange(-m) %>% 
-  select(-m)
+  dplyr::select(-m)
 kidney_macrophage <- kidney_macrophage[!duplicated(kidney_macrophage$geneID), ]
 ```
 
 ```{r}
 kidney_macrophage <- kidney_macrophage %>% 
-  dplyr::mutate(rank = - sign(logFC) * (- log10(PValue))) %>% 
-  arrange(-rank)
+  dplyr::mutate(rank = -sign(logCPM) * (- log10(PValue))) %>% 
+  arrange(-rank) 
 ranked <- kidney_macrophage$rank
 names(ranked) <- kidney_macrophage$geneID
+ranked %>% head
 ```
 
 
 ```{r}
-msigdbr_collections()
+# msigdbr_collections() %>% pull(gs_cat) %>% table
+# only use terms has experiment and phylogenetic evidence 
+go_evidence_code <- c("EXP", "IDA", "IPI", "IMP", "IGI", "IEP", 
+                      "HTP", "HDA", "HMP", "HGI", "HEP", 
+                      "IBA", "IBD", "IKR", "IRD") # phylogeny evidence
 
-H <- msigdbr(species = "mouse", category = "H")
-H_res <- fgseaMultilevel(pathways = split(H$gene_symbol, f = H$gs_name), 
+key_df <- select(org.Mm.eg.db, 
+                 keys = keys(org.Mm.eg.db), 
+                 keytype = "ENTREZID", 
+                 columns = c("SYMBOL", "GO"))
+
+key_df <- key_df %>% 
+  filter(EVIDENCE %in% go_evidence_code)
+go_list <- split(key_df$SYMBOL, key_df$GO)
+
+# C5 <- msigdbr(species = "mouse", category = "C5") 
+
+go_res <- fgseaMultilevel(pathways = go_list, 
                          stats = ranked, 
-                         minSize = 15, 
+                         minSize = 10,
+                         maxSize = 2000,
                          eps = 0)
-H_res <- H_res %>% 
-  mutate(pathway = gsub("^HALLMARK_", "", pathway), 
-         pathway = tolower(pathway))
 
-downs <- H_res %>% arrange(NES) %>% head(10) %>% pull(pathway)
-ups <- H_res %>% arrange(-NES) %>% head(15) %>% pull(pathway)
+go_df <- select(GO.db, 
+                keys = key_df$GO, 
+                keytype = "GOID", 
+                columns = c("GOID", "TERM", "ONTOLOGY"))
 
-H_res <- H_res %>% 
-  mutate(direction = ifelse(pathway %in% ups, "up", ifelse(pathway %in% downs, "down", NA)))
+go_ana_res <- left_join(go_res, go_df, by = c('pathway' = "GOID")) %>% 
+  distinct(pathway, .keep_all = T) %>%
+  relocate(pathway, term = TERM, ontology = ONTOLOGY)
 
-H_res %>% 
-  filter(direction == "up") %>% 
-  arrange(pval) %>% 
-  ggplot(aes(-log10(padj), reorder(pathway, -pval))) +
-  geom_bar(stat = "identity") +
-  scale_y_discrete(name = NULL) +
-  theme_classic() +
-  labs(title = "over-represented gene sets", 
-       subtitle = "monocyte macrophage v.s. self-matintaining macrophage")
-
-ggsave("over-represented-gene-sets.png")
+go_ana_res %>% 
+  filter(ontology == "BP") %>%
+  arrange(-NES)
 ```
+
+```{r}
+go_ana_res %>% 
+  filter(ontology == "MF") %>% 
+  arrange(NES)
+```
+
+
+
+```{r}
+leadingeage_2 <- H_res %>% 
+  arrange(-NES) %>% 
+  filter(grepl("^GOCC", pathway, ignore.case = F)) %>% 
+  head(2) %>% 
+  pull(leadingEdge) 
+
+intersect(leadingeage_2[[1]], leadingeage_2[[2]]) %>% sort()
+```
+
 
 
 ```{r}
@@ -111,10 +140,6 @@ AnnotationDbi::select(org.Mm.eg.db,
                       keys = inter, 
                       keytype = "SYMBOL", 
                       columns = c("SYMBOL", "GENENAME"))
-```
-
-```{r}
-kidney_macrophage %>% filter(geneID %in% inter)
 ```
 
 
