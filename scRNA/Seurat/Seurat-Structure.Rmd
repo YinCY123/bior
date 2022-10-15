@@ -19,14 +19,30 @@ library(Seurat)
 library(magrittr)
 ```
 
+# Object structure
+```
+- Seurat
+    + slot
+    + Object Information
+    + Data Access
+- Assay
+    + Slots
+    + Object Information
+    + Data Access
+- DimReduc
+    + Slots
+    + Object Information
+    + Data Access
+```
+
 
 # Object Overview  
-The Seurat object is a class allowing for the storage and manipulation of single-cell data. Previous version of the Seurat object were designed primarily with scRNA-seq data in mind. However, with the development of new technologies allowing for multiple modes of data to be collected from the same set of cells, we have redesigned the Seurat 3.0 object to allow for greater flexibility to work with all these data types in a cohesive framework.  
+The `Seurat` object is a class allowing for the storage and manipulation of single-cell data. Previous version of the Seurat object were designed primarily with scRNA-seq data in mind. However, with the development of new technologies allowing for multiple modes of data to be collected from the same set of cells, we have redesigned the Seurat 3.0 object to allow for greater flexibility to work with all these data types in a cohesive framework.  
 
-**At the top level, the Seurat object serves as a collection of Assay and DimReduc objects, representing expression data and dimensionality reductions of the expression data, respectively**. The Assay objects are designed to hold expression data of a single type, such as RNA-seq gene expression, CITE-seq ADTs, cell hashtags, or imputed gene values. DimReduc objects represent transformations of the data contained within the Assay object(s) via various dimensional reduction techniques such as PCA. For class-specific details, including more in depth description of the slots, please see the wiki sections for each class.  
+At the top level, the `Seurat` object serves as a collection of `Assay` and `DimReduc` objects, representing expression data and dimensionality reductions of the expression data, respectively. The `Assay` objects are designed to hold expression data of a single type, such as RNA-seq gene expression, CITE-seq ADTs, cell hashtags, or imputed gene values. `DimReduc` objects represent transformations of the data contained within the Assay object(s) via various dimensional reduction techniques such as PCA. For class-specific details, including more in depth description of the slots, please see the wiki sections for each class.  
 
-## Seurat  
-### Slots  
+# Seurat  
+## Slots  
 **Slot**                | **Function**  
 ------------------------|--------------------------
 `assays`                | A list of assays within this object
@@ -41,11 +57,13 @@ The Seurat object is a class allowing for the storage and manipulation of single
 `version`               | Seurat version used when creating the object
 
 
-### Object Information  
+## Object Information  
 Summary information about `Seurat` objects can be had quickly and easily using standard R functions.   
 
 Object shape/dimensions can be found using the `dim`, `ncol`, and `nrow` functions; cell and feature names can be found using the `colnames` and `rownames` functions, respectively, or the `dimnames` function.   
 ```{r}
+# InstallData("pbmc3k")
+pbmc <- LoadData("pbmc3k")
 rownames(pbmc) %>% head()
 colnames(pbmc) %>% head()
 dim(pbmc)
@@ -100,7 +118,7 @@ pbmc$percent.mt %>% head()
 
 The `HVFInfo` (get `H`ighly `V`ariable `F`eature `Info`rmation) function pulls feature mean and dispersion from an `Assay` object. The vector of variable features can be pulled with the `VariableFeatures` function. `VariableFeatures` can also set the vector of variable features.    
 ```{r}
-HVFInfo(object = pbmc) %>% head()
+HVFInfo(object = immune) %>% head()
 ```
 
 
@@ -123,14 +141,14 @@ data.frame(methods = gsub(pattern = "[.Seurat]", "", Seurat_methods) %>% unique(
 
 
 
-## Assays  
+# Assays  
 The `Assay` class stores single cell data.  
 
 For typical scRNA-seq experiments, a Seurat object will have a single Assay ("RNA"). This assay will also store multiple 'transformations' of the data, including raw counts (@counts slot), normalized data (@data slot), and scaled data for dimensional reduction (@scale.data slot).  
 
 For more complex experiments, an object could contain multiple assays. These could include multi-modal data types (CITE-seq antibody-derived tags, ADTs), or imputed/batch-corrected measurements. Each of those assays has the option to store the same data transformations as well.  
 
-### Slots  
+## Slots  
 
 **Slot**           | **Function**
 -------------------|------------------------------------

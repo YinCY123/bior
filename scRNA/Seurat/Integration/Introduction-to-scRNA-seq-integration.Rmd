@@ -1,0 +1,280 @@
+---
+title: "Introduction to scRNA-seq integration"
+author: "yincy"
+date: "2022-10-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction to scRNA-seq integration
+The joint analysis of two or more single-cell datasets poses unique challenges. In particular, identifying cell populations that are present across multiple datasets can be problematic under standard workflows. Seurat v4 includes a set of methods to match (or align) shared cell populations across datasets. These methods first identify cross-dataset pairs of cells that are in matched biological state ("anchors"), can be used both to correct for technical difference between datasets (ie. batch effect correction), and to perform comparative scRNA-seq analysis of across experiment conditions.
+
+# Integration goals
+- Create an 'integrated' data assay for downstream analysis.  
+- Identify cell types that are present in both datasets.  
+- Obtain cell type markers that are conserved in both control and stimulated cells.  
+- Compare the datasets to find cell-type specific responses to stimulation.  
+
+# Setup the Seurat objects
+```{r, message=F}
+library(Seurat)
+library(SeuratData)
+library(patchwork)
+library(magrittr)
+```
+
+```{r}
+# AvailableData()
+# InstallData(ds = "ifnb")
+ifnb <- LoadData("ifnb")
+ifnb
+
+# split the dataset into a list of two seurat object (stim and CTRL)
+ifnb.list <- SplitObject(object = ifnb, split.by = "stim")
+
+# normalize and identify variable features for each dataset
+ifnb.list <- lapply(X = ifnb.list, 
+                    FUN = function(x){
+                        x = NormalizeData(x)
+                        x = FindVariableFeatures(object = x, selection.method = "vst", nfeatures = 2000)
+                    })
+# select features that are repeatedly variable across datasets for integration
+features <- SelectIntegrationFeatures(object.list = ifnb.list)
+```
+
+
+# Integration
+We then identify anchors using the `FindIntegrationAnchors()` function, which takes a list of Seurat objects as input, and use these anchors to integrate the two datasets together with `IntegrateData()`.  
+```{r}
+immune.anchors <- FindIntegrationAnchors(object.list = ifnb.list, 
+                                         anchor.features = features)
+
+# creates an 'integrated' data assay
+immune.combined <- IntegrateData(anchorset = immune.anchors)
+```
+
+# Integration analysis
+```{r}
+# specify that we will perform downstream analysis on the corrected data note that the original unmodified data still resides in the 'RNA' assay.
+
+DefaultAssay(immune.combined) <- "integrated"
+
+immune.combined <- ScaleData(immune.combined, verbose = F)
+immune.combined <- RunPCA(object = immune.combined, 
+                          npcs = 30, 
+                          verbose = F)
+immune.combined <- RunUMAP(object = immune.combined, 
+                           reduction = "pca", 
+                           dims = 1:30)
+immune.combined <- FindNeighbors(object = immune.combined, 
+                                 reduction = "pca", 
+                                 dims = 1:30)
+immune.combined <- FindClusters(object = immune.combined, 
+                                resolution = 0.6)
+```
+
+```{r}
+p1 <- DimPlot(immune.combined, reduction = "umap", group.by = "stim")
+p2 <- DimPlot(immune.combined, reduction = "umap", label = T, repel = T)
+
+p1 + p2
+```
+
+
+# Identify conserved cell type markers
+To identify canonical cell type marker genes that are conserved across conditions, we provide the `FindConservedMarkers()` function. This function performs differential gene expression test for each datasets/group and combines the p-values using meta-analysis methods from the `MetaDE` R package. For example, we can calculated the genes that are conserved markers irrespective of stimulation condition in cluster 6.  
+```{r}
+DefaultAssay(immune.combined) <- "RNA"
+nk.markers <- FindConservedMarkers(object = immune.combined, 
+                                   ident.1 = 6, 
+                                   grouping.var = "stim", 
+                                   verbose = F)
+nk.markers %>% head
+```
+
+
+```{r}
+FeaturePlot(object = immune.combined, 
+            features = c("CD3D", "SELL", "CREM", 
+                         "CD8A", "GNLY", "CD79A", 
+                         "FCGR3A", "CCL2", "PPBP"), 
+            min.cutoff = "q9")
+```
+
+```{r}
+immune.combined <- RenameIdents(object = immune.combined, 
+                                "0" = "CD14 Mono", 
+                                "1" = "CD4 Naive T", 
+                                "2" = "CD4 Memory T", 
+                                "3" = "CD16 Mono", 
+                                "4" = "B", 
+                                "5" = "CD8 T", 
+                                "6" = "NK", 
+                                "7" = "T activated", 
+                                "8" = "DC", 
+                                "9" = "B activated", 
+                                "10" = "MK", 
+                                "11" = "pDC", 
+                                "12" = "Eryth", 
+                                "13" = "Mono/MK doublets", 
+                                "14" = "HSPC")
+```
+
+
+```{r}
+DimPlot(object = immune.combined, 
+        label = TRUE)
+```
+
+
+```{r}
+Idents(immune.combined) <- factor(Idents(immune.combined), 
+                                  levels = c("HSPC", "Mono/MK Doublets", "pDC", 
+                                             "Eryth", "MK", "DC", 
+                                             "CD14 Mono", "CD16 Mono", 
+                                             "B activated", "B", "CD8 T", 
+                                             "NK", "T activated", "CD4 Naive T",
+                                             "CD4 Memory T"))
+
+markers.to.plot <- c("CD3D", "CREM", "HSPH1", "SELL", "GIMAP5", 
+                     "CACYBP", "GNLY", "NKG7", "CCL5", "CD8A", 
+                     "MS4A1", "CD79A", "MIR155HG", "NME1", 
+                     "FCGR3A", "VMO1", "CCL2", "S100A9", 
+                     "HLA-DQA1","GPR183", "PPBP", "GNG11", 
+                     "HBA2", "HBB", "TSPAN13", "IL3RA", 
+                     "IGJ", "PRSS57")
+
+DotPlot(object = immune.combined, 
+        features = markers.to.plot, 
+        cols = c("blue", "red"), 
+        dot.scale = 8, 
+        split.by = "stim") +
+    RotatedAxis()
+```
+
+# Identify differential expressed genes across conditions
+```{r}
+library(ggplot2)
+library(cowplot)
+theme_set(theme_cowplot())
+
+t.cells <- subset(immune.combined, idents = "CD4 Naive T")
+Idents(t.cells) <- "stim"
+avg.t.cells <- as.data.frame(log1p(AverageExpression(t.cells, verbose = F)$RNA))
+avg.t.cells$gene <- rownames(avg.t.cells)
+
+cd14.mono <- subset(immune.combined, idents = "CD14 Mono")
+Idents(cd14.mono) <- "stim"
+avg.cd14.mono <- as.data.frame(log1p(AverageExpression(cd14.mono, verbose = F)$RNA))
+avg.cd14.mono$gene <- rownames(avg.cd14.mono)
+
+genes.to.label <- c("ISG15", "LY6E", "IFI6", "ISG20", "MX1", "IFIT2", "IFIT1", "CXCL10", "CCL8")
+
+p1 <- ggplot(avg.t.cells, aes(CTRL, STIM)) +
+        geom_point() +
+        ggtitle(label = "CD4 Naive T cells")
+p1 <- LabelPoints(plot = p1, 
+                  points = genes.to.label, 
+                  repel = T)
+
+p2 <- ggplot(avg.cd14.mono, aes(CTRL, STIM)) +
+    geom_point() +
+    ggtitle(label = "CD14 Monocytes")
+p2 <- LabelPoints(plot = p2, 
+                  points = genes.to.label, 
+                  repel = T)
+
+p1 + p2
+```
+
+As we can see, many of the same genes are upregulated in both of these cell types and likely represent a conserved interferon response pathway.
+
+```{r}
+immune.combined$celltype.stim <- paste(Idents(immune.combined), 
+                                  immune.combined$stim, 
+                                  sep = "_")
+immune.combined$celltype <- Idents(immune.combined)
+Idents(immune.combined) <- "celltype.stim"
+b.interferon.response <- FindMarkers(immune.combined, 
+                                     ident.1 = "B_STIM", 
+                                     ident.2 = "B_CTRL", 
+                                     verbose = F)
+
+b.interferon.response %>% head(n = 15)
+```
+
+```{r}
+plots <- VlnPlot(object = immune.combined, 
+                 features = c("LYZ", "ISG15", "CXCL10"), 
+                 split.by = "stim", 
+                 group.by = "celltype")
+wrap_plots(plots, ncol = 1)
+ggsave("vlnplot.tiff", width = 20, height = 7)
+```
+
+
+# Performing integration on daasets normalized with SCTransform
+- Normalize datasets individually by `SCTransform()`, instead of `NormalizData()` prior to integration.  
+- As discussed further in our SCTransform vignette, we typically use 3000, or more features for analysis downstream of sctransform.  
+- Run the `PrepSCTIntegration()` function prior to identifying anchors.  
+- When running `FindIntegrationAnchors()`, and `IntegrateData()`, set the `normalization.method` parameter to the value `SCT`.  
+- When running sctransform-based workflows, including integration, do not run the `ScaleData()` function.  
+
+
+```{r, message=FALSE}
+library(Seurat)
+library(SeuratData)
+```
+
+```{r}
+ifnb <- LoadData("ifnb")
+
+ifnb.list <- SplitObject(object = ifnb, split.by = "stim")
+ifnb.list <- lapply(X = ifnb.list, FUN = SCTransform)
+features <- SelectIntegrationFeatures(object.list = ifnb.list, nfeatures = 3000)
+ifnb.list <- PrepSCTIntegration(object.list = ifnb.list, anchor.features = features)
+```
+
+```{r}
+immune.anchors <- FindIntegrationAnchors(object.list = ifnb.list,
+                                         normalization.method = "SCT", 
+                                         anchor.features = features)
+immune.combined.sct <- IntegrateData(anchorset = immune.anchors, normalization.method = "SCT")
+```
+
+```{r}
+immune.combined.sct <- RunPCA(object = immune.combined.sct, 
+                              verbose = F)
+
+immune.combined.sct <- RunUMAP(object = immune.combined.sct, 
+                               reduction = "pca", 
+                               dims = 1:30)
+```
+
+```{r}
+p1 <- DimPlot(object = immune.combined.sct, 
+              reduction = "umap", 
+              group.by = "stim")
+p2 <- DimPlot(object = immune.combined.sct, 
+              reduction = "umap", 
+              group.by = "seurat_annotations", 
+              label = T, 
+              repel = T)
+
+p1 + p2
+```
+
+
+
+
+
+
+
+
+
+
+
+
