@@ -71,7 +71,7 @@ GDEList components:
     - `samples`: containing information about the samples or libraries  
     - `genes`: containing information about the genes or genomic features  
     - `group`: vector or factor giving the experimental group/condition for each sample/library  
-    - `lib.size`: for the libarry size or sequencing depth for each sample. If not specified it will be computed from the column sums of the counts.  
+    - `lib.size`: for the library size or sequencing depth for each sample. If not specified it will be computed from the column sums of the counts.  
 
 
 ## Filtering  
@@ -91,7 +91,7 @@ Filtering out low expression genes by `filterByExpr()` function.
 
 The function accesses the group factor contained in y in order to compute the minimum group size, but the filtering is performed independently of which sample belongs to which group so that no bias is introduced.  
 
-The group factor or the experimental design matrix can also be given directly to the `filterByExpr` function if not already set in the DGEList object.  
+The group factor or the experimental design matrix can also be given directly to the `filterByExpr` function if not already set in the `DGEList` object.  
 
 
 ## Normalization  
@@ -99,7 +99,7 @@ Normalization is only necessary for sample-specific effects.
 
 The `calcNormFactors` function normalizes for RNA composition by finding a set of scaling factors for the library sizes that minimize the log-fold changes between the samples for most genes.  
 
-The default method for computing these scale factors uses a trimmed mean of Mvalues (TMM) between each pair of samples. We call the product of the *original library size* and the scaling factor the *effective library size*. The *effective library size* replaces the original library size in all downsteam analyses.    
+The default method for computing these scale factors uses a trimmed mean of Mvalues (TMM) between each pair of samples. We call the product of the *original library size* and the scaling factor the *effective library size*. The *effective library size* replaces the original library size in all downstream analyses.    
 
 TMM is recommended for most RNA-Seq data where the majority (more than half) of the genes are believed not differentially expressed between any pair of the samples.   
 

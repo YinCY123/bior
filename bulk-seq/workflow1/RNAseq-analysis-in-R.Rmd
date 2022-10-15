@@ -154,7 +154,7 @@ heatmap.2(logcounts[var_genes_500, ],
 ## Normalisation for composition bias  
 TMM normalization is performed to eliminate composition biases between libraries. This generates a set of normalization factors, where **the product of these factors and the library size defines the effective library size**.   
 
-The `calcNormFactors` function calculates the normalization factors between libraries. TMM normalisation (and most scaling normalisation methods) scale relative to one sample.  
+The `calcNormFactors` function calculates the normalization factors between libraries. TMM normalization (and most scaling normalisation methods) scale relative to one sample.  
 
 ```{r}
 y <- calcNormFactors(y)
@@ -184,7 +184,7 @@ abline(h = 0, col = "grey")
 
 ## Differential expression with limma-voom  
 ### Creating the design matrix  
-First we need to create a design matrix for the groups. There are many different ways to set up your design matrix, and it is dictated by what comparisions you would like to test.   
+First we need to create a design matrix for the groups. There are many different ways to set up your design matrix, and it is dictated by what comparisons you would like to test.   
 ```{r}
 group <- factor(paste(sampleinfo$CellType, sampleinfo$Status, sep = "_"))
 design <- model.matrix(~ 0 + group)
@@ -231,7 +231,7 @@ colnames(design)
 cont_matrix <- makeContrasts(B.PregVsLac = basal_pregnant - basal_lactate, levels = design)
 ```
 
-Now we can apply the contrasts matrix to the `fit` object to get the statistics and estimated parameters of our comparision that we are interested in.  
+Now we can apply the contrasts matrix to the `fit` object to get the statistics and estimated parameters of our comparison that we are interested in.  
 ```{r}
 fit_cont <- contrasts.fit(fit = fit, contrasts = cont_matrix)
 ```
