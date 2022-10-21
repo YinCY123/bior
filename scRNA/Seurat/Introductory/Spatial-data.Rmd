@@ -1,0 +1,66 @@
+---
+title: "Spatial-data"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Analysis, visualization, and integration of spatial datasets with Seurat
+## Overview
+The tutorial demonstrates how to use Seurat(v>=3.2) to analyze spatially-resolved data.  
+
+Tasks of this tutorial:  
+1. Normalization  
+2. Dimensional reduction and clustering  
+3. Detecting spatially-variable features  
+4. Interactive visualization  
+5. Integration with single-cell RNA-seq data  
+6. Working with multiple slices  
+
+## 10x Visium
+### Dataset
+Here, we will be using a recently released dataset of sagital mouse brain slices generated using the Visium v1 chemistry. There are two serial anterior sections, and two (matched) serial posterior sections.
+
+```{r, message=FALSE}
+library(Seurat)
+library(SeuratData)
+library(patchwork)
+library(ggplot2)
+
+# InstallData("stxBrain")
+brain <- LoadData(ds = "stxBrain", type = "anterior1")
+```
+
+The visium data from 10x consists of the following data types:  
+- A spot by gene expression matrix  
+- An image of the tissue slice (obtained from H&E staining during data acquisition)  
+- Scaling factors that relate the original high resolution image to the lower resolution image used here for visualization.  
+
+In the Seurat object, the spot by gene expression matrix is similar to a typical 'RNA' Assay but contains spot level, not single-cell level data. The image itself is stored in a new `images` slot in the Seurat object. The `images` slot also stores the information necessary to associate spots with their physical position on the tissue image.  
+
+## Data preprocessing
+The initial preprocessing steps that we perform on the spot by gene expression data are similar to a typical scRNA-seq experiment. We first need to normalize the data in order to account for variance in sequencing depth across data points. We note that the variance in molecular counts / spot can be substantial for spatial datasets, particularly if there are differences in cell density across the tissue. We see substantial heterogeneity here, which requires effective normalization.  
+
+```{r}
+plot1 <- VlnPlot(object = brain, 
+                 features = "nCount_Spatial", 
+                 pt.size = 0.1) +
+    NoLegend()
+
+plot2 <- SpatialFeaturePlot(object = brain, 
+                            features = "nCount_Spatial") +
+    theme(legend.position = "right")
+
+wrap_plots(plot1, plot2)
+```
+
+
+
+
+
+
+
