@@ -1,0 +1,108 @@
+---
+title: "Introduction"
+author: "yincy"
+date: "10/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Installation
+## Bioconductor versioning
+Unlike CRAN, Bioconductor releases its packages as a cohort on a half-yearly cycle. This comes with the guarantee that different packages will work together smoothly if they belong to the same cohort - as mentioned above, this is one of Biocondiuctor's main selling points. For a particular installation, the version of the cohort release can be easily obtained from `BiocManager`.  
+
+```{r}
+BiocManager::version()
+```
+
+Each Bioconductor release relies on the latest release version of R, which in turn has yearly updates. For example, Bioconductor 3.11 and 3.12 would use R 4.0, while Bioconductor 3.13 and 3.14 will use R 4.1, and so on. Thus, getting the latest Bioconductor release usually requires us to install the latest release version of R; `BiocManager::install()` will then take care of the rest.
+
+The interoperability guarantee mentioned above only extends to packages from the same version of Bioconductor. Packages from different Bioconductor releases may not necessarily work together, e.g., due to updates in the data structures or function arguments. Normally, BiocManager::install() will prevent us from installing versions from different versions, but if it does happen, we can fix incompatibilities with:
+
+```{r, eval=FALSE}
+BiocManager::valid()
+```
+
+## Staying up to date
+Updating all R/Bioconductor packages is as simple as running `BiocManager::install()` without any arguments. This will check for more recent version of each package (within a Bioconductor release) and prompt the user to update if any are available.  
+
+```{r, eval=FALSE}
+BiocManager::install()
+```
+
+
+If we want to update to a more recent Bioconductor release, we can use the `version=` argument to explicitly state the version number. This assumes that we have a version of R that is capable of handling the requested Bioconductor release.
+
+```{r, eval=FALSE}
+BiocManager::install(version = "3.15")
+```
+
+It is a good idea to make sure that you are using the latest versions of all packages, at least at the start of any analysis project. This ensures that you have the most recent functionality and bugfixes. The only exception is if there is a need to recover historical results, in which case we might prefer to use older versions of all packages:
+
+```{r, eval=FALSE}
+# installing CRAN packages as of 29th April, 2020
+
+options(repos = c(CRAN = "https://packagemanager.rstudio.com/all/277"))
+
+# Using packages from Bioconductor version 3.10
+BiocManager::install(version = '3.10')
+```
+
+
+# Learning
+## Getting help
+```{r, eval=FALSE}
+# get help about a function
+?`function-name`
+
+# questions about how to use a package may be answered by the package's vignette
+vignette(package = "SingleCellExperiment") # list all available vignettes
+vignette(package = "SingleCellExperiment", topic = "intro") # open specific vignette
+
+# getting help from Stack Overflow's R tag
+```
+
+## Advanced tutorials
+- advanced R
+- What they Forgot to Teach You About R
+- The R Inferno
+- Happy Git and Github for the useR
+- R Packages
+- Writing R extensions
+
+
+# Getting scRNA-seq datasets
+## Single-Cell experiment protocol
+1. droplet-based protocols  
+    - 10X Genomics
+    - inDrop
+    - Drop-seq
+2. plate-based protocols with UMI  
+    - CEL-seq(2)
+    - MARS-seq
+3. plate-based protocols with reads
+    - Smart-seq2
+
+
+## Experimental design
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
