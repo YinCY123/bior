@@ -10,11 +10,11 @@ knitr::opts_chunk$set(echo = TRUE)
 # Chapter 6 Quality Control  
 Low-quality libraries in scRNA-seq data can arise from a variety of sources such as cell damage during dissociation or failure in library preparation (e.g., inefficient reverse transcription or PCR amplification). **These usually manifest as “cells” with low total counts, few expressed genes and high mitochondrial or spike-in proportions**. These low-quality libraries are problematic as they can contribute to misleading results in downstream analyses:  
 
-- They form their own distinct cluster(s), complicating interpretation of the results. This is most obviously driven by increased mitochondrial proportions or enrichment for nuclear RNAs after cell damage. In the worst case, low-quality libraries generated from different cell types can cluster together based on similarities in the damage-induced expression profiles, creating artificial intermediate states or trajectories between otherwise distinct subpopulations. Additionally, very small libraries can form their own clusters due to shifts in the mean upon transformation.  
+- **They form their own distinct cluster(s), complicating interpretation of the results**. This is most obviously driven by increased mitochondrial proportions or enrichment for nuclear RNAs after cell damage. In the worst case, low-quality libraries generated from different cell types can cluster together based on similarities in the damage-induced expression profiles, creating artificial intermediate states or trajectories between otherwise distinct sub-populations. Additionally, very small libraries can form their own clusters due to shifts in the mean upon transformation.  
 
-- They distort the characterization of population heterogeneity during variance estimation or principal components analysis. The first few principal components will capture differences in quality rather than biology, reducing the effectiveness of dimensionality reduction. Similarly, genes with the largest variances will be driven by differences between low- and high-quality cells. The most obvious example involves low-quality libraries with very low counts where scaling normalization inflates the apparent variance of genes that happen to have a non-zero count in those libraries.  
+- **They distort the characterization of population heterogeneity during variance estimation or principal components analysis**. The first few principal components will capture differences in quality rather than biology, reducing the effectiveness of dimensional reduction. Similarly, genes with the largest variances will be driven by differences between low- and high-quality cells. The most obvious example involves low-quality libraries with very low counts where scaling normalization inflates the apparent variance of genes that happen to have a non-zero count in those libraries.  
 
-- They contain genes that appear to be strongly “upregulated” due to aggressive scaling to normalize for small library sizes. This is most problematic for contaminating transcripts (e.g., from the ambient solution) that are present in all libraries at low but constant levels. Increased scaling in low-quality libraries transforms small counts for these transcripts in large normalized expression values, resulting in apparent upregulation compared to other cells. This can be misleading as the affected genes are often biologically sensible but are actually expressed in another subpopulation.  
+- **They contain genes that appear to be strongly “upregulated” due to aggressive scaling to normalize for small library sizes**. This is most problematic for contaminating transcripts (e.g., from the ambient solution) that are present in all libraries at low but constant levels. Increased scaling in low-quality libraries transforms small counts for these transcripts in large normalized expression values, resulting in apparent upregulation compared to other cells. This can be misleading as the affected genes are often biologically sensible but are actually expressed in another subpopulation.  
 
 To avoid - or at least mitigate - these problems, we need to remove these cells at the start of the analysis. This step is commonly referred to as quality control (QC) on the cells.  
 
@@ -22,7 +22,9 @@ scRNA-seq dataset from [PMID:29030468]
 ```{r}
 library(scRNAseq)
 
-load("data/sce.416b.RData")
+# load("data/sce.416b.RData")
+sce.416b <- LunSpikeInData(which = "416b")
+sce.416b %>% colData()
 sce.416b$block <- factor(sce.416b$block)
 ```
 
@@ -34,7 +36,7 @@ We use several common QC metrics to identify low-quality cells based on their ex
 
 - The number of expressed features in each cell is defined as the number of endogenous genes with non-zero counts for that cell. Any cell with very few expressed genes is likely to be of poor quality as the diverse transcript population has not been successfully captured.  
 
-- The proportion of reads mapped to spike-in transcripts is calculated relative to the total count across all features (including spike-ins) for each cell. As the same amount of spike-in RNA should have been added to each cell, any enrichment in spike-in counts is symptomatic of loss of endogenous RNA. Thus, high proportions are indicative of poor-quality cells where endogenous RNA has been lost due to, e.g., partial cell lysis or RNA degradation during dissociation.  
+- The proportion of reads mapped to spike-in transcripts is calculated relative to the total count across all features (including spike-ins) for each cell. As the same amount of spike-in RNA should have been added to each cell, any enrichment in spike-in counts is symptomatic of loss of endogenous RNA. **Thus, high proportions are indicative of poor-quality cells where endogenous RNA has been lost due to, e.g., partial cell lysis or RNA degradation during dissociation**.  
 
 - In the absence of spike-in transcripts, the proportion of reads mapped to genes in the mitochondrial genome can be used. High proportions are indicative of poor-quality cells (Islam et al. 2014; Ilicic et al. 2016), presumably because of loss of cytoplasmic RNA from perforated cells. The reasoning is that, in the presence of modest damage, the holes in the cell membrane permit efflux of individual transcript molecules but are too small to allow mitochondria to escape, leading to a relative enrichment of mitochondrial transcripts. For single-nuclei RNA-seq experiments, high proportions are also useful as they can mark cells where the cytoplasm has not been successfully stripped.  
 
@@ -52,7 +54,8 @@ location <- rownames(sce.416b) %>%
            columns = c("GENEID", "SYMBOL"))
 
 is.mito <- grepl("^MT-", location$SYMBOL, ignore.case = T)
-
+is.mito %>% table()
+location[is.mito, ] %>% distinct(SYMBOL) %>% arrange(SYMBOL)
 
 # # ALTERNATIVELY: using resources in AnnotationHub to retrieve chromosomal locations given the Ensembl IDs; this should yield the same result.  
 # library(EnsDb.Mmusculus.v79)
@@ -67,10 +70,10 @@ is.mito <- grepl("^MT-", location$SYMBOL, ignore.case = T)
 # is.mito.alt %>% table
 
 library(scater)
-df <- perCellQCMetrics(sce.416b, subset = list(Mito = is.mito))
+df <- perCellQCMetrics(sce.416b, subset = list(mito = is.mito))
 ```
 
-Alternatively, users may prefer to use the addPerCellQC() function. This computes and appends the per-cell QC statistics to the colData of the SingleCellExperiment object, allowing us to retain all relevant information in a single object for later manipulation.  
+Alternatively, users may prefer to use the `addPerCellQC()` function. This computes and appends the per-cell QC statistics to the `colData` of the `SingleCellExperiment` object, allowing us to retain all relevant information in a single object for later manipulation.  
 
 ```{r}
 sce.416b <- addPerCellQC(x = sce.416b, subsets = list(Mito = is.mito))
@@ -108,14 +111,14 @@ tibble(LibSize = sum(qc.lib),
 # sce.416b <- sce.416b[, discard]
 ```
 
-While simple, this strategy requires considerable experience to determine appropriate thresholds for each experimental protocol and biological system. **Thresholds for read count-based data are simply not applicable for UMI-based data, and vice versa**. Differences in mitochondrial activity or total RNA content require constant adjustment of the mitochondrial and spike-in thresholds, respectively, for different biological systems. Indeed, even with the same protocol and system, the appropriate threshold can vary from run to run due to the vagaries of cDNA capture efficiency and sequencing depth per cell.  
+While simple, this strategy requires considerable experience to determine appropriate thresholds for each experimental protocol and biological system. **Thresholds for read count-based data are simply not applicable for UMI-based data, and vice versa**. Differences in mitochondrial activity or total RNA content require constant adjustment of the mitochondrial and spike-in thresholds, respectively, for different biological systems. Indeed, even with the same protocol and system, the appropriate threshold can vary from run to run due to the variance of cDNA capture efficiency and sequencing depth per cell.  
 
 
 ### With adaptive thresholds  
 #### Identifying outliers  
 **To obtain an adaptive threshold, we assume that most of the dataset consists of high-quality cells. We then identify cells that are outliers for the various QC metrics, based on the median absolute deviation (MAD) from the median value of each metric across all cells**. Specifically, a value is considered an outlier if it is more than 3 MADs from the median in the “problematic” direction. This is loosely motivated by the fact that such a filter will retain 99% of non-outlier values that follow a normal distribution.  
 
-For the 416B data, we identify cells with log-transformed library sizes that are more than 3 MADs below the median. A log-transformation is used to improve resolution at small values when type="lower". Specifically, it guarantees that the threshold is not a negative value, which would be meaningless for a non-negative metric. Furthermore, it is not uncommon for the distribution of library sizes to exhibit a heavy right tail; the log-transformation avoids inflation of the MAD in a manner that might compromise outlier detection on the left tail. (More generally, it makes the distribution seem more normal to justify the 99% rationale mentioned above.)  
+For the 416B data, we identify cells with log-transformed library sizes that are more than 3 MADs below the median. **A log-transformation is used to improve resolution at small values when type="lower"**. Specifically, it guarantees that the threshold is not a negative value, which would be meaningless for a non-negative metric. Furthermore, it is not uncommon for the distribution of library sizes to exhibit a heavy right tail; the log-transformation avoids inflation of the MAD in a manner that might compromise outlier detection on the left tail. (More generally, it makes the distribution seem more normal to justify the 99% rationale mentioned above.)  
 
 ```{r}
 qc.lib2 <- isOutlier(metric = df$sum, log = T, type = "lower")
@@ -145,7 +148,7 @@ attr(qc.spike2, "thresholds")
 ```
 
 ```{r}
-qc.mito2 <- isOutlier(df$subsets_Mito_percent, type = "higher")
+qc.mito2 <- isOutlier(df$subsets_mito_percent, type = "higher")
 attr(qc.mito2, "thresholds")
 ```
 
@@ -169,10 +172,10 @@ tibble(
 Alternatively, this entire process can be done in a single step using the `quickPerCellQC()` function. This is a wrapper that simply calls `isOutlier()` with the settings described above.  
 
 ```{r}
-reasons <- quickPerCellQC(df, 
+reasons <- quickPerCellQC(x = df, 
                           lib_size = "sum", 
                           n_features = "detected", 
-                          percent_subsets = c("subsets_Mito_percent", 
+                          percent_subsets = c("subsets_mito_percent", 
                                               "altexps_ERCC_percent", 
                                               "altexps_SIRV_percent"))
 
@@ -182,9 +185,9 @@ reasons %>% as_tibble() %>% colnames()
 With this strategy, the thresholds adapt to both the location and spread of the distribution of values for a given metric. This allows the QC procedure to adjust to changes in sequencing depth, cDNA capture efficiency, mitochondrial content, etc. without requiring any user intervention or prior experience. However, it does require some implicit assumptions that are discussed below in more detail.  
 
 #### Assumptions of outlier detection  
-Outlier detection assumes that most cells are of acceptable quality. This is usually reasonable and can be experimentally supported in some situations by visually checking that the cells are intact, e.g., on the microwell plate. If most cells are of (unacceptably) low quality, the adaptive thresholds will obviously fail as they cannot remove the majority of cells. Of course, what is acceptable or not is in the eye of the beholder - neurons, for example, are notoriously difficult to dissociate, and we would often retain cells in a neuronal scRNA-seq dataset with QC metrics that would be unacceptable in a more amenable system like embryonic stem cells.  
+**Outlier detection assumes that most cells are of acceptable quality**. This is usually reasonable and can be experimentally supported in some situations by usually checking that the cells are intact, e.g., on the microwell plate. If most cells are of (unacceptably) low quality, the adaptive thresholds will obviously fail as they cannot remove the majority of cells. Of course, what is acceptable or not is in the eye of the beholder - neurons, for example, are notoriously difficult to dissociate, and we would often retain cells in a neuronal scRNA-seq dataset with QC metrics that would be unacceptable in a more amenable system like embryonic stem cells.  
 
-Another assumption mentioned earlier is that the QC metrics are independent of the biological state of each cell. This is most likely to be violated in highly heterogeneous cell populations where some cell types naturally have, e.g., less total RNA (see Figure 3A of Germain, Sonrel, and Robinson (2020)) or more mitochondria. Such cells are more likely to be considered outliers and removed, even in the absence of any technical problems with their capture or sequencing. The use of the MAD mitigates this problem to some extent by accounting for biological variability in the QC metrics. A heterogeneous population should have higher variability in the metrics among high-quality cells, increasing the MAD and reducing the chance of incorrectly removing particular cell types (at the cost of reducing power to remove low-quality cells).  
+**Another assumption mentioned earlier is that the QC metrics are independent of the biological state of each cell**. This is most likely to be violated in highly heterogeneous cell populations where some cell types naturally have, e.g., less total RNA (see Figure 3A of Germain, Sonrel, and Robinson (2020)) or more mitochondria. Such cells are more likely to be considered outliers and removed, even in the absence of any technical problems with their capture or sequencing. The use of the MAD mitigates this problem to some extent by accounting for biological variability in the QC metrics. A heterogeneous population should have higher variability in the metrics among high-quality cells, increasing the MAD and reducing the chance of incorrectly removing particular cell types (at the cost of reducing power to remove low-quality cells).  
 
 In general, these assumptions are either reasonable or their violations have little effect on downstream conclusions. Nonetheless, it is helpful to keep them in mind when interpreting the results.  
 
@@ -201,7 +204,7 @@ batch %>% table
 
 batch.reasons <- quickPerCellQC(df, 
                                 batch = batch, 
-                                percent_subsets = c("subsets_Mito_percent", 
+                                percent_subsets = c("subsets_mito_percent", 
                                                     "altexps_ERCC_percent"))
 
 batch.reasons %>% as_tibble() %>% colSums()
@@ -225,7 +228,7 @@ with.blocking <- plotColData(object = sce.grun,
     ggtitle(label = "with blocking")
 
 
-# second attemp, sharing information across batches to avoid dramatically different thresholds for unusual batches.  
+# second attempt, sharing information across batches to avoid dramatically different thresholds for unusual batches.  
 discard.ercc2 <- isOutlier(sce.grun$altexps_ERCC_percent, 
                            type = "higher", 
                            batch = sce.grun$donor, 
@@ -240,7 +243,7 @@ without.blocking <- plotColData(object = sce.grun,
 cowplot::plot_grid(with.blocking, without.blocking)
 ```
 
-To identify problematic batches, one useful rule of thumb is to find batches with QC thresholds that are themselves outliers compared to the thresholds of other batches. The assumption here is that most batches consist of a majority of high quality cells such that the threshold value should follow some unimodal distribution across “typical” batches. If we observe a batch with an extreme threshold value, we may suspect that it contains a large number of low-quality cells that inflate the per-batch MAD. We demonstrate this process below for the Grun et al. (2016) data.  
+**To identify problematic batches, one useful rule of thumb is to find batches with QC thresholds that are themselves outliers compared to the thresholds of other batches**. The assumption here is that most batches consist of a majority of high quality cells such that the threshold value should follow some unimodal distribution across “typical” batches. If we observe a batch with an extreme threshold value, we may suspect that it contains a large number of low-quality cells that inflate the per-batch MAD. We demonstrate this process below for the Grun et al. (2016) data.  
 
 ```{r}
 ercc.thresholds <- attr(discard.ercc, "thresholds")["higher", ]
@@ -291,11 +294,11 @@ cowplot::plot_grid(plotlist = list(
         ggtitle("Detected features"), 
     plotColData(sce.416b, 
                 x = "block", 
-                y = "subsets_Mito_detected.1", 
+                y = "subsets_mito_detected", 
                 colour_by = "discard", 
                 other_fields = "phenotype") +
         facet_wrap(~phenotype) +
-        ggtitle("Mito percent"), 
+        ggtitle("mito percent"), 
     plotColData(sce.416b, 
                 x = "block", 
                 y = "altexps_ERCC_percent", 
@@ -309,8 +312,8 @@ ncol = 1)
 Another useful diagnostic involves plotting the proportion of mitochondrial counts against some of the other QC metrics. The aim is to confirm that there are no cells with both large total counts and large mitochondrial counts, to ensure that we are not inadvertently removing high-quality cells that happen to be highly metabolically active (e.g., hepatocytes). We demonstrate using data from a larger experiment involving the mouse brain (Zeisel et al. 2015); in this case, we do not observe any points in the top-right corner in Figure 6.3 that might potentially correspond to metabolically active, undamaged cells.  
 
 ```{r}
-# sce.zeisel <- ZeiselBrainData()
-sce.zeisel <- readRDS("data/sce.zeisel.rds")
+sce.zeisel <- ZeiselBrainData()
+# sce.zeisel <- readRDS("data/sce.zeisel.rds")
 
 library(scater)
 sce.zeisel <- aggregateAcrossFeatures(x = sce.zeisel, 
@@ -355,7 +358,7 @@ Once low-quality cells have been identified, we can choose to either remove them
 filtered <- sce.416b[, !reasons$discard]
 ```
 
-The biggest practical concern during QC is whether an entire cell type is inadvertently discarded. There is always some risk of this occurring as the QC metrics are never fully independent of biological state. We can diagnose cell type loss by looking for systematic differences in gene expression between the discarded and retained cells. To demonstrate, we compute the average count across the discarded and retained pools in the 416B data set, and we compute the log-fold change between the pool averages.
+The biggest practical concern during QC is whether an entire cell type is inadvertently discarded. There is always some risk of this occurring as the QC metrics are never fully independent of biological state. *We can diagnose cell type loss by looking for systematic differences in gene expression between the discarded and retained cells*. To demonstrate, we compute the average count across the discarded and retained pools in the 416B data set, and we compute the log-fold change between the pool averages.
 
 ```{r}
 # using the `discard` vector for demonstration purpose, as it has more cells for stable calculation of 'lost'.
@@ -369,33 +372,30 @@ logFC <- logged[, 1] - logged[, 2]
 abundance <- rowMeans(logged)
 ```
 
-If the discarded pool is enriched for a certain cell type, we should observe increased expression of the corresponding marker genes. No systematic upregulation of genes is apparent in the discarded pool, suggesting that the QC step did not inadvertently filter out a cell type in the 416B dataset.  
+**If the discarded pool is enriched for a certain cell type, we should observe increased expression of the corresponding marker genes**. No systematic upregulation of genes is apparent in the discarded pool, suggesting that the QC step did not inadvertently filter out a cell type in the 416B dataset.  
 
-```{r, fig.cap='Log-fold change in expression in the discarded cells compared to the retained cells in the 416B dataset. Each point represents a gene with mitochondrial transcripts in blue.'}
+```{r}
 plot(abundance, logFC, xlab = "Average count", ylab = "Log-FC(lost/kept)", pch = 16)
 points(abundance[is.mito], logFC[is.mito], col = "dodgerblue", pch  =16)
+text(abundance[is.mito], logFC[is.mito], col = "dodgerblue", pch  =16, labels = names(abundance[is.mito]))
 ```
 
 For comparison, let us consider the QC step for the PBMC dataset from 10X Genomics (Zheng et al. 2017). We’ll apply an arbitrary fixed threshold on the library size to filter cells rather than using any outlier-based method. Specifically, we remove all libraries with a library size below 500.  
 
 ```{r}
 library(DropletTestFiles)
-raw.path <- getTestFile("tenx-2.1.0-pbmc4k/1.0.0/raw.tar.gz")
-out.path <- file.path("/home/yincy/git/Bioconductor/workflow/Single-Cell/scRNA-seq-online/data/", "pbmc4k")
-untar(raw.path, exdir = out.path)
-
-
-library(DropletUtils)
+library(TENxPBMCData)
 library(scuttle)
-fname <- file.path(out.path, "raw_gene_bc_matrices/GRCh38")
-# sce.pbmc <- read10xCounts(fname, col.names = T)
-sce.pbmc <- readRDS("data/sce.pbmc.rds")
+
+fname <- file.path("../../../data/10X/raw_gene_bc_matrices/hg19/")
+sce.pbmc <- read10xCounts(fname, col.names = T)
+colData(sce.pbmc)
+rowData(sce.pbmc)
 
 # gene annotation 
 library(scater)
-
-rownames(sce.pbmc) <- uniquifyFeatureNames(rowData(sce.pbmc)$ID, 
-                                           rowData(sce.pbmc)$Symbol)
+rownames(sce.pbmc) <- uniquifyFeatureNames(ID = rowData(sce.pbmc)$ID, 
+                                           names = rowData(sce.pbmc)$Symbol)
 
 library(EnsDb.Hsapiens.v86)
 location <- mapIds(EnsDb.Hsapiens.v86, 
@@ -421,13 +421,14 @@ abundance <- rowMeans(logged)
 
 The presence of a distinct population in the discarded pool manifests as a set of genes that are strongly upregulated in `lost`. This includes PF4, PPBP and SDPR, which (spoiler alert!) indicates that there is a platelet population that has been discarded by `alt.discard`.  
 
-```{r, fig.cap='Average counts across all discarded and retained cells in the PBMC dataset, after using a more stringent filter on the total UMI count. Each point represents a gene, with platelet-related genes highlighted in orange.'}
+```{r}
 plot(abundance, logFC, xlab = "Average count", ylab = "Log-FC (lost/kept)", pch = 16)
 platelet <- c("PF4", "PPBP", "SDPR")
 points(abundance[platelet], logFC[platelet], col = "orange", pch = 16)
+text(abundance[platelet], logFC[platelet], labels = names(abundance[platelet]))
 ```
 
-If we suspect that cell types have been incorrectly discarded by our QC procedure, the most direct solution is to relax the QC filters for metrics that are associated with genuine biological differences. For example, outlier detection can be relaxed by increasing nmads= in the isOutlier() calls. Of course, this increases the risk of retaining more low-quality cells and encountering the problems discussed in Section 6.1. The logical endpoint of this line of reasoning is to avoid filtering altogether, as discussed in Section 6.6.  
+If we suspect that cell types have been incorrectly discarded by our QC procedure, the most direct solution is to relax the QC filters for metrics that are associated with genuine biological differences. For example, outlier detection can be relaxed by increasing `nmads=` in the `isOutlier()` calls. Of course, this increases the risk of retaining more low-quality cells. The logical endpoint of this line of reasoning is to avoid filtering altogether.  
 
 As an aside, it is worth mentioning that the true technical quality of a cell may also be correlated with its type. (This differs from a correlation between the cell type and the QC metrics, as the latter are our imperfect proxies for quality.) This can arise if some cell types are not amenable to dissociation or microfluidics handling during the scRNA-seq protocol. In such cases, it is possible to “correctly” discard an entire cell type during QC if all of its cells are damaged. Indeed, concerns over the computational removal of cell types during QC are probably minor compared to losses in the experimental protocol.  
 

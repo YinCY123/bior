@@ -49,7 +49,7 @@ summary(lib.sf.zeisel)
 
 In the Zeisel brain data, the library size factors differ by up to 10-fold across cells (Figure 7.1). This is typical of the variability in coverage in scRNA-seq data.  
 
-```{r, fig.cap='Distribution of size factors derived from the library size in the Zeisel brain dataset.'}
+```{r}
 hist(log10(lib.sf.zeisel), xlab = "Log10[size factor]", col = "grey80", breaks = 20)
 ```
 
@@ -81,7 +81,7 @@ We use a pre-clustering step with `quickCluster()` where cells in each cluster a
 
 We see that the deconvolution size factors exhibit cell type-specific deviations from the library size factors in Figure 7.2. This is consistent with the presence of composition biases that are introduced by strong differential expression between cell types. Use of the deconvolution size factors adjusts for these biases to improve normalization accuracy for downstream applications.  
 
-```{r, fig.cap='Deconvolution size factor for each cell in the Zeisel brain dataset, compared to the equivalent size factor derived from the library size. The red line corresponds to identity between the two size factors.'}
+```{r}
 plot(lib.sf.zeisel, deconv.sf.zeisel, 
      xlab = "library size factor", 
      ylab = "Deconvolution size factor", 
@@ -117,7 +117,7 @@ summary(sizeFactors(sce.richard))
 
 We observe a positive correlation between the spike-in size factors and deconvolution size factors within each treatment condition (Figure 7.3), indicating that they are capturing similar technical biases in sequencing depth and capture efficiency. However, we also observe that increasing stimulation of the T cell receptor - in terms of increasing affinity or time - results in a decrease in the spike-in factors relative to the library size factors. This is consistent with an increase in biosynthetic activity and total RNA content during stimulation, which reduces the relative spike-in coverage in each library (thereby decreasing the spike-in size factors) but increases the coverage of endogenous genes (thus increasing the library size factors).  
 
-```{r, fig.cap='Size factors from spike-in normalization, plotted against the library size factor fro all cells in the T cell dataset. Each plot represents a different ligand treatment and each point is a cell coloured according by time from stimulation.'}
+```{r}
 to.plot <- data.frame(
     DeconvFactor = calculateSumFactors(sce.richard), 
     SpikeFactor = sizeFactors(sce.richard), 
@@ -137,7 +137,7 @@ ggplot(to.plot, aes(x = DeconvFactor, y = SpikeFactor, color = Time)) +
 
 The differences between these two sets of size factors have real consequences for downstream interpretation. If the spike-in size factors were applied to the counts, the expression values in unstimulated cells would be scaled up while expression in stimulated cells would be scaled down. However, the opposite would occur if the deconvolution size factors were used. This can manifest as shifts in the magnitude and direction of DE between conditions when we switch between normalization strategies, as shown below for *Malat1*.  
 
-```{r, fig.cap='Distribution of log-normalized expression values for Malat1 after normalization with the deconvolution (left) or spike-in size factor (right). Cells are stratified by the ligand affinity and colored by the time stimulation.'}
+```{r}
 # see below for explanation of LogNormCounts()
 sce.richard.deconv <- logNormCounts(sce.richard, size_factors = to.plot$DeconvFactor)
 sce.richard.spike <- logNormCounts(sce.richard, size_factors = to.plot$SpikeFactor)

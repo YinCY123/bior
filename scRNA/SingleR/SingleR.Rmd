@@ -8,14 +8,14 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Introduction 
-`SingleR` is an automatic annotation method for single-cell RNA sequencing (scRNAseq) data (Aran et al. 2019). Given a reference dataset of samples (single-cell or bulk) with known labels, it labels new cells from a test dataset based on similarity to the reference. Thus, the burden of manually interpreting clusters and defining marker genes only has to be done once, for the reference dataset, and this biological knowledge can be propagated to new datasets in an automated manner.  
+`SingleR` is an automatic annotation method for single-cell RNA sequencing (`scRNAseq`) data (Aran et al. 2019). Given a reference dataset of samples (single-cell or bulk) with known labels, it labels new cells from a test dataset based on similarity to the reference. Thus, the burden of manually interpreting clusters and defining marker genes only has to be done once, for the reference dataset, and this biological knowledge can be propagated to new datasets in an automated manner.  
 
 To keep things brief, this vignette only provides a brief summary of the basic capabilities of `SingleR`. However, the package also provides more advanced functionality that includes the use of multiple references simultaneously, manipulating the cell ontology and improving performance on big datasets. Readers are referred to the [book](http://bioconductor.org/books/devel/SingleRBook/) for more details.  
 
 # Using built-in references  
-The easiest way to use SingleR is to annotate cells against built-in references. In particular, the celldex package provides access to several reference datasets (mostly derived from bulk RNA-seq or microarray data) through dedicated retrieval functions. Here, we will use the Human Primary Cell Atlas (Mabbott et al. 2013), represented as a SummarizedExperiment object containing a matrix of log-expression values with sample-level labels.  
+The easiest way to use `SingleR` is to annotate cells against built-in references. In particular, the `celldex` package provides access to several reference datasets (mostly derived from bulk RNA-seq or microarray data) through dedicated retrieval functions. Here, we will use the Human Primary Cell Atlas (Mabbott et al. 2013), represented as a `SummarizedExperiment` object containing a matrix of log-expression values with sample-level labels.  
 
-```{r}
+```{r, message=FALSE}
 library(celldex)
 
 hpca.se <- HumanPrimaryCellAtlasData()
@@ -23,7 +23,7 @@ rowData(hpca.se)
 colData(hpca.se)
 ```
 
-Our test dataset consists of some human embryonic stem cells (La Manno et al. 2016) from the scRNAseq package. For the sake of speed, we will only label the first 100 cells from this dataset.  
+Our test dataset consists of some human embryonic stem cells (La Manno et al. 2016) from the `scRNAseq` package. For the sake of speed, we will only label the first 100 cells from this dataset.  
 
 ```{r}
 library(scRNAseq)
@@ -57,7 +57,7 @@ At this point, it is worth noting that `SingleR` is workflow/package agnostic. T
 
 
 # Using single-cell references  
-Here, we will use two human pancreas datasets from the `scRNAseq` package. The aim is to use one pre-labelled dataset to annotate the other unlabelled dataset. First, we set up the Muraro et al. (2016) dataset to be our reference.  
+Here, we will use two human pancreas dataset from the `scRNAseq` package. The aim is to use one pre-labelled dataset to annotate the other unlabelled dataset. First, we set up the Muraro et al. (2016) dataset to be our reference.  
 
 ```{r}
 sceM <- MuraroPancreasData()
@@ -88,14 +88,14 @@ pred.grun <- SingleR(test = sceG,
                      labels = sceM$label, 
                      de.method = "wilcox")
 
-pred.grun$labels %>% table
+pred.grun$labels %>% table(useNA = "ifany")
 ```
 
 # Annotation diagnostics  
 `plotScoreHeatmap()` displays the scores for all cells across all reference labels, which allows users to inspect the confidence of the predicted labels across the dataset. **Ideally, each cell (i.e., column of the heatmap) should have one score that is obviously larger than the rest, indicating that it is unambiguously assigned to a single label**. A spread of similar scores for a given cell indicates that the assignment is uncertain, though this may be acceptable if the uncertainty is distributed across similar cell types that cannot be easily resolved.  
 
 ```{r}
-pred.grun$scores %>% pheatmap::pheatmap(cluster_rows = F, angle_col = 315)
+pred.grun$scores %>% pheatmap::pheatmap(angle_col = 315)
 ```
 
 Another diagnostic is based on the per-cell “deltas”, i.e., the difference between the score for the assigned label and the median across all labels for each cell. Low deltas indicate that the assignment is uncertain, which is especially relevant if the cell’s true label does not exist in the reference. We can inspect these deltas across cells for each label using the  `plotDeltaDistribution()` function.  
@@ -128,9 +128,9 @@ plotHeatmap(sceG,
 
 
 # FAQs  
-1. How can I use this with my Seurat, SingleCellExperiment, or cell_data_set object?  
+1. How can I use this with my `Seurat`, `SingleCellExperiment`, or `cell_data_set` object?  
 
-SingleR is workflow agnostic - all it needs is normalized counts. An example showing how to map its results back to common single-cell data objects is available in the README.  
+`SingleR` is workflow agnostic - all it needs is normalized counts. An example showing how to map its results back to common single-cell data objects is available in the README.  
 
 2. Where can I find reference sets appropriate for my data?  
 
