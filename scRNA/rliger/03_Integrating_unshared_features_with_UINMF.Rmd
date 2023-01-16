@@ -1,0 +1,109 @@
+---
+title: "Unshared Features UINMF"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Step 1: Preprocessing and Normalization
+First, read in your datasets.  
+
+```{r}
+osmFISH <- readRDS("../../../data/liger/Downsampled.osmFISH.RDS")
+rna <- readRDS("../../../data/liger/Downsampled.DropViz.RDS")
+```
+
+Next, create your Liger object, submitting the datasets in list format. The unshared features should not be subsetted out, or submitted separately. Rather, they should be included in the matrix for that dataset. For example, the scRNA-seq data is submitted in its entirety, the unshared features are not submitted separately. This helps ensure proper normalization.  
+
+```{r}
+library(rliger)
+
+osm.liger <- createLiger(raw.data = list(osmFISH = osmFISH, 
+                                         rna = rna))
+```
+
+Normalize the datasets. The normalization is applied to the datasets in their entirety.  
+
+```{r}
+osm.liger <- normalize(osm.liger)
+```
+
+To include unshared features in your analysis, set the unshared parameter to TRUE when selecting genes.When selecting the unshared features, it is necessary to include a list of what datasets unshared features should be included for. For instance, in this case, we wish to include the unshared features from the RNA dataset, the second dataset in our analysis. We provide an individual tuning threshold for unshared features. If a single value is submitted, that threshold is applied to all datasets’ unshared features. If multiple datasets include unshared features, the user can specify an individual thresholds for each dataset by submitting a list of thresholds the same length as the number of datasets with unshared datasets. The variable unshared features willl be stored in `liger@var.unshared.features`.
+
+```{r}
+osm.liger <- selectGenes(object = osm.liger, 
+                         unshared = TRUE, 
+                         unshared.datasets = list(2), 
+                         unshared.thresh = 0.4)
+```
+
+The `scaleNotCenter` functions will scale both the shared and unshared features. The scaled unshared features will be stored in `liger@scale.unshared.data`.  
+
+```{r}
+osm.liger <- scaleNotCenter(osm.liger)
+```
+
+## Step 2: Joint Matrix Factorization
+To factorize the datasets including unshared datasets, set the `use.unshared` parameter to TRUE.
+
+```{r}
+osm.liger <- optimizeALS(object = osm.liger, 
+                         k = 30, 
+                         use.unshared = TRUE)
+```
+
+## Step 3: Quantile Normalization and Joint Clustering
+After factorization, the resulting Liger object can used in all downstream LIGER functions without adjustment. The default reference dataset for quantile normalization is the larger dataset, but the user should select the higher quality dataset as the reference dataset, even if it is the smaller dataset.
+
+```{r}
+osm.liger <- quantile_norm(osm.liger, ref_dataset = "rna")
+osm.liger <- louvainCluster(osm.liger)
+```
+
+## Step 4: Visualization and Downstream processing
+```{r}
+osm.liger <- runUMAP(osm.liger)
+```
+
+Next, we can visualize our return factorized object by dataset to check the alignment between datasets, as well as by cluster determined in the factorization.  
+
+```{r}
+umap_plots <- plotByDatasetAndCluster(osm.liger, 
+                                      axis.labels = c("UMAP.1", "UMAP.2"), 
+                                      return.plots = TRUE)
+
+umap_plots[[1]] + umap_plots[[2]]
+```
+
+We can also examine features such as gene expression.  
+
+```{r}
+Pdgfra <- plotGene(osm.liger, 
+                   gene = "Pdgfra", 
+                   axis.labels = c("UMAP.1", "UMAP.2"), 
+                   return.plots = TRUE)
+Bmp4 <- plotGene(osm.liger, 
+                 gene = "Bmp4", 
+                 axis.labels = c("UMAP.1", "UMAP.2"), 
+                 return.plots = TRUE)
+
+plot_grid(Pdgfra[[1]], Pdgfra[[2]], 
+          Bmp4[[1]], Bmp4[[2]], 
+          ncol = 2)
+```
+
+
+
+
+
+
+
+
+
+
+
+

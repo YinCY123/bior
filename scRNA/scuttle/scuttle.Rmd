@@ -1,0 +1,350 @@
+---
+title: "scuttle"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Quality control for single-cell RNA-seq data
+### Introduction
+`scuttle` provides various low-level utilities for single-cell RNA-seq data analysis, typically used at the start of the analysis workflows or within high-level functions in other packages. 
+
+
+To demonstrate, we will obtain the classic Zeisel dataset from the `scRNAseq` package. In this case, the dataset is provided as a `SingleCellExperiment` object. However, most `scuttle` functions can also be used with raw expression matrices or instances of the more general `SummarizedExperiment` class.  
+
+```{r}
+library(scRNAseq)
+sce <- ZeiselBrainData()
+sce
+```
+
+### Computing per-cell QC metrics
+The `perCellQCMetrics()` function computes a varity of basic cell-level metrics, including `sum`, total number of counts for the cell (i.e., the library size); and `detected`, the number of features for the cell that have counts above the detection limit (default of zero). Low values for either metric are indicative of poor cDNA capture.  
+
+```{r}
+library(scuttle)
+is.mito <- grep("mt-", rownames(sce))
+is.mito %>% table
+per.cell <- perCellQCMetrics(sce, subsets = list(mito = is.mito))
+per.cell %>% apply(2, summary)
+```
+
+In addition, we can compute `subsets_X_percent`, percentage of counts that come from the feature control set named `X`; and `altexps_Y_percent`, the percentage of all counts that come from an alternative feature set `Y`. Here, `X` contains the mitochondrial genes and `Y` contains the set of spike-ins. High proportions for either metric are indicative of cell damage.  
+
+It is often convenient to store this in the colData() of our SingleCellExperiment object for future reference. One can either do so manually:
+
+```{r}
+colData(sce) <- cbind(colData(sce), per.cell)
+```
+
+or just use the `addPerCellQCMetrics()` function, which does this automatically.  
+
+```{r}
+sce <- addPerCellQCMetrics(sce, subsets = list(mito = is.mito))
+sce %>% colData()
+```
+
+
+### Identifying outliers on QC metrics
+We identify low-quality cells by setting a threshold on each of these metrics using the `isOutlier()` function. This defines the threshold at a certain number of median absolute deviations (MADs) aways from the median; values beyond this threshold are considered outliers and can be filtered out, assuming that they correspond to low-quality cells. Here, we define small outliers (using `type=lower`) for the log-total counts at 3 MADs from the median.  
+
+```{r}
+low.total <- isOutlier(per.cell$sum, type = "lower", log = TRUE)
+low.total %>% summary
+```
+
+Note that the attributes of the `isOutlier()` output contain the thresholds, if this is interest. 
+
+```{r}
+attr(low.total, "threshold")
+```
+
+Advanced users can set `batch=` to compute outliers within each batch, avoiding inflated MADs due to batch effects.  
+
+```{r}
+low.total.batched <- isOutlier(per.cell$sum, 
+                               type = "lower", 
+                               log = TRUE, 
+                               batch = sce$tissue)
+low.total.batched %>% summary
+```
+
+In cases where entire batches contain a majority of low-quality cells, we can set `subset=` to only use high-quality batches for computing the thresholds. Those thresholds are then extrapolated back to the low-quality batches for some stringent QC.  
+
+### Filtering out low-quality cells
+We could manually apply `isOutlier()` to all of our metrics, but it is easier to use `perCellQCFilter` to do this for us. This identifies low-quality cells as those that are low outliers for the log-total count, low outlier for the log-number of detected features, or high outliers for the percentage of counts in specified gene sets (e.g., mitochondrial genes, spike-in transcripts). The `discard` column contains the final call for whether a particular cell should be discarded.  
+
+```{r}
+qc.stats <- perCellQCFilters(per.cell, sub.fields = "subsets_mito_percent")
+qc.stats %>% as.matrix() %>% colSums()
+```
+
+
+```{r}
+qc.stats2 <- perCellQCFilters(per.cell, 
+                              sub.fields = c("subsets_mito_percent", "altexps_ERCC_percent"))
+qc.stats2 %>% as.matrix() %>% colSums()
+```
+
+For typical scRNA-seq applications, `quickPerCellQC()` will wrap the `perCellQCMetrics()` and `perCellQCFilters()` calls. This returns a filtered `SingleCellExperiment` that can be immediately used in downstream analyses.  
+
+```{r}
+filtered <- quickPerCellQC(sce, subsets = list(mito = is.mito), 
+                           sub.fields = "subsets_mito_percent")
+
+```
+
+depth, amount of spike-in RNA added, differences in total RNA content between cell types. In contrast, a fixed threshold would require manual adjustment to account for changes to the experimental protocol or system. 
+
+
+### Computing feature-level statistics
+Some basic feature-level statistics are computed by the `perFeatureACMetrics()` function. This include `mean`, the mean count of the gene/feature across all cells; `detected`, the percentage of cells with non-zero counts for each gene; `subsets_Y_ration`, ratio of mean counts between the cell control set named Y and all cells.  
+
+```{r}
+# pretending that the first 10 cells are empty wells, for demonstration
+per.feat <- perFeatureQCMetrics(sce, subsets = list(empty = 1:10))
+per.feat %>% apply(2, summary)
+```
+
+These metrics tend to be more useful for informing the analyst about the overall behavior of the experiment, rather than being explicitly used to filter out genes. For example, one would hope that the most abundant genes are the 'usual suspects', e.g., ribosomal proteins, actin, histones.  
+
+Users may wish to filter out very lowly or non-expressed genes to reduce the size of the dataset prior to downstream processing. However, be sure to publish the unfiltered count matrix! It is very difficult to re-use a count matrix where the features are filtered; information from the filtered features cannot be recovered, complicating integration with other datasets.  
+
+
+
+## Normalization singlce cell RNA-seq data
+### Introduction
+`scuttle` provides various low-level utilities for single-cell RNA-seq data analysis, typically used at the start of the analysis workflows or within high-level functions in other packages. This vignette will discuss the use of scaling normalization for removing cell-specific biases. To demonstrate, we will obtain the classic Zeisel dataset from the `scRNAseq` package and apply some quick control to remove damaged cells.  
+
+```{r}
+library(scRNAseq)
+sce <- ZeiselBrainData()
+
+library(scuttle)
+library(magrittr)
+sce <- quickPerCellQC(sce, 
+                      subsets = list(mito = grep("mt-", rownames(sce))), 
+                      sub.fields = c("subsets_mito_percent", "altexps_ERCC_percent"))
+
+sce %>% colData()
+```
+
+
+### Computing size factors
+Scaling normalization involves dividing the counts for each cell by a cell-specific 'size factor' to adjust for uninteresting differences in sequencing depth and capture efficiency. The `librarySizeFactors()` function provides a simple definition of the size factor for each cell, computed as the library size of each cell after scaling them to have a mean of 1 across all cells. This is fast but inaccurate in the presence of differential expression between cells that introduce composition biases.  
+
+```{r}
+librarySizeFactors(sce) %>% summary()
+```
+
+The `geometricSizeFactors()` function instead computes the geometric mean within each cell. This is more robust to composition biases but is only accurate when the counts are large and there are few zeroes.  
+
+```{r}
+geometricSizeFactors(sce) %>% summary
+```
+
+The `medianSizeFactors()` function uses a `DESeq2`-equal approach based on the median ratio from an average pseudo-cell. Briefly, we assume that most genes are non-DE, such that any systematic fold difference in coverage (as defined by the median ratio) represents technical biases that must be removed. This is highly robust to composition biases that relies on sufficient sequencing coverage to obtain well-defined ratios.  
+
+```{r}
+medianSizeFactors(sce) %>% summary
+```
+
+All of these size factors can be stored in the `SingleCellExperiment` via the `sizeFactors<-()` setter function. Most downstream function will pick these up automatically for any calculations that rely on size factors.  
+
+```{r}
+sizeFactors(sce) <- librarySizeFactors(sce)
+```
+
+Alternatively, functions like `computeLibraryFactors()` can automatically compute and attach the size factors to our `SingleCellExperiment` object.  
+
+```{r}
+sce <- computeLibraryFactors(sce)
+sizeFactors(sce) %>% summary
+```
+
+### Pooling normalization
+The `computePooledFactors()` method implements the *pooling strategy for scaling normalization*. This uses an approach similar to `medianSizeFactors()` to remove composition biases, but pools cells together to overcome problems with discreteness at low counts. Per-cell factors are then obtained from the pools using a deconvolution strategy.  
+
+```{r}
+library(scran)
+clusters <- quickCluster(sce)
+sce <- computePooledFactors(sce, clusters = clusters)
+sizeFactors(sce) %>% summary
+```
+
+For large data sets, a rough clustering should be performed prior to normalization. `computePooledFactors()` will then automatically apply normalization within each cluster first, before adjusting the scaling factors to be comparable across clusters. This reduces the risk of violating our assumptions (of a non-DE majority of genes) when many genes are DE between clusters in a heterogeneous population. In this case, we use the `quickCluster()` function from `scran` package, but any clustering function can be used.  
+
+```{r}
+sce <- computePooledFactors(sce, clusters = sce$level1class)
+sizeFactors(sce) %>% summary
+```
+
+We assume that quality control on the cells has already been performed prior to running this function. Low-quality cells with few expressed genes can often have negative size factor estimates.  
+
+### Spike-in normalization
+An alternative approach is to normalize based on the spike-in counts. The idea is that the same quantity of spike-in RNA was added to each cell prior to library preparation. Size factors are computed to scale the counts such that the total coverage of the spike-in transcripts is equal across cells.  
+
+```{r}
+sce2 <- computeSpikeFactors(sce, spikes = "ERCC")
+sizeFactors(sce2) %>% summary()
+```
+
+The main practical difference from the other strategies is that spike-in normalization preserves differences in total RNA content between cells, whereas `computePooledFactors()` and other non-DE methods do not. This can be important in certain applications where changes in total RNA content are associated with a biological phenomenon of interest.  
+
+### Computing normalized expression matrices
+Regardless of which size factor calculation we pick, the calculation of normalized expression values simply involves dividing each count by the size factor for the cell. This eliminates the cell-specific scaling effect for valid comparisions between cells in downstream analysis. The simplest approach to computing these values is to use the `logNormCounts()` function.  
+
+```{r}
+sce <- logNormCounts(sce)
+assayNames(sce)
+```
+
+This computes log2-transformed normalized expression values by adding a constant pseudo-count and log-transforming. The resulting values can be roughly interpreted on the same scale as log-transformed counts and are stored in 'logcounts'. This is the most common expression measure for downstream analyses as differences between values can be treated as log-fold changes. For example, Euclidean distance between cells are analogous to the average log-fold change across genes.  
+
+Of course, users can construct any arbitrary matrix of the same dimensions as the count matrix and store it as an assay. Here, we use the `normalizedCounts()` function to perform some custom normalization with random size factors.  
+
+```{r}
+assay(sce, "normed") <- normalizeCounts(sce, log = FALSE, 
+                                        size.factors = runif(ncol(sce)), 
+                                        pseudo.count = 1.5)
+assayNames(sce)
+```
+
+`scuttle` can also calculate counts-per-million using the aptly-named `calculateCPM()` function. The output is most appropriately stored as an assay named `cpm` in the assays of the `SingleCellExperiment` object. Related functions include `calculateTPM()` and `calculateFPKM()`, which do pretty much as advertised.  
+
+```{r}
+assay(sce, "cpm") <- calculateCPM(sce)
+assayNames(sce)
+```
+
+
+## Other functions
+### Introduction
+`scuttle` provides various low-level utilities for single-cell RNA-seq data analysis, typically used at the start of the analysis workflows or within high-level functions in other packages. This vignette will discuss the use of miscellaneous functions for scRNA-seq data processing. To demonstrate, we will obtain the classic Zeisel dataset from the `scRNAseq` package, and apply some quick quality control to remove damaged cells.  
+
+```{r}
+library(scRNAseq)
+sce <- ZeiselBrainData()
+sce
+
+library(scuttle)
+sce <- quickPerCellQC(sce, subsets = list(mito = grep("mt-", rownames(sce))), 
+                      sub.fields = c("subsets_mito_percent", "altexps_ERCC_percent"))
+sce
+```
+
+
+### Aggregation across groups or clusters
+The `aggregateAcrossCells()` function is helpful for aggregating expression values across groups of cells. For example, we might wish to sum together counts for all cells in the same cluster, possibly to use as a summary statistic for downstream analysis (e.g., for differential expression with `edgeR`). This will also perform the courtesy of sensibly aggregating the column metadata for downstream use.  
+
+```{r}
+library(scuttle)
+library(magrittr)
+
+agg.sce <- aggregateAcrossCells(sce, ids = sce$level1class)
+assay(agg.sce) %>% head
+```
+
+```{r}
+colData(agg.sce)[, c("ids", "ncells")]
+```
+
+It is similarly possible to sum across multiple factors, as shown below for the cell type and the tissue of origin. This yields one column per combination of cell type and tissue, which allows us to conveniently perform downstream analyses with both factors.
+
+```{r}
+agg.sce <- aggregateAcrossCells(sce, 
+                                ids = colData(sce)[, c("level1class", "tissue")])
+assay(agg.sce) %>% head
+```
+
+```{r}
+colData(agg.sce)[, c("level1class", "tissue", "ncells")]
+```
+
+Summation across rows may occasionally be useful for obtaining a measure of the activity of a gene set, e.g., in a pathway. Given a list of gene sets, we can use the `sumCountsAcrossFeatures()` function to aggregate expression values across features. This is usually best done by averaging the log-expression values as shown below.
+
+```{r}
+sce <- logNormCounts(sce)
+agg.feat <- sumCountsAcrossFeatures(sce, 
+                                    ids = list(GeneSet1 = 1:10, GeneSet2 = 11:50, GeneSet3 = 1:100), 
+                                    average = TRUE, 
+                                    exprs_values = "logcounts")
+agg.feat[, 1:10]
+```
+
+Similar functions are available to compute the number or proportion of cells with detectable expression in each group.
+
+```{r}
+agg.n <- summarizeAssayByGroup(sce, 
+                               statistics = "prop.detected", 
+                               ids = colData(sce)[, c("level1class", "tissue")])
+assay(agg.n) %>% head
+```
+
+### Reading in sparse matrices
+Normally, sparse matrices are provided in the MatrixMarket (`.mtx`) format, where they can be read efficiently into memory using the `readMM()` function from the `Matrix` package. However, for some reason, it has been popular to save these files in dense form as tab- or comma-separate files. This is an inefficient and inconvenient approach, requiring users to read in the entire dataset in dense form with functions like `read.delim()` or `read.csv()` (and hope that they have enough memory on their machines to do so).
+
+In such cases, `scuttle` provides the `readSparseCounts()` function to overcome excessive memory requirements. This reads in the dataset in a chunkwise manner, progressively coercing each chunk into a sparse format and combining them into a single sparse matrix to be returned to the user. In this manner, we never attempt to load the entire dataset in dense format to memory.
+
+```{r}
+outfile <- tempfile()
+write.table(counts(sce)[1:100, ], 
+            file = outfile, 
+            sep = "\t", 
+            quote = FALSE)
+output <- readSparseCounts(outfile)
+output %>% class()
+```
+
+
+### Making gene symbol unique
+When publishing a dataset, the best practice is to provide gene annotations in the form of a stable identifier like those from Ensembl or Entrez. This provides an unambiguous reference to the identity of the gene, avoiding difficulties with synonynms and making it easier to cross-reference. However, when working with a dataset, it is more convenient to use the gene symbols as these are easier to remember.
+
+Thus, a common procedure is to replace the stable identifiers in the row names with gene symbols. However, this is not straightforward as the gene symbols may not exist (`NAs`) or may be duplicated. To assist this process, `scuttle` provides the `uniquifyFeatureNames()` function that emit gene symbols if they are unique; append the identifier, if they are duplicated; and replace the symbol with the identifier if the former is missing.
+
+```{r}
+sce.ens <- ZeiselBrainData(ensembl = TRUE)
+rownames(sce.ens) %>% head
+```
+
+```{r}
+# replacing with guranted unique and non-missing symbols
+rownames(sce.ens) <- uniquifyFeatureNames(
+    ID = rownames(sce.ens), 
+    names = rowData(sce.ens)$originalName
+)
+```
+
+
+### Creating a `data.frame`
+The `makePerCellDF()` and `makePerFeatureDF()` functions create `data.frames` from the `SingleCellExperiment` object. In the `makePerCellDF()` case, each row of the output `data.frame` corresponds to a cell and each column represents the expression of a specified feature across cells, a field of the column metadata, or reduced dimensions (if any are available).
+
+```{r}
+out <- makePerCellDF(sce, features = "Tspan12")
+out %>% colnames
+```
+
+In the `makePerFeatureDF()` case, each row of the output `data.frame` corresponds to a gene and each column represents the expression profile of a specified cell or the values of a row metadata field.
+
+```{r}
+out2 <- makePerFeatureDF(sce, 
+                         cells = c("1772063062_D05", "1772063061_D01", "1772060240_F02", "1772062114_F05"))
+out2 %>% colnames
+```
+
+The aim is to enable the data in a `SingleCellExperiment` to be easily used in functions like `model.matrix()` or in `ggplot()`, without requiring users to manually extract the desired fields from the `SingleCellExperiment` to construct their own `data.frame`.
+
+
+
+
+
+
+
+
+
+
+
