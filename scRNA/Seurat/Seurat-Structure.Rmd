@@ -25,10 +25,12 @@ library(magrittr)
     + slot
     + Object Information
     + Data Access
+
 - Assay
     + Slots
     + Object Information
     + Data Access
+
 - DimReduc
     + Slots
     + Object Information
