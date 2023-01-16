@@ -1,5 +1,5 @@
 ---
-title: "scater"
+title: "Single-cell analysis toolkit for expression in R"
 output: html_document
 ---
 
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(scRNAseq)
 sce.zeisel <- ZeiselBrainData()
-# saveRDS(sce.zeisel, "f:/git/Data/Bioconductor/osca/sce.zeisel.rds")
+sce.zeisel
 ```
 
 # Diagnostic plots for quality control  
@@ -21,6 +21,7 @@ Quality control remove damaged cells and poorly sequenced libraries is a common 
 
 ```{r}
 library(scater)
+library(magrittr)
 
 sce.zeisel <- addPerCellQC(sce.zeisel, 
                            subsets = list(Mito = grep("mt-", rownames(sce.zeisel))))
@@ -34,7 +35,7 @@ colData(sce.zeisel) %>% colnames()
 plotColData(sce.zeisel, x = "sum", y = "detected", colour_by = "tissue")
 ```
 
-Here, we have plotted the total count for each cell against the mitochondrial content. Well-behaved cells should have a large number of expressed features and a low percentage of expression from feature controls. High percentage expression from feature controls and few expressed features are indicative of blank and failed cells. For some varity, we have faceted by the tissue of origin.  
+Here, we have plotted the total count for each cell against the mitochondrial content. Well-behaved cells should have a large number of expressed features and a low percentage of expression from feature controls. High percentage expression from feature controls and few expressed features are indicative of blank and failed cells. For some variety, we have faceted by the tissue of origin.  
 
 ```{r}
 plotColData(sce.zeisel, 
@@ -50,7 +51,7 @@ On the gene level, we can look at a plot that shows the top 50 (by default) most
 plotHighestExprs(sce.zeisel, exprs_values = "counts")
 ```
 
-Variable-level metrics are computed by the  `getVarianceExplained()` function (after normalization, see below). This calculates the percentage of variance of each gene’s expression that is explained by each variable in the `colData` of the  `SingleCellExperiment` object. We can then use this to determine which experimental factors are contributing most to the variance in expression. This is useful for diagnosing batch effects or to quickly verify that a treatment has an effect.  
+Variable-level metrics are computed by the  `getVarianceExplained()` function (after normalization, see below). This calculates the percentage of variance of each gene’s expression that is explained by each variable in the `colData` of the  `SingleCellExperiment` object. We can then use this to determine which experimental factors are contributing most to the variance in expression. **This is useful for diagnosing batch effects or to quickly verify that a treatment has an effect**.  
 
 ```{r}
 # Computing variance explained on the log-counts, so that the statistics reflect changed in relative expression
@@ -113,7 +114,7 @@ sce.zeisel <- runPCA(x = sce.zeisel)
 reducedDim(sce.zeisel, "PCA") %>% str
 ```
 
-By default, `runPCA()` uses the top 500 genes with the highest variances to compute the first PCs. This can be tuned by specifying `subset_row` to pass in an explicit set of genes of interest, and by using `ncomponents` to determine the number of components to compute. The `name` argument can also be used to change the name of the result in the reducedDims slot.  
+By default, `runPCA()` uses the top 500 genes with the highest variances to compute the first PCs. This can be tuned by specifying `subset_row` to pass in an explicit set of genes of interest, and by using `ncomponents` to determine the number of components to compute. The `name` argument can also be used to change the name of the result in the `reducedDims` slot.  
 
 ```{r}
 sce.zeisel <- runPCA(x = sce.zeisel, 
@@ -125,7 +126,7 @@ reducedDim(sce.zeisel, "PCA2") %>% str
 ```
 
 ## Other dimensionality reduction methods  
-t-distributed stochastic neighbour embedding (t-SNE) is widely used for visualizing complex single-cell data sets. The same procedure described for PCA plots can be applied to generate t-SNE plots using `plotTSNE`, with coordinates obtained using  `runTSNE` via the `Rtsne` package. We strongly recommend generating plots with different random seeds and perplexity values, to ensure that any conclusions are robust to different visualizations.  
+t-distributed stochastic neighbour embedding (t-SNE) is widely used for visualizing complex single-cell data sets. The same procedure described for PCA plots can be applied to generate t-SNE plots using `plotTSNE`, with coordinates obtained using  `runTSNE` via the `Rtsne` package. **We strongly recommend generating plots with different random seeds and perplexity values, to ensure that any conclusions are robust to different visualizations**.  
 
 ```{r}
 # Perplexity of 10 just chosen here arbitrarily
@@ -143,14 +144,14 @@ sce.zeisel <- runTSNE(x = sce.zeisel,
                       dimred = "PCA", 
                       n_dimred = 10)
 
-reducedDim(sce.zeisel, "TSNE") 
+reducedDim(sce.zeisel, "TSNE") %>% head
 ```
 
 The same can be done for uniform manifold with approximate projection (UMAP) via the `runUMAP()` function, itself based on the `uwot` package.  
 
 ```{r}
 sce.zeisel <- runUMAP(x = sce.zeisel)
-reducedDim(sce.zeisel, "TSNE")
+reducedDim(sce.zeisel, "TSNE") %>% head
 ```
 
 ## Visualizing reduced dimensions  
@@ -187,17 +188,17 @@ We separate the execution of these functions from the plotting to enable the sam
 We provide some helper functions to easily convert from a  `SingleCellExperiment` object to a `data.frame` for use in, say, `ggplot2` functions. This allows users to create highly customized plots that are not covered by the existing `scater` functions.  
 
 The `ggcells()` function will intelligently retrieve fields from: 
-
 1. `colData()`  
 2. `assays()`  
 3. `altExps()`  
 4. `reducedDims()` 
 
+
 to create a single `data.frame` for immediate use. In the example below, we create boxplots of Snap25 expression stratified by cell type and tissue of origin:  
 
 ```{r}
 ggcells(x = sce.zeisel, mapping = aes(x = level1class, y = Snap25)) +
-  geom_boxplot() +
+  geom_violin() +
   geom_jitter(alpha = 1/5, size = 1) +
   facet_wrap(~tissue) +
   scale_x_discrete(name = NULL) +
@@ -222,16 +223,24 @@ ggcells(sce.zeisel, mapping = aes(x = sizeFactor, y = Actb)) +
   geom_smooth()
 ```
 
-`ggfeatures()` function, whcih retrive values from:  
-
+`ggfeatures()` function, which retrieve values from:  
 1. `rowData()`  
 2. columns of `assays()`
 
+
 ```{r}
 colnames(sce.zeisel) <- colnames(sce.zeisel) %>% make.names()
+sce.zeisel %>% rowData()
+sce.zeisel %>% assay() %>% .[1:10, 1:10]
 
-ggfeatures(x = sce.zeisel, mapping = aes(x = featureType, y = X1772062111_E06)) +
-  geom_violin()
+makePerFeatureDF(sce.zeisel, 
+                 cells = assay(sce.zeisel, "logcounts") %>% colnames() %>% head(1), 
+                 assay.type = "logcounts") %>% 
+    ggplot(aes(featureType, `1772071015_C02`)) +
+    geom_violin() 
+
+ggfeatures(sce.zeisel, aes(featureType, )) +
+    geom_violin()
 ```
 
 
