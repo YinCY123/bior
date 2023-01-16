@@ -1,0 +1,54 @@
+---
+title: "Rtsne"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+There are mainly two functions in this package:  
+- `normalize_input`: centers each column of an input matrix so that it has a mean of zero. Scales the entire matrix so that the largest absolute of the centered matrix is equal to unity.  
+
+- `Rtsne`: the main working horse in this package for computing  a low dimensional embedding of high-dimensional data.  
+
+```{r}
+library(Rtsne)
+library(magrittr)
+
+out <- Rtsne(X = iris_matrix, 
+             is_distance = F, 
+             theta = 0.2, 
+             perplexity = 20, 
+             pca = TRUE, 
+             pca_scale = TRUE, 
+             initial_dims = 3)
+out$Y %>% plot(pch = 19, cex = 0.5)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

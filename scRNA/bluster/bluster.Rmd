@@ -1,0 +1,207 @@
+---
+title: "bluster"
+author: "YinCY"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Introduction
+The `bluster` package provides a flexible and extensible framework for clustering in Bioconductor package/workflows. At its core is the `clusterRows()` generic that controls dispatch to different clustering algorithms. We will demonstrate on some single-cell RNA sequencing data from the `scRNAseq` package, our aim is to cluster cells into cell populations based on their PC coordinates.  
+
+```{r}
+library(scRNAseq)
+
+sce <- ZeiselBrainData()
+
+# normalization
+library(scuttle)
+sce <- logNormCounts(sce)
+
+# feature selection
+library(scran)
+dec <- modelGeneVar(sce)
+hvgs <- getTopHVGs(dec, n = 1000)
+
+# dimensionality reduction
+set.seed(1000)
+library(scater)
+library(magrittr)
+
+sce <- runPCA(sce, ncomponents = 50, subset_row = hvgs)
+sce <- runUMAP(sce, dimred = "PCA")
+
+mat <- reducedDim(sce, "PCA")
+mat %>% dim
+```
+
+
+## Based on distance matrices
+### Hierarchical clustering
+Our first algorithm is good old hierarchical clustering, as implemented using `hclust()` from the `stats` package. This automatically sets the cut height to half the dendrogram height.  
+
+```{r}
+library(bluster)
+
+hclust.out <- clusterRows(mat, BLUSPARAM = HclustParam(method = "ward.D2", cut.dynamic = TRUE))
+plotUMAP(sce, 
+         colour_by = I(hclust.out))
+```
+
+
+### Affinity propagation
+Another option is to use affinity propagation, as implemented using the `apcluster` package. Here, messages are passed between observations to decide on a set of exemplars, each of which from the center of a cluster.  
+
+This is not particularly fast as it involves the calculation of a square similarity matrix between all pairs of observations. So, we'll speed it up by taking analyzing a subset of the data.  
+
+```{r}
+set.seed(1000)
+sub <- sce[, sample(ncol(sce), 200)]
+ap.out <- clusterRows(reducedDim(sub), BLUSPARAM = AffinityParam())
+plotUMAP(sub, colour_by = I(ap.out))
+```
+
+The `q` parameter is probably the most important and determines the resolution of the clustering. This can be set to any value below 1, with smaller (possibly negative) values corresponding to coarser clusters.  
+
+```{r}
+set.seed(1000)
+
+ap.out <- clusterRows(reducedDim(sub), BLUSPARAM = AffinityParam(q = -2))
+plotUMAP(sub, colour_by = I(ap.out))
+```
+
+
+## With a fixed number of clusters
+A classic algorithm is k-means clustering, as implemented using the `kmeans()` function. This requires us to pass in the number of clusters, either as a number.  
+
+```{r}
+set.seed(100)
+kmeans.out <- clusterRows(mat, BLUSPARAM = KmeansParam(centers = 10))
+plotUMAP(sce, colour_by = I(kmeans.out))
+```
+
+Or as a function of the number of observations, which is useful for vector quantization purpose.  
+```{r}
+kp <- KmeansParam(centers = sqrt)
+kp
+```
+
+```{r}
+set.seed(100)
+kmeans.out <- clusterRows(mat, kp)
+plotUMAP(sce, colour_by = I(kmeans.out))
+```
+
+
+A variant of this approach is mini-batch k-means, as implemented in the `mbkmeans` package. This uses mini-batch to approximate the full k-means algorithm for greater speed.  
+
+```{r}
+set.seed(100)
+mbkmeans.out <- clusterRows(mat, BLUSPARAM = MbkmeansParam(centers = 20))
+plotUMAP(sce, colour_by = I(mbkmeans.out))
+```
+
+### Self-organizing maps
+We can use self-organizing maps (SOMs) from the `kohonen` package. This allocates observations to nodes of a simple neural network; wach node is treated as a cluster.  
+
+```{r}
+set.seed(1000)
+som.out <- clusterRows(mat, BLUSPARAM = SomParam(centers = 20))
+plotUMAP(sce, colour_by = I(som.out))
+```
+
+## graph-based clustering
+We can shared or direct nearest neighor graphs and perform community detection with `igraph`. Here, the number of neighors `k` controls the resolution of the clusters.  
+
+```{r}
+set.seed(101)
+graph.out <- clusterRows(mat, BLUSPARAM = NNGraphParam(k = 10))
+plotUMAP(sce, colour_by = I(graph.out))
+```
+
+It is again straightforward to tune the procedure by passing more arguments such as the community detection algorithm to use.  
+
+```{r}
+set.seed(101)
+np <- NNGraphParam(k = 20, cluster.fun = "louvain")
+np
+```
+
+```{r}
+graph.out <- clusterRows(mat, BLUSPARAM = np)
+plotUMAP(sce, colour_by = I(graph.out))
+```
+
+## Density-based clustering
+We also implement a version of the DBSCAN algorithm for density-based clustering. This focuses on identifying masses of cotinuous density.  
+
+```{r}
+dbscan.out <- clusterRows(mat, BLUSPARAM = DbscanParam())
+plotUMAP(sce, colour_by = I(dbscan.out))
+# unlike the other methods, it will consider certain points to be noise and discard them from the output.
+```
+
+```{r}
+summary(is.na(dbscan.out))
+```
+
+The resolution of the clustering can be modified by thinkering with the `core.prop`. Similar values will generally result in smaller clusters as well as more noise points.  
+
+```{r}
+dbscan.out <- clusterRows(mat, BLUSPARAM = DbscanParam(core.prop = 0.1))
+plotUMAP(sce, colour_by = I(dbscan.out))
+```
+
+
+## Two-phase clustering
+We also provide a wrapper for a hybrid 'two-step' approach for handing larger datasets. Here, a fast agglomeration is performed with k-means to compact the data, followed by a slower graph-based step to obtain interpretable meta-clusters. (This dataset is not, by and large, big enough for this approach to work particularly well.)  
+
+```{r}
+set.seed(100)
+two.out <- clusterRows(mat, BLUSPARAM = TwoStepParam())
+plotUMAP(sce, colour_by = I(two.out))
+```
+
+
+Each step is itself parametrized by `BlusterParam()` objects, so it is possible to tune them individually.  
+
+```{r}
+twop <- TwoStepParam(second = NNGraphParam(k = 5))
+twop
+```
+
+```{r}
+set.seed(100)
+two.out <- clusterRows(mat, BLUSPARAM = TwoStepParam())
+plotUMAP(sce, colour_by = I(two.out))
+```
+
+## Obtaining full clustering statistics
+Sometimes the vector of cluster assignments is not enough. We can obtain more information about the clustering procedure by setting `full=TRUE` in `clusterRows()`. For example, we obtain the actual graph generated by `NNGraphParam()`.  
+
+```{r}
+nn.out <- clusterRows(mat, BLUSPARAM = NNGraphParam(), full = TRUE)
+nn.out$objects$graph
+```
+
+```{r}
+grep("Param", ls("package:bluster"), value = T)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

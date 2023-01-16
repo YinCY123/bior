@@ -1,0 +1,159 @@
+---
+title: "Define Optimal Heuristic Parameters"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+LIGER has two main free parameters: lambda and k. While the default values of `lambda = 5` and `k = 30` have proven efficacy as default parameters, a user may wish to optimize these parameters for their particular analysis. In this vignette, we demonstrate how such optimal parameter selection can be performed. We use subset the integrated datasets such that the analysis time is practical for a vignette, and perform the integration on a sptial transcriptomic dataset (osmFISH) and scRNA-seq dataset (DROPviz). The data pre-processing steps are identical for optimizing both parameters.  
+
+## Step 1: Preprocessing and Normalization
+First, read in your datasets. For this tutorial, we use a downsampled osmFISH dataset (33 genes by 2000 cells), and a downsampled single-cell RNA-seq dataset (29,463 genes by 2,000 cells).
+
+```{r}
+osmfish <- readRDS("../../../data/liger/Downsampled.osmFISH.RDS")
+rna <- readRDS("../../../data/liger/Downsampled.DropViz.RDS")
+```
+
+Next, create your Liger object, submitting the datasets in list format. The unshared features should be not be subsetted out, or submitted separately. Rather, they should be included in the matrix submitted for that dataset. For example, the scRNA-seq data is submitted in its entirely, the unshared features are not submitted separately. This helps ensure proper normalization.  
+
+```{r}
+library(rliger)
+
+osm.liger <- createLiger(raw.data = list(osmFISH = osmfish, rna = rna))
+```
+
+Normalize the datasets. The normalization is applied to the datasets in their entirety.  
+
+```{r}
+osm.liger <- normalize(osm.liger)
+```
+
+To include unshared features in your analysis, set the `unshared` parameter to TRUE when selecting variable genes. To select the unshared features, it is necessary to include a list of what datasets the unshared features should be included from. For instance, in this case, we wish to include the unshared features from RNA dataset, the second dataset in out analysis. Therefore, to use the unshared features from dataset 2, use the parameter `unshared.datasets = list(1)`. If the user wishes to include unshared feature sets from both datasets, the appropriate parameter setting is `unshared.datasets = list(1,2)`. We provide an individual threshold parameter for selecting unshared features: `unshared.thresh`. If a single value is submitted, that threshold is applied when selecting unshared features for all datasets. If the user wishes to submit different thresholds to select features from each dataset, the user can specify an individual thresholds for each datasets by submitting a list of thresholds the same length as the number of datasets with unshared datasets. The variable unshared features will be stored in `liger@var.unshared.features`. 
+
+```{r}
+osm.liger <- selectGenes(osm.liger, 
+                         unshared = TRUE, 
+                         unshared.datasets = list(2), 
+                         unshared.thresh = 0.4)
+```
+
+```{r}
+osm.liger <- scaleNotCenter(osm.liger)
+```
+
+The selection of optimal `K` and `lambda` parameters will be influenced by the number of variable genes used, as well as the number of cells present in each dataset. Although we run these analysis on downsampled datasets for the ease and convenience of our users, when performing these analysis on your own data, you will want to use the full set of data.  
+
+## Selecting an appropriate K-value
+While the default value of `k = 30` has been shown to produce excellent results in a variety of scenarios, the user may wish to optimize the `k` parameter for their particular analysis. To explore optimum K-values for a specific dataset integration, we calculate the alignment scores of the integration across a variety of k-values. We assume that the user has some familarity with the LIGER pipeline; for more thorough explanations of the `optimizeALS`, `quantile_norm`, and `louvainCluster` functions, please see our other vignettes. Because UINMF, as well as iNMF, are not guranteed to converge to a global minimum, we three random seeds at each value of K in order create a more general understanding of data trends.  
+
+```{r}
+seed <- sample(1:200, 3, replace = FALSE)
+alignment_score <- list()
+
+for(iter in seed){
+    k_values <- c(10, 20, 30, 40, 50)
+    for(i in k_values){
+        osm.liger <- optimizeALS(osm.liger, 
+                                 lambda = 5, 
+                                 use.unshared = TRUE, 
+                                 max.iters = 30, 
+                                 thresh = 1e-10, 
+                                 k = i, 
+                                 rand.seed = iter)
+        osm.liger <- quantile_norm(osm.liger, ref_dataset = "rna")
+        osm.liger <- louvainCluster(osm.liger)
+        new_alignment <- calcAlignment(osm.liger)
+        names(new_alignment) <- paste0("Seed:", iter, "_K:", i)
+        alignment_score <- append(alignment_score, new_alignment)
+    }
+}
+```
+
+At the conclusion of the above loop, the list `alignment_score` has the calculated alignment scores for the integration across a varity of k values, and across three seeds. We want to plot the alignment score in order to observe general data trends, and will need to load `ggpubr`, `tidyr`, and `sjstats`.  
+
+```{r}
+library(ggpubr)
+library(sjstats)
+library(tidyr)
+
+align_df <- data.frame(alignment_score)
+align_df <- data.frame(t(align_df))
+colnames(align_df) <- "alignment_score"
+align_df$details <- rownames(align_df)
+align_df <- separate(data = align_df, 
+                     col = details, 
+                     into = c("Seed", "K"), 
+                     sep = "_")
+align_df %>% 
+    ggline(x = "K", y = "alignment_score", 
+           add = "mean_se", 
+           palette = "jco", 
+           lwd = 2) +
+    labs(xlab = "K-Value", 
+         ylab = "Alignment Score", 
+         title = "Selecting K")
+```
+
+When selecting K, most researchers are looking to maximize `K`, while retaining a decent alignemnt score.  
+
+
+## Selecting an appropriate lambda value
+The default parameter of `lambda = 5` has previously worked well in a variety of analysis. However, to explore how the selection of lambda might be influencing your analyis, we can again calculate the alignment scores of the algorithm across a span of lambda values, gaining intuition on what lambda values are appropriate for particular data analysis.  
+
+```{r}
+seed <- sample(1:200, 3, replace = FALSE)
+alignment_score <- list()
+
+for(iter in seed){
+    lambda_value <- c(1, 5, 10, 15, 20)
+    for( i in lambda_value){
+        osm.liger <- optimizeALS(osm.liger, 
+                                lambda = i, 
+                                use.unshared = TRUE, 
+                                max.iters = 30, 
+                                thresh = 1e-10, 
+                                k = 30, 
+                                rand.seed = iter)
+        osm.liger <- quantile_norm(osm.liger, ref_dataset = "rna")
+        osm.liger <- louvainCluster(osm.liger)
+        new_alignment <- calcAlignment(osm.liger)
+        names(new_alignment) <- paste0("Seed:", iter, "_lambda:", i)
+        alignment_score <- append(alignment_score, new_alignment)
+    }
+}
+```
+
+
+We can then visualize the algorithm's performance across a variety of lambda values.  
+
+```{r}
+align_df <- data.frame(alignment_score)
+align_df <- data.frame(t(align_df))
+colnames(align_df) <- "Alignment_Score"
+align_df$details <- rownames(align_df)
+align_df <- separate(align_df, 
+                     col = details, 
+                     into = c("Seed", "Lambda"), 
+                     sep = "_")
+
+ggline(align_df, 
+       x = "Lambda", 
+       y = "Alignment_Score", 
+       add = "mean_se", 
+       palette = "jco", 
+       lwd = 2) +
+    labs(xlab = "Lambda Value", 
+         ylab = "Alignment Score", 
+         title = "Selecting lambda")
+```
+
+We can see that largest increase in alignment score comes from having `lambda = 5`, which fits with our initial intuition of this being an appropriate default parameter. Further increases in alignment are more marginal, and extreme values of lambda should be chosen with care.  
+
+
+
+

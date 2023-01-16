@@ -1,0 +1,59 @@
+---
+title: "Detailed Walkthrough of Harmony Algorithm"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Motivation
+After reading this, the user should e have a better understanding of how  
+1. the equations connect to the algorithm  
+2. the algorithm works on real data  
+3. to access the different parts of the harmony model from R  
+
+# Cell line data
+The datasets was downloaded from 10X website.   
+- https://support.10xgenomics.com/single-cell-gene-expression/datasets/1.1.0/jurkat  
+- https://support.10xgenomics.com/single-cell-gene-expression/datasets/1.1.0/293t
+- https://support.10xgenomics.com/single-cell-gene-expression/datasets/1.1.0/jurkat:293t_50:50
+
+We library normalized the cells, log transformed the counts, and scaled the genes. Then we performed PCA and kept the top 20 PCs. We begain the analysis in this notebook from here.  
+
+```{r}
+data("cell_lines")
+V <- cell_lines$scaled_pcs
+V_cos <- cosineNorm(V, "matrix")
+meta_data <- cell_lines$meta_data
+```
+
+To get a feel for the data, let's visualize the cells in PCA space. The plots below show the cells' PC1 and PC2 embeddings. We color the cells by dataset of origin (left) and cell type (right).  
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

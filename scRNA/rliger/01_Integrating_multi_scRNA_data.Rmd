@@ -1,0 +1,180 @@
+---
+title: "Integrating multi scRNA data"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Stage I: Preprocessing and normalization
+1. For the first portion of this protocol, we will be integrating data from control and interferon-stimulated PBMCs from Kang et at., 2017. The data can be found in the Gene Expression Omnibus, GSE96583. This dataset was originally in the form of output from 10X Cellranger pipeline, through we will directly load downsampled version of the control and stimulated DEGs here.  
+
+```{r}
+library(rliger)
+library(magrittr)
+
+matrix_list <- read10X(sample.dirs = c("../../../data/GSE96583/control/", 
+                                       "../../../data/GSE96583/stimulate/"), 
+                       sample.names = c("ctrl", "stim"), 
+                       merge = F)
+matrix_list %>% class()
+matrix_list %>% str
+ctrl <- matrix_list$ctrl$`Gene Expression`
+stim <- matrix_list$stim$`Gene Expression`
+colnames(ctrl) <- paste(colnames(ctrl), "_ctrl", sep = "")
+colnames(stim) <- paste(colnames(stim), "_stim", sep = "")
+```
+
+
+2. With the digial gene expresion matrices for both datasets, we can initialize a Liger object using the `createLiger()` function.  
+```{r}
+ifnb_liger <- createLiger(raw.data = list(ctrl = ctrl, 
+                                          stim = stim))
+```
+
+`ifnb_liger` now contains two datasets in its `raw.data` slot, ctrl and stim. We can run the rest of the analysis on this Liger object.
+
+3. Before we can run iNMF on our datasets, we must run several preprocessing steps to normalzie expression data to account for differences in sequencing depth and efficiency between cells, identify variable expressed genes, and scale the data so that each gene has the same variance. Note that because nonnegative matrix factorization requires positive values, we do not center the data by subtracting the mean. We also do not transform the data.  
+
+```{r}
+ifnb_liger <- rliger::normalize(ifnb_liger)
+ifnb_liger <- selectGenes(ifnb_liger)
+ifnb_liger <- scaleNotCenter(ifnb_liger)
+```
+
+
+4. We are now able to run integrative non-negative matrix factorization on the normalized and scaled datasets. The key parameter for this analysis is k, the number of matrix factors (analogous to the number of principal components in PCA). In general, we find that a value of k between 20 and 40 is suitable for most analyses and that results are robust for choice of k. Because LIGER is an unsupervised, exploratory approach, there is no single 'right' value for k, and in practice, users choose k from a combination of biological prior knowledge and other information.  
+
+## Stage II: Joint Matrix Factorization 
+```{r}
+ifnb_liger <- optimizeALS(ifnb_liger, k = 20)
+```
+
+Important parameters are as follows:  
+
+- `k`. Integer value specifying the inner dimension of factorization, or number of factors. Higher k is recomended for datasets with more structure. We find that a value of k in the range 20 - 40 works well for most datasets. Because this is an unsupervised, exploratory analysis, there is no single 'right' value for k, and in practice, users choose k from a combination of biological prior knowledge and other information.  
+
+- `lambda`. This is a regularization parameter. Larger values penalize dataset-specific effects more strongly, causing the datasets to be better aligned, but possibly at the cost of higher reconstruction error. The default value is 5. We recommend using this value for most analyses, but find that it can be lowered to 1 in cases where the dataset difference are expected to be relatively small, such as scRNA-seq data from the same tissue but different individuals.  
+
+- `thresh`. This sets the convergence threshold. Lower values cause the algorithm to run longer. The default is 1e6.  
+
+- `max.iters`. This variable sets the maximum number of iterations to perform. The default is 30.  
+
+## Stage III: Quantile Normalization and Joint Clustering
+```{r}
+ifnb_liger <- quantile_norm(ifnb_liger)
+```
+
+Important parameters of quantile_norm are as follows:  
+
+- `knn_k`. This set the number of nearest neighors for within-dataset KNN graph. The default is 20.  
+
+- `quantiles`. This sets the number of quantiles to use for quantile normalization. The default is 50.  
+
+- `min_cells`. This indicates the minimum number of cells to consider a cluster as shared across datasets. The default is 20.  
+
+- `dim.use`. This sets the indices of factors to use for quantile normalization. The user can pass in a vector of indices indicating specific factors. This is helpful for excluding factors capturing biological signals such as the cell cycle or technical signals such as mitochondrial genes. The default is all k of the factors.  
+
+- `do.center`. This indicates whether to center the data when scaling factors. The default is FALSE. This option should be set to TRUE when metagene loadings have a mean above zero, as with dense data such as DNA methylation.  
+
+- `max_sample`. This sets the maximum number of cells used for quantile normalization of each cluster and factor. The default is 1000.  
+
+- `refine.knn`. This indicates whether to robustness of cluster assignments using KNN graph. The default is TRUE.  
+
+- `eps`. This sets the error bound of the nearest neighbor search. The default is 0.9. Lower values give more accurate nearest neighbor graphs but take much longer to computer.  
+
+- `ref_dataset`. This indicates the name of the dataset to be used as a reference for quantile normalization. By default, the dataset with the large number of cells is used.  
+
+6. The `quantile_norm` procedure produces joint clustering assignments and a low-dimentional representation that integerates the datasets together. These joint clusters directly from iNMF can be used for downstream analysis. Alternatively, you can also run Louvain comminuty detection, an algorithm commonly used for single-cell data, on the normalized cell factors. The Louvain algorithm excels at merging small clusters into broad cell classes and thus may be more desirable in some cases than the maximum factor assignments produced directly by iNMF.  
+
+```{r}
+ifnb_liger <- louvainCluster(ifnb_liger, resolution = 0.25)
+```
+
+7. To visualize the clustering of cells graphically, we can project the normalized cell factors to two or three dimensions. Liger supports both t-SNE and UMAP for this purpose. Note that if both techniques are run, the object will only hold the results from the most recent.  
+
+## Stage IV: Visualization and Downstream Analysis
+```{r}
+ifnb_liger <- runUMAP(ifnb_liger, 
+                      distance = "cosine", 
+                      n_neighbors = 30, 
+                      min_dist = 0.3)
+```
+
+The `liger` package implements a variety of visualization and analysis of clustering, gene expression across datasets, and comparisons of cluster assignments. We will summarize several here.  
+
+8. `plotByDatasetAndCluster` returns two graphs, generated by t-SNE or UMAP in the previous step. The first colors cells by dataset of oigin, and the second by cluster as determined by Liger. The plots provide visual confirmation that the datasets are well aligned and the clusters are consistent with the shape of the data as revealed by UMAP.  
+
+```{r}
+all.plots <- plotByDatasetAndCluster(ifnb_liger, 
+                                     axis.labels = c("UMAP.1", "UMAP.2"), 
+                                     return.plots = TRUE)
+
+all.plots[[1]] + all.plots[[2]]
+```
+
+To directly study the impact of factors on the clustering and determine what genes load most highly on each factor, we use the `plotGeneLoadings` function, which returns plots of factor loading on the dimensionally reduced graphs and highly loaded genes by datasets for each factor.  
+
+
+```{r}
+gene_loadings <- plotGeneLoadings(ifnb_liger, 
+                                  do.spec.plot = FALSE, 
+                                  return.plots = TRUE)
+gene_loadings[[4]]
+```
+
+Using the `runWilcoxon` function, we can next identify gene markers for all clusters. We can also compare expresion within each cluster across datasets, which in this case reveals markers of interferon-beta stimulation. The function returns a table of data that allows us to determine the significance of each gene's differential expression, including fold change, area under the curve and p-value.  
+
+```{r}
+library(dplyr)
+
+cluster.results <- runWilcoxon(ifnb_liger, compare.method = "clusters")
+cluster.results[order(cluster.results$pval, decreasing = F), ] %>% head
+```
+
+```{r}
+datasets.results <- runWilcoxon(ifnb_liger, compare.method = "datasets")
+datasets.results[order(datasets.results$pval, decreasing = F), ] %>% head
+```
+
+The number of significant genes identified by `runWilcoxon` varies and depends on the datasets used. You can then filter the markers which are statistically and biologically significant. For example, one strategy is to filter the output by taking markers which have padj (Benjamini-Hochberg adjusted p-value) less than 0.05 and logFC (log fold change between observations in group versus out) larger than 3.  
+
+```{r}
+cluster.results <- cluster.results[cluster.results$padj < 0.05, ]
+cluster.results <- cluster.results[cluster.results$logFC > 3, ]
+
+cluster.results %>% 
+    filter(group == "3") %>% 
+    arrange(padj) %>% 
+    head(10)
+```
+We can then visualize the expression profiles of individual genes, such as the differentially expressed genes that we identified. This allows us to visually confirm the cluster or data-specific expression patterns of marker genes. `plotGene` return graphs of gene laoding on the dimensionally reduced graph for each dataset.  
+
+```{r}
+PRF1 <- plotGene(ifnb_liger, gene = "PRF1", 
+                 axis.labels = c("UMAP.1", "UMAP.2"), 
+                 return.plots = TRUE)
+PRF1[[1]] + PRF1[[2]]
+```
+
+We can also use `plotGene` to compare the loading of cluster markers within and between datasets.  
+
+```{r}
+IFIT3 <- plotGene(ifnb_liger, "IFIT3", 
+                  axis.labels = c("UMAP.1", "UMAP.2"), 
+                  return.plots = TRUE)
+IFITM3 <- plotGene(ifnb_liger, "IFITM3", 
+                   axis.labels = c("UMAP.1", "UMAP.2"), 
+                   return.plots = TRUE)
+
+plot_grid(IFIT3[[1]], IFIT3[[2]], 
+          IFITM3[[1]], IFITM3[[2]], 
+          ncol = 2)
+```
+
+
+
+

@@ -1,0 +1,82 @@
+---
+title: "Quick_start_to_harmony"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+Harmony is an algorithm for performing integration of single cell genomics datasets.  
+
+```{r}
+knitr::include_graphics("figures/harmony.jpg")
+```
+
+
+# Integrating cell line datasets from 10X
+We library normalized the cells, log transformed the counts, and scaled the genes. Then we performed PCA and kept the top 20 PCs. The PCA embeddings and meta data are available as part of this package.  
+
+```{r}
+library(harmony)
+data('cell_lines')
+
+V <- cell_lines$scaled_pcs
+meta_data <- cell_lines$meta_data
+```
+
+Initially, the cells cluster by both dataset (left) and cell type (right).  
+
+```{r}
+harmonized_pcs <- HarmonyMatrix(
+    data_mat = cell_lines$scaled_pcs, 
+    meta_data = cell_lines$meta_data, 
+    vars_use = "dataset", 
+    do_pca = FALSE
+)
+
+harmonized_pcs %>% dim
+harmonized_pcs %>% head
+```
+
+# Normalized gene matrix
+You can also run Harmony on a sparse matrix of library size normalized expression counts. The `HarmonyMatrix()` function will scale expression data, run PCA, and run the Harmony integration algorithm.  
+
+```{r}
+my_harmony_embeddings <- HarmonyMatrix(
+    data_mat = normalized_counts, 
+    meta_data = meta_data, 
+    var_use = "dataset"
+)
+```
+
+# Harmony with two or more covariates
+Harmony can integrate over multiple covariates. To do this, specify a vector covariates to integrate.  
+
+```{r}
+harmonized_pcs <- HarmonyMatrix(
+    data_mat = scaled_pcs, 
+    meta_data = meta_data, 
+    vars_use = c("dataset", "donor", "batch_id"), 
+    do_pca = FALSE
+)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

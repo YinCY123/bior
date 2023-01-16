@@ -1,0 +1,40 @@
+---
+title: "00 harmony"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Harmony is a general-purpose R package with an efficient algorithm for integrating multiple data sets. It is especially useful for large single-cell datasets such as single-cell RNA-seq.  
+
+**Harmony is**:  
+- **Fast**: Analyze thousands of cells on your laptop.  
+- **Sensitive**: Different cell types may be present or absent in each batch.  
+- **Accurate**: Integrate cells from multiple donors, tissue-even different technologies.  
+
+# Installation
+```{r, eval=FALSE}
+# install from github
+devtools::install_github("immunoenomics/harmony")
+
+# install from CRAN
+install.packages("harmony")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,416 @@
+---
+title: "SingleCellExperiment"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction to the SingleCellExperiment
+## Creating SingleCellExperiment instances
+`SingleCellExperiment` objects can be created via the constructor of the same name. For example, if we have a count matrix in `counts`, we can simply call:  
+
+```{r}
+library(SingleCellExperiment)
+
+counts <- matrix(rpois(100, lambda = 10), ncol = 10, nrow = 10)
+sce <- SingleCellExperiment(list(counts = counts))
+sce
+```
+
+```{r}
+pretend.cell.labels <- sample(letters, ncol(counts), replace = T)
+pretend.gene.lengths <- sample(10000, nrow(counts))
+
+sce <- SingleCellExperiment(assays = list(counts = counts), 
+                            rowData = DataFrame(length = pretend.gene.lengths), 
+                            colData = DataFrame(label = pretend.cell.labels), 
+                            metadata = list(study = "GSE111111"))
+
+sce
+rowData(sce)
+colData(sce)
+metadata(sce)
+```
+
+convert an existing `(Ranged)SummarizedExperiment` object to `SingleCellExperiment` object.  
+
+```{r}
+se <- SummarizedExperiment(assays = list(counts = counts))
+
+as(se, Class = "SingleCellExperiment")
+```
+
+Any operation that can be applied to a `RangedSummarizedExperiment` is also applicable to any instance of a `SingleCellExperiment`. This includes access to assay data via `assay()`, column metadata with `colData()`, and so on.  
+
+```{r}
+sce %>% assay() %>% dim
+
+sce %>% colData() %>% colnames()
+
+sce %>% rowData() %>% colnames()
+```
+
+```{r}
+library(scRNAseq)
+
+sce <- ReprocessedAllenData(assays = "tophat_counts")
+sce
+```
+
+
+## Adding low-dimensional representations
+```{r}
+counts <- assay(sce, "tophat_counts")
+libsizes <- colSums(counts)
+size.factors <- libsizes / mean(libsizes)
+logcounts(sce) <- log2(t(t(counts)/size.factors) + 1)
+assayNames(sce)
+```
+
+Obtain the PCA and t-SNE representation of the data and add them to the object with the `reducedDims()<-` method. Alternatively, we can representations one at a time with the `reducedDim()<-` method. 
+
+```{r}
+pca_data <- prcomp(x = t(logcounts(sce)), rank. = 50)
+
+library(Rtsne)
+set.seed(5252)
+tsne_data <- Rtsne(pca_data$x[, 1:50], pca = F)
+
+reducedDims(sce) <- list(PCA = pca_data$x, TSNE = tsne_data$Y)
+sce
+```
+
+The coordinates for all representations can be retrieved from a `SingleCellExperiment` with `reducedDims()` or one at a time with `reducedDim()`. Each row of the coordinate matrix is assumed to correspond to a cell while each column represents a dimension.  
+
+```{r}
+reducedDims(sce)
+
+reducedDimNames(sce)
+
+reducedDim(sce, "PCA")[, 1:2] %>% head
+```
+
+```{r}
+reducedDim(sce, "TSNE")[, 1:2] %>% head
+```
+
+Any subsetting by column of `sce_sub` will also lead to subsetting of the dimensionality reduction results by cell. This is convenient as it ensures our low-dimensional results synchronized with the gene expression data.  
+
+```{r}
+reducedDim(sce, "PCA") %>% dim
+
+reducedDim(sce[, 1:10], "PCA") %>% dim
+```
+
+
+## Convenient access to named assays
+In the `SingleCellExperiment`, users can assign arbitrary names to entries of `assays`. To assist interoperability between packages, we provide some suggestions for what the names should be for particularly types of data.  
+
+- `counts`: Raw count data, e.g., number of reads or transcripts of a particular gene.  
+
+- `normcounts`: Normalized values on the same scale as the original counts. For example, counts divided by cell-specific size factors that are centered at unity.  
+
+- `logcounts`: log-transformed counts or count-like values. In most cases, this will be defined as log-transformed `normcounts`, e.g., using log base 2 and a pseudo-count of 1.  
+
+- `cpm`: Counts-per-million. This is the read count for each gene in each cell, divided by the library size of each cell in million.  
+
+- `tpm`: Transcripts-per-million. This is the number of transcripts for each gene in each cell, divided by the total number of transcripts in that cell (in millions).  
+
+Each of these suggested names has an appropriate getter/setter method for convenient manipulation of the `SingleCellExperiment`.
+
+```{r}
+counts(sce) <- assay(sce, "tophat_counts")
+sce
+```
+
+## Adding alternative feature sets
+Many scRNA-seq experiments contain sequencing data for multiple feature types beyond the endogenous genes.  
+
+- Externally added spike-in transcripts for plate-based experiments.  
+- Antibody tags for CITE-seq experiments.  
+- CRISPR tags for CRISPR-seq experiments.  
+- Allele information for experiments involving multiple genotypes.  
+
+Such features can be stored inside the `SingleCellExperiment` via the concept of 'alternative Experiments'. **These are nested `SummarizedExperiment` instances that are guaranteed too have the same number and ordering of columns as the main `SingleCellExperiment` itself**. Data for endogenous genes and other features can thus be kept separate - which is often desirable as they need to be processed differently - while still retaining they synchronizations on a single object.  
+
+To illustrate, consider the case of the spike-in transcripts in the Allen data. The `altExp()` method returns a self-contained `SingleCellExperiment` instance containing only the spike-in transcripts.  
+
+```{r}
+altExp(sce)
+```
+
+Each alternative Experiment can have a different set of assays from the main `SingleCellExperiment`. This is useful in cases where the other feature types must be normalized or transformed differently. Similarly, the alternative Experiments can have different `rowData()` from the main object.  
+
+```{r}
+rowData(altExp(sce))$concentration <- runif(nrow(altExp(sce)))
+rowData(altExp(sce))
+```
+
+```{r}
+rowData(sce)
+```
+
+split a `SingleCellExperiment` into new alternative Experiments. For example, if we wanted to split the RIKEN transcripts into a separate experiment, to say ensure that they are not used in downstream analyses without explicit throwing out the data. 
+
+```{r}
+is.riken <- grepl("^[0-9]", rownames(sce))
+is.riken %>% table
+
+sce <- splitAltExps(x = sce, f = ifelse(is.riken, "RIKEN", "gene"))
+sce
+altExpNames(sce)
+```
+
+
+Alternatively, if we want to swap the main and alternative experiments - perhaps because the RIKEN transcripts were interesting than expected, and we want to perform our analyses on them - we can simply use `swapAltExp()` to switch the RIKEN alternative Experiment with the gene expression data.  
+
+```{r}
+swapAltExp(sce, name = "RIKEN", saved = "original")
+```
+
+
+## Storing row or column pairings
+A common procedure in single-cell analyses is to identify relationships between pairs of cells, e.g., to construct a nearest-neighbor graph or to mark putative physical interactions between cells. We can capture this information in the `SingleCellExperiment` class with the `colPairs()` functionality. To demonstrate, say we have 100 relationships between the cells in `sce`, characterized by some distance measures.  
+
+```{r}
+cell1 <- sample(ncol(sce), 100, replace = TRUE)
+cell2 <- sample(ncol(sce), 100, replace = TRUE)
+distance <- runif(100)
+```
+
+We store this in the `SingleCellExperiment` as a `SelfHist` object using the `value` metadata field to hold our data. This is easily extracted as a `SelfHits` or, for logical or numeric data, as a sparse matrix from `Matrix`.  
+
+```{r}
+colPair(sce, type = "relationships") <- SelfHits(from = cell1, to = cell2, nnode = ncol(sce), value = distance)
+
+colPair(sce, "relationships")
+```
+
+```{r}
+class(colPair(sce, "relationships"))
+```
+
+A particularly useful feature is that the indices of the interacting cells are automatically remapped when `sce` is subsetted. This ensures that the pairings are always synchronized with the identities of the cells in `sce`.  
+
+```{r}
+sub <- sce[, 50:300]
+colPair(sce)
+```
+
+
+## Additional metadata fields
+The `SingleCellExperiment` class provides the `sizeFactors()` getter and setter methods, to set and retrieve size factors from the `colData()` of the object. Each size factor represents the scaling factor applied to a cell to normalize expression values prior to downstream comparisions, e.g., to remove the effects of differences in library size and other cell-specific biases. These methods are primarily intended for programmatic use in functions implementing normalization methods, but users can also directly call this to inspect or define the size factors for their analysis.  
+
+```{r}
+sizeFactors(sce) <- 2^rnorm(ncol(sce))
+summary(sizeFactors(sce))
+```
+
+```{r}
+sizeFactors(sce) <- NULL
+sizeFactors(sce)
+```
+
+The `colLabels()` getter and setters methods allow applications to set and retrieve cell labels from the `colData`. These labels can be derived from cluster annotations, assigned by classification algorithms, etc. and are often used in downstream visualization and analyses. While labels can be stored in any `colData` field, the `colLabels()` methods aim to provide some informal standardization to a default location that downstream functions can search first when attempting to retrieve annotations.  
+
+```{r}
+colLabels(sce) <- sample(letters, ncol(sce), replace = T)
+colLabels(sce) %>% table
+colLabels(sce) <- NULL
+```
+
+
+In a similar vein, we provide the `rowSubset()` function for users to set and get row subsets from the `rowData`. This will store any vector of gene identities (e.g., row names, integer indices, logical vector) in the `SingleCellExperiment` object for retrieval and use by downstream functions. Users can then easily pack multiple feature sets into the same object for synchronized manipulation.
+
+```{r}
+rowSubset(sce, "my_gene_set_1") <- 1:10
+which(rowSubset(sce, "my_gene_set_1"))
+rowSubset(sce, "my_gene_set_1") %>% table
+
+rowSubset(sce, "my_gene_set_1") <- NULL
+rowSubset(sce, "my_gene_set_1")
+```
+
+
+# Applying a function over a SingleCellExperiment's contents
+## Motivation
+The `SingleCellExperiment` is quite a complex class that can hold multiple aspects of the same dataset. It is possible to have multiple assays, multiple dimensionality reduction results, and multiple alternative experiments- each of which can further have assays and `reducedDims`. In some scenarios, it may be desireable to loop over these pieces and apply the same function to each of them. This is made conveniently possible via the `applySCE()` framework.  
+
+## Quick start
+Let's say we have a moderately complicated `SingleCellExperiment` object, containing multiple alternative Experiments for different data modalities.  
+
+```{r}
+library(SingleCellExperiment)
+counts <- matrix(rpois(100, lambda = 10), ncol = 10)
+sce <- SingleCellExperiment(assays = list(counts = counts))
+altExp(sce, "Spike") <- SingleCellExperiment(assays = list(spike = matrix(rpois(100, lambda = 5), ncol = 10)))
+altExp(sce, "Protein") <- SingleCellExperiment(assays = list(Protein = matrix(rpois(50, 5), ncol = 10)))
+altExp(sce, "CRISPR") <- SingleCellExperiment(assays = list(CRISPR = matrix(rbinom(80, p = 0.1, 1), ncol = 10)))
+
+sce
+```
+
+Assume that we want to compute the total count for each modality, using the first assay. We might define a function that looks like the below.  
+
+```{r}
+totalCount <- function(x, i = 1, multiplier = 1, subset.row = NULL){
+    mat <- assay(x, i)
+    if(!is.null(subset.row)){
+        mat <- mat[subset.row, , drop = FALSE]
+    }
+    colSums(mat) * multiplier
+}
+```
+
+We can then easily apply this function across the main and alternative Experiments with.  
+
+```{r}
+totals <- applySCE(sce, FUN = totalCount)
+
+str(totals)
+totals %>% sapply(class)
+```
+
+
+## Design explanation
+The `applySCE()` call above is functionally equivalent to.  
+
+```{r}
+totals.manual <- list(
+    totalCount(sce), 
+    Spike = totalCount(altExp(sce, "Spike")), 
+    Protein = totalCount(altExp(sce, "Protein")), 
+    CRISPR = totalCount(altExp(sce, "CRISPR"))
+)
+
+totals.manual %>% str
+```
+
+Subset to a different set of features for each main and alternative Experiment.  
+```{r}
+totals.custom <- applySCE(sce, FUN = totalCount, 
+                          multiplier = 10, 
+                          ALT.ARGS = list(Spike = list(subset.row = 2), Protein = list(subset.row = 3:5)))
+
+totals.custom
+```
+
+## Simplifying to a SingleCellExperiment
+The other convenient aspect of `applySCE()` is that, if the specified `FUN=` returns a `SingleCellExperiment`, `applySCE()` will try to format the output as a `SingleCellExperiment`. To demonstrate, let's use the `head` function to take the first few features for each main and alternative Experiment.  
+
+```{r}
+head.sce <- applySCE(sce, FUN = head, n = 5)
+head.sce
+```
+
+Rather than returning a list of `SingleCellExperiments`, we can see that the output is neatly organized as a `SingleCellExperiment` with the specified `n=5` features. Moreover, each of the alternative Experiments is also truncated to its first 5 features (or fewer, if there weren’t that many to begin with). This output mirrors, as much as possible, the format of the input `sce`, and is much more convenient to work with than a list of objects.
+
+```{r}
+altExp(head.sce, 1)
+print("-----")
+altExp(head.sce, 2)
+print("-----")
+altExp(head.sce, 3)
+```
+
+To look under the hood, we can turn off simplification and see what happens. We see that the function indeed returns a list of `SingleCellExperiment` objects corresponding to the `head()` of each Experiment. When `SIMPLIFY=TRUE`, this list is passed through `simplifyToSCE()` to attempt the reorganization into a single object.
+
+```{r}
+head.sce.list <- applySCE(sce, FUN = head, n = 5, SIMPLIFY = FALSE)
+head.sce.list
+```
+
+Of course, this simplification is only possible when circumstances permit. It requires that `FUN=` returns a `SingleCellExperiment` at each call, and that no more than one result is generated for each alternative Experiment. Failure to meet these conditions will result in a warning and a non-simplified output.
+
+Developers may prefer to set `SIMPLIFY=FALSE` and manually call `simplifyToSCE()`, possibly with `warn.level=3` to trigger an explicit error when simplification fails.
+
+
+# Developing around the SingleCellExperiment class
+## Introduction
+By design, the scope of this package is limited to defining the `SingleCellExperiment` class and some minimal getter and setter methods. For this reason, we leave it to developers of specialized packages to provide more advanced methods for the `SingleCellExperiment` class. If packages define their own data structure, it is their responsibility to provide coercion methods to/from their classes to `SingleCellExperiment`.
+
+For developers, the use of `SingleCellExperiment` objects within package functions is mostly the same as the use of instances of the base `SummarizedExperiment` class. The only exceptions involve direct access to the internal fields of the `SingleCellExperiment` definition. Manipulation of these internal fields in other packages is possible but requires some caution.
+
+## Using the internal fields
+### Rationale
+We use an internal storage mechanism to protect certain fields from direct manipulation by the user. This ensures that only a call to the provided setter methods can change the size factors. The same effect could be achieved by reserving a subset of columns (or column names) as “private” in `colData()` and `rowData()`, though this is not easily implemented.
+
+The internal storage avoids situations where users or functions can silently overwrite these important metadata fields during manipulations of `rowData` or `colData`. This can result in bugs that are difficult to track down, particularly in long workflows involving many functions. It also allows us to add new methods and metadata types to `SingleCellExperiment` without worrying about overwriting user-supplied metadata in existing objects.
+
+Methods to get or set the internal fields are exported for use by developers of packages that depend on `SingleCellExperiment`. This allows dependent packages to store their own custom fields that are not meant to be directly accessible by the user. However, this requires some care to avoid conflicts between packages.
+
+### Conflicts between packages
+The concern is that package A and B both define methods that get/set an internal field `X` in a `SingleCellExperiment` instance. Consider the following example objects.  
+
+```{r}
+library(SingleCellExperiment)
+
+counts <- matrix(rpois(100, lambda = 10), ncol = 10)
+sce <- SingleCellExperiment(assays = list(counts = counts))
+sce
+```
+
+Assume that we have functions that set an internal field `X` in packages A and B.  
+
+```{r}
+AsetX <- function(sce){
+    int_colData(sce)$X <- runif(ncol(sce))
+    sce
+}
+
+BsetX <- function(sce){
+    int_colData(sce)$X <- sample(LETTERS, ncol(sce), replace = TRUE)
+    sce
+}
+```
+
+if both of those functions are called, one will clobber the output of the other. This may lead to nonsensical results in downstream procedures.  
+
+```{r}
+sce2 <- AsetX(sce)
+int_colData(sce2)$X
+
+sce2 <- BsetX(sce)
+int_colData(sce2)$X
+```
+
+
+### Using "Inception-style" nesting
+We recommend using nested `DataFrames` to store internal fields in the column-level metadata. The name of the nested element should be set to the package name, thus avoiding clashes between fields with the same name from different packages.
+
+```{r}
+AsetX_better <- function(sce){
+    int_colData(sce)$A <- DataFrame(X = runif(ncol(sce)))
+    sce
+}
+
+BsetX_better <- function(sce){
+    choice <- sample(LETTERS, ncol(sce), replace = TRUE)
+    int_colData(sce)$B <- DataFrame(X = choice)
+    sce
+}
+
+sce2 <- AsetX_better(sce)
+sce2 <- BsetX_better(sce2)
+
+
+int_colData(sce2)$A$X
+int_colData(sce2)$B$X
+sce2 %>% int_colData()
+```
+
+
+
+
+
+
+
+
+
+
+
+
