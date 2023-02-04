@@ -42,8 +42,10 @@ harmonized_pcs %>% dim
 harmonized_pcs %>% head
 ```
 
+
+
 # Normalized gene matrix
-You can also run Harmony on a sparse matrix of library size normalized expression counts. The `HarmonyMatrix()` function will scale expression data, run PCA, and run the Harmony integration algorithm.  
+You can also run `Harmony` on a sparse matrix of library size normalized expression counts. The `HarmonyMatrix()` function will scale expression data, run PCA, and run the Harmony integration algorithm.  
 
 ```{r}
 my_harmony_embeddings <- HarmonyMatrix(
