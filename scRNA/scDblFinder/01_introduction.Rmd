@@ -1,0 +1,64 @@
+---
+title: "01_introduction"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Contents
+1. `computeDoubletDensity`
+2. `recoverDoublets`
+3. `scDblFinder`
+4. `directDblClassification`
+5. `findDoubletClusters`
+
+The `scDblFinder` package gathers various methods for the detection and handling of doublets/multiplets in single-cell sequencing data (i.e. multiple cells captured within the same droplet or reaction volume). This vignette provides a brief overview of the different approaches (which are each covered in their own vignettes) for single-cell RNA sequencing.
+
+All methods require as an input either a matrix of counts or a `SingleCellExperiment` containing count data. With the exception of findDoubletClusters, which operates at the level of clusters (and consequently requires clustering information), all methods try to assign each cell a score indicating its likelihood (broadly understood) of being a doublet.
+
+The approaches described here are complementary to doublets identified via cell hashes and SNPs in multiplexed samples: while hashing/genotypes can identify doublets formed by cells of the same type (homotypic doublets) from two samples, which are often nearly undistinguishable from real cells transcriptionally (and hence generally unidentifiable through the present package), it cannot identify doublets made by cells of the same sample, even if they are heterotypic (formed by different cell types). Instead, the methods presented here are primarily geared towards the identification of heterotypic doublets, which for most purposes are also the most critical ones.
+
+
+# 1 computeDoubletDensity
+The `computeDoubletDensity` method (formerly `scran::doubletCells()`) generates random artificial doublets from the real cells, and tries to identify cells whose neighorhood has a high local of articial doublets.  
+
+
+# 2 recoverDoublets
+The `recoverDoublets()` method is meant to be used when some doublets are already known, for instance through genotype-based calls or cell hashing in multiplexed experiments. The function then tries to identify intra-sample doublets that are neighbors to the known inter-sample doublets.   
+
+
+# 3 scDblFinder
+The `scDblFinder()` method combines both known doublets (if available) and cluster-based artificial doublets to identify doublets. The approach builds and improves on a variety of earlier efforts, and is at present the most accurate approach included in this package.  
+
+
+# 4 direcDblClassification
+The `directDblClassification()` method identifies doublets by training a classifier directly on gene expression. This follows the same procedure as `scDblFinder()` for doublet generation and iterative training, but skips the k-nearest neighbor step and directly yses the matrix of real cells and artificial doublets. This is computationally more intensive and generally leads to worse predictions than `scDblFinder()`, and it is included chiefly for comparative purposes.  
+
+
+# 5 findDoubletClusters
+The `findDoubletClusters()` method identifies clusters that are likely to be composed of doublets by estimating whether their expression profile lies between two other clusters.  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
