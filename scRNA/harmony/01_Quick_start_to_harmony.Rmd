@@ -31,44 +31,47 @@ meta_data <- cell_lines$meta_data
 Initially, the cells cluster by both dataset (left) and cell type (right).  
 
 ```{r}
-harmonized_pcs <- HarmonyMatrix(
-    data_mat = cell_lines$scaled_pcs, 
-    meta_data = cell_lines$meta_data, 
-    vars_use = "dataset", 
-    do_pca = FALSE
-)
+library(ggplot2)
+source("R/do_scater.R")
+p1 <- do_scatter(V, meta_data = meta_data, label_name = "dataset") +
+    labs(title = "Colored by dataset")
+p2 <- do_scatter(V, meta_data, "cell_type") +
+    labs(title = "Colored by cell type")
 
-harmonized_pcs %>% dim
-harmonized_pcs %>% head
+library(patchwork)
+p1 + p2
 ```
 
-
-
-# Normalized gene matrix
-You can also run `Harmony` on a sparse matrix of library size normalized expression counts. The `HarmonyMatrix()` function will scale expression data, run PCA, and run the Harmony integration algorithm.  
+Let’s run `Harmony` to remove the influence of dataset-of-origin from the embedding. By default, `Harmony` accepts a normalized gene expression matrix and performs PCA. Since here we already have the PCs, we specify `do_pca=FALSE`. The matrix harmony_embeddings is the matrix of `Harmony` corrected PCA embeddings.
 
 ```{r}
-my_harmony_embeddings <- HarmonyMatrix(
-    data_mat = normalized_counts, 
-    meta_data = meta_data, 
-    var_use = "dataset"
-)
+harmony_embeddings <- HarmonyMatrix(data_mat = V, 
+                                    meta_data = meta_data, 
+                                    vars_use = "dataset", 
+                                    do_pca = FALSE, 
+                                    verbose = FALSE)
 ```
 
-# Harmony with two or more covariates
-Harmony can integrate over multiple covariates. To do this, specify a vector covariates to integrate.  
+After Harmony, the datasets are now mixed (left) and the cell types are still separate (right).  
 
 ```{r}
-harmonized_pcs <- HarmonyMatrix(
-    data_mat = scaled_pcs, 
-    meta_data = meta_data, 
-    vars_use = c("dataset", "donor", "batch_id"), 
-    do_pca = FALSE
-)
+p1 <- do_scatter(harmony_embeddings, 
+                 meta_data = meta_data, 
+                 label_name = "dataset", 
+                 point_size = 1) +
+    labs(title = "Colored by dataset")
+p1
 ```
 
 
+# Next Steps
+## Interfacing to software packages
+You can also run Harmony as part of an established pipeline in several packages, such as Seurat, MUDAN, and scran.
 
+The most common way to run Harmony is on reduced dimensions such as PC embeddings from pricipal component analysis (PCA). If you use low dimensiional embeddings, set `do_pca = FALSE`. 
+
+## Normalized gene matrix
+You can also run Harmony on a sparse matrix of library size normalized expression counts. The `HarmonyMatrix()` function will scale expression data, run PCA, and run the Harmony integration algorithm.
 
 
 
