@@ -17,15 +17,15 @@ library(Rsamtools)
 
 
 ## Introduction  
-The main purpose of the Rsamtools package is to import BAM files into R. Rsamtools also provides some facility for file access such as record counting, index file creation, and filtering to create new files containing subsets of the original. An important use case for Rsamtools is as a starting point for creating R objects suitable for a diversity of work flows, e.g., AlignedRead objects in the ShortRead package (for quality assessment and read manipulation), or GAlignments objects in GenomicAlignments package (for RNA-seq and other applications).  
+**The main purpose of the `Rsamtools` package is to import BAM files into R**. `Rsamtools` also provides some facility for file access such as record counting, index file creation, and filtering to create new files containing subsets of the original. An important use case for `Rsamtools` is as a starting point for creating R objects suitable for a diversity of work flows, e.g., `AlignedRead` objects in the `ShortRead` package (for quality assessment and read manipulation), or `GAlignments` objects in `GenomicAlignments` package (for RNA-seq and other applications).  
 
 
 ## Input  
-The essential capabiblity provided by `Rsamtools` is `BAM` input. This is accomplished with the `scanBam` function. `scanBam` takes as input the name of the BAM file to be parsed. In addition, the param argument determines which genomic coordinates of the BAM file, and what components of each record, will be input.  
+The essential capability provided by `Rsamtools` is `BAM` input. This is accomplished with the `scanBam` function. `scanBam` takes as input the name of the BAM file to be parsed. In addition, the `param` argument determines which genomic coordinates of the BAM file, and what components of each record, will be input.  
 
-Rparam is an instance of the ScanBamParam class. To create a param object, call `ScanBamParam`.  
+`param` is an instance of the `ScanBamParam` class. To create a `param` object, call `ScanBamParam`.  
 
-Here we create a param object to extract reads aligned to three distinct ranges (one on seq1, two on seq2). From each of read in those ranges, we specify that we would like to extract the reference name (rname, e.g., seq1), strand, alignment position, query width, and query sequence.  
+Here we create a `param` object to extract reads aligned to three distinct ranges (one on seq1, two on seq2). From each of read in those ranges, we specify that we would like to extract the reference name (rname, e.g., seq1), strand, alignment position, query width, and query sequence.  
 
 ```{r}
 which <- IRangesList(seq1 = IRanges(start = 1000, end = 2000),
@@ -58,6 +58,7 @@ param <- ScanBamParam(which = which,
 bamFile <- system.file("extdata", "ex1.bam", package = "Rsamtools")
 bam <- scanBam(file = bamFile, param = param)
 ```
+
 Like `scan` , `scanBam` returns a list of values. Each element of the list corresponds to a range specified by the which argument to `ScanBamParam.`  
 
 ```{r}
@@ -85,7 +86,7 @@ sapply(bam[[1]], as.character) %>% head()
 
 ```{r}
 bam_unlist <- rbind(sapply(bam[[1]], as.character), sapply(bam[[2]], as.character), sapply(bam[[3]], as.character))
-sapply(bam_unlist, class)
+sapply(bam_unlist, class) %>% str
 ```
 
 
@@ -166,42 +167,6 @@ cvg <- lapply(seqnames, summaryFunction, bamFile)
 names(cvg) <- seqnames
 cvg
 ```
-
-
-## Views  
-```{r}
-library(KEGG.db)
-kid <- revmap(x = KEGGPATHID2NAME)[["Caffeine metabolism"]]
-egid <- KEGGPATHID2EXTID[[sprintf("hsa%s", kid)]]
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

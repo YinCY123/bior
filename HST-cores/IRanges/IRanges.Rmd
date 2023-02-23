@@ -15,7 +15,7 @@ library(IRanges)
 library(magrittr)
 ```
 
-Two central classes are available in Bioconductor for representing ranges: the **IRanges** class defined in the `IRanges` package for representing ranges defined on a single space, and the GRanges class defined in the `GenomicRanges` package for representing ranges defined on multiple spaces.  
+Two central classes are available in Bioconductor for representing ranges: the **IRanges** class defined in the `IRanges` package for representing ranges defined on a single space, and the `GRanges` class defined in the `GenomicRanges` package for representing ranges defined on multiple spaces.  
 
 
 `IRanges` are collections of integer intervals. `GRanges` are like `IRanges`, but with an associated chromosome and strand, taking care of some book keeping.  
@@ -23,7 +23,6 @@ Two central classes are available in Bioconductor for representing ranges: the *
 
 ## Basic IRanges  
 ```{r}
-?IRanges
 ir1 <- IRanges(start = 1:10, width = 10:1)
 ```
 
@@ -36,42 +35,42 @@ ir3 <- IRanges(end = 11, width = 10:1)
 identical(ir1, ir2)
 ```
 
-An `IRanges` consist of separate intervals; each interval is called a range. So `irl` above contains 3 ranges.   
+An `IRanges` consist of separate intervals; each interval is called a range.  
 
 **Assessor methods: `start()`, `end()`, `width()` and also replacement methods**.  
 
 ```{r}
-start(irl)
+start(ir1)
 ```
 
 ```{r}
-width(irl)
+width(ir1)
 ```
 
 ```{r}
-width(irl) <- 1
-irl
+width(ir1) <- 1
+ir1
 ```
 
 ```{r give they are names}
-names(irl) <- paste("A", 1:3, sep = "") # row names 
-irl
+names(ir1) <- paste("A", 1:length(ir1), sep = "") # row names 
+ir1
 ```
 
 ```{r IRange object only have one dimension}
-dim(irl); length(irl)
+dim(ir1); length(ir1)
 ```
 
 ```{r subsetting like vector}
-irl[1]
+ir1[1]
 ```
 
 ```{r}
-irl["A1"]
+ir1["A1"]
 ```
 
 ```{r concatenate two IRanges with c() function}
-c(irl, ir2)
+c(ir1, ir2)
 ```
 
 ```{r plotRanges}
@@ -105,17 +104,17 @@ plotRanges(ir3)
 
 
 ## Normality  
-Sometimes, it is necessary to formally represent a subsequence, where no elements are repeated and order is preserved. Also, it is occasionally useful to think of an IRanges object as a set of integers, where no elements are repeated and order does not matter.  
+Sometimes, it is necessary to formally represent a subsequence, where no elements are repeated and order is preserved. Also, it is occasionally useful to think of an `IRanges` object as a set of integers, where no elements are repeated and order does not matter.  
 
-The *NormalIRanges* class formally represents a set of integers. By definition an *IRanges* object is said to be normal when its ranges are: (a) not empty. (b) not overlapping. (c) ordered from left to right. (d) not even adjacent (e.g., there muts be a non empty gap between 2 consecutive ranges.)
+The *NormalIRanges* class formally represents a set of integers. By definition an *IRanges* object is said to be normal when its ranges are: (a) not empty. (b) not overlapping. (c) ordered from left to right. (d) not even adjacent (e.g., there must be a non empty gap between 2 consecutive ranges.)
 
-There are three main advantages of using a normal IRanges object:  
+There are three main advantages of using a normal `IRanges` object:  
 
 1. it guarantees a subsequence encoding or set of integers.  
 2. it is compact in terms of the number of ranges.  
 3. it uniquely identifies its informations, which simplifies comparisions.   
 
-The `reduce` function reduces any IRanges object to a `NormalIRanges` by merging redundant ranges.  
+The `reduce` function reduces any `IRanges` object to a `NormalIRanges` by merging redundant ranges.  
 
 ```{r}
 ir <- IRanges(start = c(1, 3, 5, 7), 
@@ -128,11 +127,11 @@ plotRanges(reduce(ir))
 
 
 ## Lists of IRanges objects  
-It is common to manipulate collections of IRanges objects during an analysis. Thus, the IRanges package defines some specific classes for working with multiple IRanges objects.  
+It is common to manipulate collections of `IRanges` objects during an analysis. Thus, the `IRanges` package defines some specific classes for working with multiple `IRanges` objects.  
 
-The `IRangesList` class asserts that each element is an IRanges object and provides convenience methods, such as `start`, `end` and `width` accessors that return `IntegerList` objects, aligning with the IRangesList object.  
+The `IRangesList` class asserts that each element is an `IRanges` object and provides convenience methods, such as `start`, `end` and `width` accessors that return `IntegerList` objects, aligning with the `IRangesList` object.  
 
-To explicitly construct an IRangesList, use the `IRangesList` function.  
+To explicitly construct an `IRangesList`, use the `IRangesList` function.  
 
 ```{r}
 rl <- IRangesList(ir, rev(ir))
@@ -142,7 +141,7 @@ start(rl)
 ## Vector Extraction  
 > IRange object can be used for vector extraction.  
 
-As the elements of an IRanges object encode consecutive subsequences, they may be used directly in sequence extraction. Note that when a normal IRanges is given as the index, the result is a subsequence, as no elements are repeated or reordered. If the sequence is a Vector subclass (i.e. not an ordinary vector), the canonical `[` function accepts an IRanges object.  
+As the elements of an `IRanges` object encode consecutive subsequences, they may be used directly in sequence extraction. Note that when a normal `IRanges` is given as the index, the result is a subsequence, as no elements are repeated or reordered. If the sequence is a Vector subclass (i.e. not an ordinary vector), the canonical `[` function accepts an `IRanges` object.  
 
 ```{r}
 set.seed(0)
@@ -159,7 +158,7 @@ xRle[irextract]
 ```
 
 ## Finding Overlapping Ranges  
-The function `findOverlaps` detects overlaps between two IRanges objects.  
+The function `findOverlaps` detects overlaps between two `IRanges` objects.  
 
 ```{r}
 ol <- findOverlaps(query = ir, reduce(ir))

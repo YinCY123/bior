@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r load packages}
+```{r load packages, message=FALSE}
 library(GenomicRanges)
 library(magrittr)
 ```
@@ -26,13 +26,16 @@ gr <- GRanges(seqnames = "chr1",
               ranges = IRanges(start = c(1, 3, 5), width = 3))
 ```
 
-Natrual accessor functions: `strand()`, `seqnames()`, `ranges()`, `start()`, `end()`, `width()`.  
+Natural accessor functions: `strand()`, `seqnames()`, `ranges()`, `start()`, `end()`, `width()`.  
 
 Because the they have strand, we now have operations which are relative to the direction of transcription: `upstream()`, `downstream()`.  
 
 ```{r}
+gr
 flank(gr, width = 2, start = T); flank(gr, width = 2, start = F)
 ```
+
+
 ```{r}
 strand(gr)
 start(gr)
@@ -76,7 +79,7 @@ seqlevels(gr) <- c("chr1", "chr2")
 seqnames(gr) <- c("chr1", "chr2", "chr1")
 ```
 
-When you `sort()` a GRanges, the sorting order of the chromosomes is determined by their order in `seqlevel`.   
+When you `sort()` a `GRanges`, the sorting order of the chromosomes is determined by their order in `seqlevel`.   
 ```{r}
 sort(gr)
 ```
@@ -86,13 +89,13 @@ seqlevels(gr) <- c("chr2", "chr1")
 sort(gr)
 ```
 
-associate a genome with a GRanges  
+associate a genome with a `GRanges`  
 ```{r}
 genome(gr) <- "hg19"
 gr
 ```
 
-This is becomes valuable when you deal with data from different genome versions, because it allows R to throw an error when you compare two GRanges from different genomes   
+This is becomes valuable when you deal with data from different genome versions, because it allows R to throw an error when you compare two `GRanges` from different genomes   
 ```{r}
 gr2 <- gr
 genome(gr2) <- "hg18"
@@ -100,7 +103,7 @@ findOverlaps(gr, gr2)
 ```
 
 ## DataFrame  
-The `S4Vectors` package introduced the **DataFrame** class. This class is very similar to the bae `data.frame` class from R, but it allows columns of any class, provided a number of required methods are supported. For example, **DataFrame** can have `IRanges` as columns, unlike data.frame.  
+The `S4Vectors` package introduced the **DataFrame** class. This class is very similar to the base `data.frame` class from R, but it allows columns of any class, provided a number of required methods are supported. For example, **DataFrame** can have `IRanges` as columns, unlike `data.frame`.  
 
 ```{r}
 ir <- IRanges(start = 1:2, width = 3)
@@ -165,12 +168,13 @@ findOverlaps(gr, gr2, ignore.strand = T)
 ## subsetByOverlaps  
 A common operation is to select only certain ranges from a `GRanges` which overlap something else.   
 ```{r}
+gr;gr2
 subsetByOverlaps(gr, gr2)
 ```
 
 
 ## makeGRangesFromeDataFrame  
-A common situation is that you have data which looks like a GRanges but is really stored as a classic data.frame, with chr, start etc. The makeGRangesFromDataFrame converts this data.frame into a GRanges. An argument tells you whether you want to keep any additional columns.  
+A common situation is that you have data which looks like a `GRanges` but is really stored as a classic `data.frame`, with chr, start etc. The `makeGRangesFromDataFrame` converts this `data.frame` into a `GRanges`. An argument tells you whether you want to keep any additional columns.  
 ```{r}
 df <- data.frame(chr = "chr1", 
                  start = 1:3, 
@@ -238,12 +242,7 @@ gr <- renameSeqlevels(gr, value = newStyle)
 This can in principle go wrong, if the original set of `seqlevels` are inconsistent (not a single style).  
 
 
-
 # GenomicRanges - Rle
-```{r}
-library(GenomicRanges)
-```
-
 `Rle`: run length encoding, this class is great for representation genome-wide sequence coverage.  
 
 ## Coverage 
@@ -279,9 +278,9 @@ as.numeric(rl)
 
 This is very efficient representation if:  
 - the vector is very long  
-- there are a lot of consecutive eleemnts with the same value  
+- there are a lot of consecutive elemnts with the same value  
 
-This is especially useful for genomic data which is either piecewise constant, or where most of the genome is not covered.  
+This is especially useful for genomic data which is either piece wise constant, or where most of the genome is not covered.  
 
 In many ways `Rle`s function as normal vectors, you can do arithmetic with them, transform them etc. using standard R functions like `+` and `log2`.  
 
@@ -289,7 +288,7 @@ There are also `RleList` which is a list of `Rle`s. This class is used to repres
 
 
 ## Useful functions for Rle  
-A standard usecase is that you have a number of regions (say IRanges) and you want to do something to your Rle over each of these regions.   
+A standard usecase is that you have a number of regions (say `IRanges`) and you want to do something to your `Rle` over each of these regions.   
 ```{r}
 ir <- IRanges(start = c(2, 6), width = 2)
 aggregate(x = rl, by = ir, FUN = max)
@@ -309,7 +308,9 @@ slice(rl, lower = 2)
 
 ## Views and Rles  
 ```{r}
+rl
 vi <- Views(subject = rl, start = c(3, 7), width = 3)
+vi
 ```
 
 ```{r}
@@ -362,14 +363,14 @@ We have a new `XXapply` function with the fancy name `endoapply`. This is used w
 shift(gL, 10)
 ```
 
-findOverlaps works slightly different. For GRangesLists, we think of each element is a union of ranges. So we get an overlap if any range overlaps.  
+`findOverlaps` works slightly different. For `GRangesLists`, we think of each element is a union of ranges. So we get an overlap if any range overlaps.  
 ```{r}
 findOverlaps(gL, gr2)
 ```
 
-Note how the queryLength is 2 and not 20. What we know from the first row of this output is that some range in gL[[2]] overlaps the range gr[1].
+Note how the `queryLength` is 2 and not 20. What we know from the first row of this output is that some range in gL[[2]] overlaps the range gr[1].
 
-This is actually a feature if we think of the GRangesList as a set of transcript, where each GRanges gives you the exon of the transcript. With this interpretation, findOverlaps tells you whether or not the transcript overlaps some region of interest, and this is true if any of the exons of the transcript overlaps the region.  
+This is actually a feature if we think of the `GRangesList` as a set of transcript, where each `GRanges` gives you the exon of the transcript. With this interpretation, `findOverlaps` tells you whether or not the transcript overlaps some region of interest, and this is true if any of the exons of the transcript overlaps the region.  
 
 
 ## Other Lists  
@@ -403,7 +404,7 @@ gr <- GRanges(
     GC = seq(1, 0, length=10))
 ```
 
-The output of the GRanges show method separates the information into a left and right hand region that are separated by | symbols. The genomic coordinates (seqnames, ranges, and strand) are located on the left-hand side and the metadata columns (annotation) are located on the right.  
+The output of the `GRanges` show method separates the information into a left and right hand region that are separated by `|` symbols. The genomic coordinates (seqnames, ranges, and strand) are located on the left-hand side and the metadata columns (annotation) are located on the right.  
 
 ```{r}
 gr
@@ -428,7 +429,7 @@ c(sp[[1]], sp[[2]])
 
 # GenomicRanges HOWTOs  
 ## How to read single-end reads from a BAM file  
-Several functions are availabe for reading BAM files into R  
+Several functions are available for reading BAM files into R  
 - `readGAlignments()`  
 - `readGAlignmentPairs()`  
 - `readGAlignmentsList()`  
@@ -460,12 +461,6 @@ flag <- scanBamFlag(isMinusStrand = TRUE)
 param <- ScanBamParam(flag = flag, what = what, which = which)
 neg <- readGAlignments(file = un1, param = param)
 ```
-
-
-
-
-
-
 
 
 
