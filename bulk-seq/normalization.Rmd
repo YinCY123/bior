@@ -1,0 +1,31 @@
+---
+title: "normalization"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# RPKM (reads per kilo base of exon model per million mapped reads)
+$$RPKM = \frac{read \space counts}{sequencing \space deeps* gene \space length(in \space kb)} * 10^6$$
+
+# CPM (counts per million)
+$$CPM = \frac{read \space counts}{sequencing \space deeps} *10^6$$
+
+# FPKM (fragments per kilobase of exon model per million mapped fragments)
+$$FPKM = \frac{fragments}{sequencing \space deeps * gene \space length (in \space kb)} * 10^6$$
+
+# TPM (transcripts per million)
+$$TPM = \frac{fragments}{sequencing \space deeps} * 10^6$$
+
+
+
+
+
+
+
+
