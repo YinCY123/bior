@@ -1,0 +1,65 @@
+---
+title: "01_genetic_codes"
+author: "yincy"
+date: "2023-02-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Standard genetic code
+```{r}
+library(seqinr)
+library(magrittr)
+
+data("SEQINR.UTIL")
+SEQINR.UTIL %>% class()
+SEQINR.UTIL %>% length
+SEQINR.UTIL %>% names
+
+codes_ncbi <- SEQINR.UTIL$CODES.NCBI
+codes_ncbi
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

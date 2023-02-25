@@ -1,0 +1,68 @@
+---
+title: "02_introduction_to_seqinr"
+author: "yincy"
+date: "2023-02-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# About 
+## ACNUC
+ACNUC was the first database of nucleic acids developed in the early 80's in the same lab that issued seqinR. ACNUC was published as a printed book in two volumes, whose covers are reproduced in margin there. At about the same time, two other database were created, one in the USA (GeneBank, at Los Alamos and now managed by the NCBI), and another one in Germany. To avoid duplication of efforts at the europen level, a single repository database was initiated in Germany yielding the EMBL database that moved from Koln to Heidelberg, and then to its current location at the EBI near Canbridge. The DDBJ started in 1986 at the NIG in Mishima. These three main repository DNA databases are now collaborating to maintain the INSD and are sharing data on a daily basis. 
+
+The sequences present in the ACUNC books, were all the published nucleic acid sequences of about 150 or more continuous unambiguous nucleotides up to May or June 1981 from the jounal gieven in table 1.  
+
+
+## R and CRAN
+R is libre language and environment for statistical computing and graphics which provides a wide variety of statistical and graphical techniques: linear and nonlinear modelling, statistical tests, time series analysis, classification, clustering, etc.   
+
+The Comprehensive R Archive Network, CRAN, is a network of servers around the world that store identical, up-to-date, versions of code and documentation for R. 
+
+
+## sequin and seqinR
+Sequin is the well known software used to submit sequences to GenBank, seqinR has definitively no connection with sequin. seqinR is just shortcut for 'sequences in R'.  
+
+However, as a mnemotechnic tip, you may think about the seqinR package as the Reciprocal function of sequin: with sequin you can submit sequences to GenBank, with seqinR you can Retrieve sequences from GenBank. This is a very good summary of a major functionality of the seqinR package: to provide an efficient access to sequence databases under R.  
+
+```{r}
+library(seqinr)
+library(magrittr)
+
+lseqinr() %>% head
+```
+
+
+
+## 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
