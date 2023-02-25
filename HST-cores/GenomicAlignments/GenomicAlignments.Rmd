@@ -16,22 +16,25 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Introdution to GenomicAlignments  
 ## Introduction  
-The GenomicAlignments package serves as the foundation for representing genomic alignments within the Bioconductor project. In the Bioconductor package hierarchy, it builds upon the GenomicRanges (infrastructure) package and provides support for many Bioconductor packages.  
+The `GenomicAlignments` package serves as the foundation for representing genomic alignments within the Bioconductor project. In the Bioconductor package hierarchy, it builds upon the `GenomicRanges` (infrastructure) package and provides support for many Bioconductor packages.  
+
 This package defines three classes: *GAlignments*, *GAlignmentsPairs*, and *GAlignmentsList*, which are used to represent genomic alignments, pairs of genomic alignments, and groups of genomic alignments.  
 
 
 ## GAlignments: Genomic Alignments 
-The GAlignments class which is a container for storing a set of genomic alignments. The class is intended to support alignments in general, not only those coming from a 'Binary Alignment Map' or 'BAM' files.   
+The `GAlignments` class which is a container for storing a set of genomic alignments. The class is intended to support alignments in general, not only those coming from a 'Binary Alignment Map' or 'BAM' files.   
 
 Also alignments with gaps  in the reference sequence (like gapped alignemnts) are supported which makes the class suited for storing junction reads from an RNA-seq experiment.  
 
 More precisely, a *GAlignemnts* object is a vector-like object where each element describes an alignemnt, that is, how a given sequence (called query or read, typically short) aligns to a reference (typically long).  
 
-A *GAlignments* object can be created from 'BAM' file. In that case, each element in the resulting object will correspond to a record in the file. One important thing to note though is that not all the information present in the BAM/SAM file records is stored in the object.  
+A *GAlignments* object can be created from 'BAM' file. In that case, each element in the resulting object will correspond to a record in the file. One important thing to note though is that **not all the information present in the BAM/SAM file records is stored in the object**.  
 
 ### load a BAM file into a GAlignments object  
 ```{r}
 library(GenomicAlignments)
+library(magrittr)
+
 aln1_file <- system.file("extdata", "ex1.bam", package = "Rsamtools")
 aln1 <- readGAlignments(aln1_file)
 ```
@@ -40,15 +43,14 @@ aln1 <- readGAlignments(aln1_file)
 length(aln1)
 ```
 
-
-Note that the readGAlignments would have discarded any 'BAM' record describing an unaligned query.  
+Note that the `readGAlignments` would have discarded any 'BAM' record describing an unaligned query.  
 
 
 ### Simple accessor methods  
 There is one accessor per field displayed by the `show` method and it has the same name as the field. All of them return a vector or factor of the same length as the object.  
 
 ```{r}
-head(seqnames(aln1))
+seqnames(aln1)
 ```
 
 
@@ -57,35 +59,34 @@ seqlevels(aln1)
 ```
 
 ```{r}
-head(strand(aln1))
+strand(aln1)
 ```
 
 ```{r}
-head(cigar(aln1))
-```
-
-
-```{r}
-head(qwidth(aln1))
+cigar(aln1) %>% as(Class = "Rle")
 ```
 
 
 ```{r}
-head(start(aln1))
+qwidth(aln1) %>% as("Rle")
+```
+
+
+```{r}
+start(aln1) %>% str
 ```
 
 ```{r}
-head(end(aln1))
+end(aln1) %>% str
 ```
 
 ```{r}
-head(width(aln1))
+width(aln1) %>% as("Rle")
 ```
 
 ```{r}
-head(njunc(aln1))
+njunc(aln1) %>% as("Rle")
 ```
-
 
 
 # Overlap encodings  
@@ -102,17 +103,17 @@ untreated1_chr4()
 ```
 
 ```{r}
-library(GenomicAlignments)
 flag0 <- scanBamFlag(isDuplicate = F, 
                      isNotPassingQualityControls = F)
 
 param0 <- ScanBamParam(flag = flag0)
 
 U1.GAL <- readGAlignments(untreated1_chr4(), use.names = T, param = param0)
-head(U1.GAL)
+U1.GAL
 ```
 
 Because the aligner used to align those reads can report more than 1 alignment per original query, we should expect the names of U1.GAL has duplicates.  
+
 ```{r}
 U1.GAL_names_is_dup <- duplicated(names(U1.GAL))
 table(U1.GAL_names_is_dup)
@@ -130,35 +131,35 @@ U1.GAL_dup2unq <- match(U1.GAL_qnames, U1.GAL_qnames)
 
 
 ```{r}
-head(unique(cigar(U1.GAL)))
+cigar(U1.GAL) %>% unique() %>% head
 ```
 
 ```{r}
-table(njunc(U1.GAL))
+njunc(U1.GAL) %>% head
 ```
 
 ```{r}
-colSums(cigarOpTable(cigar(U1.GAL)))
+cigar(U1.GAL) %>% cigarOpTable() %>% head
 ```
 
 ### Load paired-end reads from a BAM file  
 ```{r}
 U3.galp <- readGAlignmentPairs(untreated3_chr4(), use.names = T, param = param0)
-head(U3.galp)
+U3.galp %>% head
 ```
 
-The show method for GAlignmentPairs objects displays two ranges columns, one for the first alignment in the pair (the left column) and one for the last alignment in the pair (the right column). The strand column corresponds to the strand of the first alignemnt.  
+The show method for `GAlignmentPairs` objects displays two ranges columns, one for the first alignment in the pair (the left column) and one for the last alignment in the pair (the right column). The strand column corresponds to the strand of the first alignment.  
 
 ```{r}
-head(first(U3.galp))
-```
-
-```{r}
-head(last(U3.galp))
+U3.galp %>% first() %>% head
 ```
 
 ```{r}
-table(isProperPair(U3.galp))
+U3.galp %>% last %>% head
+```
+
+```{r}
+U3.galp %>% isProperPair() %>% table
 ```
 
 ```{r}
@@ -167,7 +168,7 @@ U3.GALP <- U3.galp[isProperPair(U3.galp)]
 
 
 ```{r}
-table(duplicated(names(U3.GALP)))
+U3.GALP %>% names %>% duplicated() %>% table
 ```
 
 ```{r}
@@ -182,30 +183,30 @@ U3.GALP_dup2unq <- match(U3.GALP_names, U3.GALP_names)
 
 
 ```{r}
-head(unique(cigar(first(U3.GALP))))
+U3.GALP %>% first %>% cigar() %>% unique() %>% str
 ```
 
 ```{r}
-head(unique(cigar(last(U3.GALP))))
-```
-
-
-```{r}
-table(njunc(first(U3.GALP)))
-```
-
-```{r}
-table(njunc(first(U3.GALP)), njunc(last(U3.GALP)))
+U3.GALP %>% last %>% cigar() %>% unique() %>% str
 ```
 
 
 ```{r}
-colSums(cigarOpTable(cigar(first(U3.GALP))))
+U3.GALP %>% first %>% njunc %>% table()
+```
+
+```{r}
+table(first = njunc(first(U3.GALP)), last = njunc(last(U3.GALP)))
 ```
 
 
 ```{r}
-colSums(cigarOpTable(cigar(last(U3.GALP))))
+U3.GALP %>% first %>% cigar() %>% cigarOpTable() %>% colSums()
+```
+
+
+```{r}
+U3.GALP %>% last %>% cigar() %>% cigarOpTable() %>% colSums()
 ```
 
 
@@ -217,35 +218,41 @@ In order to compute overlaps between reads and transcripts, we need access to th
 ```{r}
 library(TxDb.Dmelanogaster.UCSC.dm3.ensGene)
 TxDb.Dmelanogaster.UCSC.dm3.ensGene
+
+library(AnnotationHub)
+ah <- AnnotationHub()
+query(ah, c("UCSC", "melanogaster", "TxDb", "dm3"))
 ```
 
 ```{r}
+txdb <- ah[["AH52252"]]
 txdb <- TxDb.Dmelanogaster.UCSC.dm3.ensGene
 ```
 
-extract exons grouped by transcript in a GRangesList object  
+extract exons grouped by transcript in a `GRangesList` object  
 ```{r}
-exbytx <- exonsBy(txdb, by = "tx", use.names = T)
-length(exbytx)
+exbytx <- exonsBy(txdb, by = "tx", use.names = TRUE)
+exbytx
 ```
 
 
 ```{r}
-seqnames(exbytx) %>% runLength() %>% elementNROWS() %>% table()
+exbytx %>% seqnames() %>% runLength() %>% elementNROWS() %>% table()
 ```
 
 
 ```{r}
-strand(exbytx) %>% runLength() %>% elementNROWS() %>% table()
+exbytx %>% strand() %>% runLength() %>% elementNROWS() %>% table()
 ```
 
 ```{r}
-exbytx_strand <- unlist(runValue(strand(exbytx)), use.name = F)
+exbytx_strand <- exbytx %>% strand() %>% runValue() %>% unlist(use.names = FALSE)
 ```
  
 
 ```{r}
-tx <- transcripts(txdb, columns = c("tx_name", "gene_id"))
+txdb %>% columns()
+tx <- transcripts(txdb, columns = c("tx_name", "gene_id", "tx_id", "tx_type", "exon_rank", "cds_id"))
 ```
 
 
@@ -279,13 +286,11 @@ U1.ovoo <- findOverlaps(query = U1.GAL, subject = exbytx, ignore.strand = T)
 ### Tabulate the single-end overlaps  
 ```{r}
 U1.GAL_ntx <- countQueryHits(U1.ovoo)
+U1.GAL_ntx %>% table
 mcols(U1.GAL)$ntx <- U1.GAL_ntx
 head(U1.GAL)
 ```
 
-```{r}
-table(U1.GAL_ntx)
-```
 
 ```{r}
 mean(U1.GAL_ntx >= 1)

@@ -1,0 +1,240 @@
+---
+title: "02 Overlap encodings"
+author: "YinCY"
+date: 2023-02-23
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+In the context of an RNA-seq experiment, encoding the overlaps between the aligned reads and the transcripts can be used for detecting those overlaps that are “splice compatible”, that is, compatible with the splicing of the transcript. 
+
+Various tools are provided in the `GenomicAlignments` package for working with overlap encodings. In this vignette, we will illustrate the use of these tools on the single-end and paired-end reads of an RNA-seq experiment.  
+
+
+# Load reads from a BAM file
+## Load single-end reads from a BAM file
+BAM file `untreated1_chr4.bam` (located in the pasillaBamSubset data package) contains single-end reads from the 'Pasilla' experiment and aligned against the dm3 genome.  
+
+```{r}
+library(pasillaBamSubset)
+untreated1_chr4()
+```
+
+We use the readGAlignments function defined in the GenomicAlignments package to load the reads into a GAlignments object. It’s probably a good idea to get rid of the PCR or optical duplicates (flag bit 0x400 in the SAM format, see the SAM Spec 1 for the details), as well as reads not passing quality controls (flag bit 0x200 in the SAM format). We do this by creating a ScanBamParam object that we pass to readGAlignments (see ?ScanBamParam in the Rsamtools package for the details). Note that we also use `use.names=TRUE` in order to load the query names from the BAM file (`readGAlignments` will use them to set the names of the returned object).  
+
+```{r}
+library(GenomicAlignments)
+
+flag0 <- scanBamFlag(isDuplicate = FALSE, isNotPassingQualityControls = FALSE)
+param0 <- ScanBamParam(flag = flag0)
+U1.GAL <- readGAlignments(untreated1_chr4(), use.names = TRUE, param = param0)
+U1.GAL %>% head
+```
+
+Because the aligner used to align those reads can report more than 1 alignment per original query, we shouldn't expect the names of `U1.GAL` to be unique.  
+
+```{r}
+U1.GAL_names_is_dup <- duplicated(names(U1.GAL))
+U1.GAL_names_is_dup %>% table
+```
+
+```{r}
+U1.uqnames <- U1.GAL %>% names() %>% unique()
+U1.GAL_qnames <- factor(names(U1.GAL), levels = U1.uqnames)
+```
+
+```{r}
+U1.GAL_dup2unq <- match(U1.GAL_qnames, U1.GAL_qnames)
+U1.GAL_dup2unq %>% str
+```
+
+Our reads can have up to 2 skipped regions (a skipped region corresponds to an N operation in the CIGAR).  
+
+```{r}
+U1.GAL %>% cigar() %>% unique() %>% str
+U1.GAL %>% njunc() %>% table
+```
+
+Also, the following table indices that indels were not allowed/supported during the alignment process (no I or D CIGAR operations).  
+
+```{r}
+U1.GAL %>% cigar() %>% cigarOpTable() %>% colSums()
+```
+
+
+## load paired-end reads from a BAM file
+BAM file untreated3_chr4.bam (located in the pasillaBamSubset data package) contains paired-end reads from the “Pasilla” experiment and aligned against the dm3 genome.  
+
+We use the `readGAlignmentPairs` function to load them into a `GAlignmentPairs` object.  
+
+```{r}
+U3.galp <- readGAlignmentPairs(untreated3_chr4(), use.names = TRUE, param = param0)
+U3.galp %>% head
+```
+
+The `show` method for `GAlignmentPairs` objects displays two ranges columns, one for the first
+alignment in the pair (the left column), and one for the last alignment in the pair (the right
+column). The strand column corresponds to the strand of the first alignment.
+
+```{r}
+U3.galp %>% first() %>% head
+```
+
+```{r}
+U3.galp %>% last %>% head
+```
+
+According to the SAM format specifications, the aligner is expected to mark each alignment pair as proper or not (flag bit 0x2 in the SAM format). The SAM Spec only says that a pair is proper if the first and last alignments in the pair are “properly aligned according to the aligner”. So the exact criteria used for setting this flag is left to the aligner.
+
+We use `isProperPair` to extract this flag from the `GAlignmentPair` object.
+
+```{r}
+U3.galp %>% isProperPair() %>% table
+```
+
+Even though we could do overlap encodings with the full object, we keep only the proper pairs for our downstream analysis.  
+
+```{r}
+U3.GALP <- U3.galp[isProperPair(U3.galp)]
+```
+
+Because the aligner used to align those reads can report more than 1 alignment per original query template (i.e. per pair of sequences stored in the input files, typically 1 FASTQ file for the first ends and 1 FASTQ file for the last ends), we shouldn’t expect the names of `U3.GALP` to be unique:
+
+```{r}
+U3.GALP_names_is_dup <- duplicated(names(U3.GALP))
+U3.GALP_names_is_dup %>% table
+```
+
+Storing the query templete names in a factor will be useful.  
+
+```{r}
+U3.uqnames <- unique(names(U3.GALP))
+U3.GALP_qnames <- factor(names(U3.GALP), levels = U3.uqnames)
+```
+
+```{r}
+U3.GALP_dup2unq <- match(U3.GALP_qnames, U3.GALP_qnames)
+```
+
+Our reads can have up to 1 skipped region per end
+
+```{r}
+U3.GALP %>% first %>% cigar() %>% unique() %>% head
+U3.GALP %>% last %>% cigar() %>% unique() %>% head
+
+table(first = U3.GALP %>% first %>% njunc(), 
+      last = U3.GALP %>% last %>% njunc())
+```
+
+
+```{r}
+# insertion and deletion are not allowed
+U3.GALP %>% first %>% cigar() %>% cigarOpTable() %>% colSums()
+```
+
+
+# Find all the overlaps between the reads and transcripts
+## load the transcripts from a TxDb object
+```{r}
+library(TxDb.Dmelanogaster.UCSC.dm3.ensGene)
+txdb <- TxDb.Dmelanogaster.UCSC.dm3.ensGene
+
+exbytx <- exonsBy(txdb, by = "tx", use.names = TRUE)
+exbytx %>% head
+```
+
+```{r}
+
+exbytx %>% seqnames() %>% runLength() %>% elementNROWS() %>% table
+exbytx %>% strand %>% runLength() %>% elementNROWS() %>% table
+```
+
+```{r}
+exbytx_strand <- exbytx %>% strand %>% runValue() %>% unlist(use.names = FALSE)
+exbytx %>% head
+```
+
+```{r}
+tx <- transcripts(txdb, columns = c("tx_name", "gene_id"))
+tx %>% head
+```
+
+```{r}
+df <- mcols(tx)
+exbytx2gene <- as.character(df$gene_id)
+exbytx2gene <- factor(exbytx2gene, levels = unique(exbytx2gene))
+names(exbytx2gene) <- df$tx_name
+exbytx2gene <- exbytx2gene[names(exbytx)]
+exbytx2gene %>% head
+nlevels(exbytx2gene)
+```
+
+## Single-end overlaps
+### Find the single-end overlaps
+We are ready to compute the overlaps with the `findOverlaps` function. Note that the strand of the queries produced by the RNA-seq experiment is typically unknown so we use `ignore.strand=TRUE`.  
+
+```{r}
+U1.0v00 <- findOverlaps(U1.GAL, exbytx, ignore.strand = TRUE)
+U1.0v00
+```
+
+### tabulate the single-end overlaps
+We will repeatedly use the 2 following little helper functions to 'tabulate' the overlaps in a given Hits object, i.e., to count the number of overlaps for each element in the query or for each element in the subject.  
+
+```{r}
+U1.GAL_ntx <- countQueryHits(U1.0v00)
+mcols(U1.GAL)$ntx <- U1.GAL_ntx
+U1.GAL %>% head
+```
+
+```{r}
+U1.GAL_ntx %>% table
+mean(U1.GAL_ntx >= 1) # 76% reads have at least of 1 hits
+```
+
+```{r}
+U1.GAL_ntx2 <- countOverlaps(query = U1.GAL, subject = exbytx, ignore.strand = TRUE)
+identical(U1.GAL_ntx, unname(U1.GAL_ntx2))
+```
+
+
+## Paired-end overlaps
+### find the paired-end overlaps
+
+
+
+
+
+
+
+## Encode the overlaps between the reads and transcripts
+## Single-end encodings
+The overlap encodings are strand sensitive so we will compute them twice, once for the 'original' alignments (i.e., the alignments of the original queries), and once again for the 'flipped alignments' (i.e., the alignments of the 'flipped original queries'). We extact the ranges of the 'original' and 'flipped' alignments in 2 GRangesList objects with.  
+
+```{r}
+U1.grl <- grglist(U1.GAL, order.as.in.query = TRUE)
+U1.grlf <- flipQuery(U1.grl) # just flipped the strand
+```
+
+```{r}
+U1.ovencA <- encodeOverlaps(query = U1.grl, subject = exbytx, hits = U1.0v00)
+U1.ovencB <- encodeOverlaps(query = U1.grlf, subject = exbytx, hits = U1.0v00)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

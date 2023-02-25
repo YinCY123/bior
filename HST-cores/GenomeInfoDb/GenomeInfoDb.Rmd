@@ -13,24 +13,26 @@ knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
 library(GenomeInfoDb)
 library(GenomicRanges)
 library(magrittr)
+ls("package:GenomeInfoDb")
 ```
 
 
 ## Introduction  
-The `GenomeInfoDb` provides an interface to access seqlevelsStyles (such as UCSC, NCBI, Ensembl) and their supported mappings for organisms. For instance, for Homo sapiens, seqlevelsStyle "UCSC" maps to "chr1", "chr2", ..., "chrX","chrY".  
+The `GenomeInfoDb` provides an interface to access `seqlevelsStyles` (such as UCSC, NCBI, Ensembl) and their supported mappings for organisms. For instance, for Homo sapiens, `seqlevelsStyle` "UCSC" maps to "chr1", "chr2", ..., "chrX","chrY".  
 
 
 ##Functionality for all existing organisms   
 ### genomeStyles  
-The `genomeStyles` lists out for each organism, the seqlevelsStyles and their mappings.  
+The `genomeStyles` lists out for each organism, the `seqlevelsStyles` and their mappings.  
 
 ```{r}
 seqmap <- genomeStyles()
-head(seqmap, n = 2)
+seqmap %>% names()
+seqmap[["Mus_musculus"]]
 ```
 
 
-Organism's supported by GenomeInfoDb can be found by  
+Organism's supported by `GenomeInfoDb` can be found by  
 ```{r}
 names(genomeStyles())
 ```
@@ -41,23 +43,23 @@ If one knows the organism one is interested in, then we can directly access the 
 genomeStyles(species = "Homo_sapiens")
 ```
 
-We can also check if a given style is supported by GenomeInfoDb for a given species.  
+We can also check if a given style is supported by `GenomeInfoDb` for a given species.  
 ```{r}
 "UCSC" %in% names(genomeStyles(species = "Homo_sapiens")) 
 ```
 
 
 ### extractSeqlevels   
-We can also extract the desired seqlevelsStyle from a given organism using the `extractSeqlevels`  
+We can also extract the desired `seqlevelsStyle` from a given organism using the `extractSeqlevels`  
 ```{r}
 extractSeqlevels(species = "Homo_sapiens", style = "NCBI")
 ```
 
 ### extractSeqlevelsByGroup   
-We can also extract the desired seqlevelsStyle from a given organism based on a group ('auto' denotes autosomes, 'circular' denotes circular chromosomes and 'sex' denotes sex chromosomes, the default is all chromosomes are returned).  
+We can also extract the desired `seqlevelsStyle` from a given organism based on a group ('auto' denotes autosomes, 'circular' denotes circular chromosomes and 'sex' denotes sex chromosomes, the default is all chromosomes are returned).  
 
 ```{r}
-extractSeqlevelsByGroup(species = "Homo_sapiens", group = "auto", style = "NCBI")
+extractSeqlevelsByGroup(species = "Homo_sapiens", group = "all", style = "NCBI")
 ```
 
 
@@ -132,8 +134,10 @@ mapSeqlevels(seqnames = c("chrII", "chrIII", "chrM"), style = "NCBI")
 
 
 ```{r}
-gr <- GRanges(seqnames = paste('ch', 1:35), 
+gr <- GRanges(seqnames = paste('ch', 1:35, sep = ""), 
               ranges = IRanges(start = 1:35, width = 5))
+gr %>% seqlevels()
+seqnames(gr) <- mapSeqlevels(seqnames = as.character(seqnames(gr)), style = "NCBI") %>% unname() %>% as.factor() %>% Rle
 ```
 
 

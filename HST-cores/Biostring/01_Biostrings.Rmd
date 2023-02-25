@@ -1,0 +1,90 @@
+---
+title: "01 Biostrings functions summary"
+author: "YinCY"
+date: 2023-02-22
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# function summary of Biostrings package
+## low-level manipulation of DNAStringSet and AAStringSet Objects
+- `length`: the number of sequences in an object.  
+- `names`: the names of the sequences in an object.  
+- `[`: extract sequence from an object.  
+- `head`: the first sequences in an object.  
+- `tail`: the last sequences in an object.  
+- `rev`: reverse the order of the sequences in an object.  
+- `c`: combine two or more sequences.  
+- `width`: the size of all the sequences in an object.  
+- `nchar`:same as above.  
+- `==`: element-wise comparision.  
+- `!=`: element-wise comparision.  
+- `match` and `%in%`: analog match and %in% on character vectors.    
+- `duplicated` and `unique`: analog duplicated and unique on character vectors.    
+- `sort` and `order`: analog sort and order on character vectors.    
+- `relist`, `plit` and `extractList`: analog to `relist` and `split` on character vectors, `extractList` is a generalization of `relist` and `split` that supports arbitrary groupings.  
+
+
+## Counting or tabulating
+- `alphabetaFrequency`  
+- `letterFrequency`  
+- `uniqueLetters`  
+- `letterFrequencyInSliidingView`  
+- `consensusMatrix`  
+- `dinucleotideFrequency`  
+- `trinucleotideFrequency`  
+- `oligonucleotideFrequency`  
+- `nucleotideFrequencyAt`: tallies the short sequences formed by extracting the nucleotides found at a set of fixed positions from each sequence of a set of DNA or RNA sequences.  
+
+
+# Sequence transformation and editing
+- `reverse`  
+- `complement`  
+- `reverseComplement`  
+- `translate`: translate a set of DNA sequences into a set of Amino Acid sequences.    
+- `chartr` and `replaceAmbiguities`: replace letters in a sequence or a set of sequences.  
+- `subseq`, `extractAt` and `replaceAt`: extract/replace arbitrary substrings from/in a string or set of strings.  
+- `replaceLetterAt`: Replace the letters specified by a set of positions by new letters.  
+- `padAndClip` and `stackStrings`: Pad and clip strings.  
+- `strsplit` and `unstrsplit`: `strsplit` splits the sequences in a set of sequences according to a pattern. `unstrsplit` is the reverse operation i.e., a fast implementation of `sapply(x, paste0, collapse=sep)` for collapsing the list elements of a `DNAStringSetList` or `AAStringSetList` object.  
+
+
+# String matching and alignments
+- `matchPattern` and `countPattern`: Find/count all the occurrences of a given pattern in a reference sequence. Support mismatches and indels.  
+
+- `vmatchPattern` and `vcountPattern`: Find/count all the occurrences of a given pattern in a set of reference sequences. Support mismatches and indels.  
+
+- `matchPDict`, `countPDict` and `whichPDict`: Find/count all the occurrences of a set of patterns in a reference sequence. `whichPDict` only identifies which patterns in the set have at least one match. Support s small number of mismatches.  
+
+- `vmatchPDict`, `vcountPDict` and `vwhichPDict`: Find/count all the occurrences of a set of patterns in a set of reference sequences.  
+
+- `pairwiseAlignment`: Solve global alignment (Needleman-Wunsch), local alignment (Smith-Waterman), and (ends-free) overlap alignment problems.  
+
+- `matchPWM` and `countPWM`: Find/count all the occurrences of a Position Weight Matrix in a reference sequence.  
+
+- `trimLRPatterns`  
+
+- `matchLRPatterns`: Find all paired matches in a reference sequence i.e. matches specified by a left and a right pattern, and a maximum distance between them.  
+
+- `matchProbePair`: Find all the amplicons that match a pair of probes in a reference sequence.  
+
+- `findPalindromes`: Find palindromic regions in a sequence.  
+
+
+# I/O functions
+- `readBStringSet`  
+- `readDNAStringSet`  
+- `readRNAStringSet`  
+- `readAAStringSet`  
+- `writeXStringSet`  
+- `writePairwiseAlignments`  
+- `readDNAMultipleAlignment`  
+- `readRNAMultipleAlignment`  
+- `readAAMultipleAlignment`  
+- `write.phylip`  
+
+

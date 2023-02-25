@@ -1,0 +1,122 @@
+---
+title: "02_scDblFinder"
+author: "YinCY"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# scDblFinder
+The scDblFinder method combines the strengths of various doublet detection approaches, training an iterative classifier on the neighborhood of real cells and artificial doublets.
+
+`scDblFinder()` has two main modes of operation: cluster-based or not. Both perform quite well (see Germain et al., 2021). In general, we recommend the cluster-based apporach in datasets with a very clear cluster structure, and the random approach in more complex datasets.  
+
+## Usage
+The input of `scDblFinder` is an object `sce` of class `SingleCellExperiment` (empty drops having already been removed) containing at least the counts (assay ‘counts’). Alternatively, a simple count matrix can also be provided.
+
+Given an SCE object, `scDblFinder` (using the random approach) can be launched as follows.  
+
+```{r}
+set.seed(123)
+library(scDblFinder)
+
+sce <- mockDoubletSCE(dbl.rate = 0.1, ngenes = 300)
+sce <- scDblFinder(sce, dbr = 0.1)
+```
+
+For 10x data, it is usually safe to leave the `dbr` empty, and it will be automatically estimated.  
+
+`scDblFinder()` will add a number of columns to the colData of `sce` prefixed with 'scDblFinder', the most important of which are.  
+
+- `sce$scDblFinder.score`: the final doublet score.  
+- `sce$scDblFinder.class`: the classification (doublet or singlet).  
+
+We can compare the calls with the truth in this toy example.  
+```{r}
+table(truth = sce$type, call = sce$scDblFinder.class)
+```
+
+
+To use the `cluster-based` approach, one simply needs to additionally provide the `clusters` argument.
+
+```{r}
+sce <- scDblFinder(sce, clusters = "cluster")
+
+table(truth = sce$type, call = sce$scDblFinder.class)
+```
+
+The `clusters` argument can be either a vector of cluster labels for each column of `sce`, a `colData` column of `sce` containing such labels, or `TRUE`. If `clusters=TRUE`, the fast clustering approach (see `?fastcluster`) will be employed. If normalized expression (assay ‘logcounts’) and/or PCA (reducedDim ‘PCA’) are already present in the object, these will be used for the clustering step.
+
+### Multiple samples
+If you have multiple samples (understood as different cell captures), then it is preferable to look for doublets separately for each sample (for multiplexed samples with cell hashes, this means for each batch). You can do this by simply providing a vector of the sample ids to the `samples` parameter of `scDblFinder` or, if these are stored in a column of `colData`, the name of the column. In this case, you might also consider multithreading it using the `BPPARAM` parameter (assuming you’ve got enough RAM!). For example:
+
+```{r}
+library(BiocParallel)
+library(SingleCellExperiment)
+library(magrittr)
+sce %>% colData
+colData(sce)$sample_id <- sample(letters[1:2], size = ncol(sce), replace = T)
+
+sce <- scDblFinder(sce, samples = "sample_id", BPPARAM = MulticoreParam(workers = 4))
+table(sce$scDblFinder.class)
+```
+
+Note that if you are running multiple samples using the cluster-based approach (see below), clustering will be performed sample-wise. While this is typically not an issue for doublet identification, it means that the cluster labels (and putative origins of doublets) won’t match between samples. If you are interested in these, it is preferable to first cluster (for example using `sce$cluster <- fastcluster(sce)`) and then provide the clusters to `scDblFinder`, which will ensure concordant labels across samples.
+
+Of note, if you have very large differences in number of cells between samples the scores will not directly comparable. We are working on improving this, but the meantime it would be preferable to stratify similar samples and threshold the sets separately.  
+
+## Description of the method
+Wrapped in the `scDblFinder` function are the following steps.  
+
+### Splitting captures 
+Doublets can only arise within a given sample or capture, and for this reason are better sought independently for each sample, which also speeds up the analysis. If the `samples` argument is given, `scDblFinder` will use it to split the cells into samples/captures, and process each of them in parallel if the `BPPARAM` argument is given. The classifier will be trained globally, but thresholds will be optimized on a per-sample basis. If your samples are multiplexed, i.e. the different samples are mixed in different batches, then the batches should be what you provide to this argument.
+
+### Reducing and clustering the data
+The analysis can be considerably sped up, at little if any cost in accuracy, by reducing the dataset to only the top expressed genes (controlled by the `nfeatures` argument).
+
+Then, depending on the `clusters` argument, an eventual PCA and clustering (using the internal `fastcluster` function) will be performed. The rationale for the cluster-based approach is that homotypic doublets are nearly impossible to distinguish on the basis of their transcriptome, and therefore that creating that kind of doublets is a waste of computational resources that can moreover mislead the classifier into flagging singlets. An alternative approach, however, is to generate doublets randomly (setting `clusters` to FALSE or NULL), and use the iterative approach (see below) to exclude also unidentifiable artificial doublets from the training.
+
+### Genrating artifical doublets
+Depending on the `clusters` and `propRandom` arguments, artificial doublets will be generated by combining random cells and/or pairs of non-identical clusters (this can be performed manually using the `getArtificalDoublets` function). A proportion of the doublets will simply use the sum of counts of the composing cells, while the rest will undergo a library size adjustment and poisson resampleing.  
+
+### Examining the k-nearest neighbors (kNN) of each cell
+A new PCA is performed on the combination of real and artificial cells, from which a kNN network is generated. Using this kNN, a number of parameters are gathered for each cell, such as the proportion of doublets (i.e. artificial doublets or known doublets provided through the `knownDoublets` argument, if given) among the KNN, ratio of the distances to the nearest doublet and nearest non-doublet, etc. Several of this features are reported in the output with the ‘scDblFinder.’ prefix, e.g.:
+
+- `distanceToNearest`: distance to the nearest cell (real or artifical).  
+
+- `ratio`: the proportion of the kNN that are doublets. (If more than one value of `k` is given, the various ratios will be used during classification and will be reported). 
+
+- `weighted`: the proportion of the kNN that are doublets, weighted by their distance (useful for isolated cells).  
+
+### Training a classifier
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
