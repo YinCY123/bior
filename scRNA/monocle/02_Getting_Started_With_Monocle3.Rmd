@@ -1,0 +1,163 @@
+---
+title: "02 Getting Started with Monocle3"
+author: "yincy"
+date: "2023-03-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Workflow steps at a glance
+```{r}
+knitr::include_graphics("figures/monocle-workflow.png")
+```
+
+
+## Step 1 Store data in a `cell_data_set` object
+The first step in working with Monocle3 is to load your data into Monocle3's main class `cell_data_set`:
+
+```
+cds <- new_cell_data_set(expression_data = expression_matrix, 
+                         cell_metadata = cell_metadata, 
+                         gene_metadata = gene_annotation)
+```
+
+## Step 2 Normalize and preprocess the data
+```
+cds <- preprocess_cds(cds = cds, num_dim = 100)
+```
+
+##Step 3 remove batch effects
+You can subtracted unwatched batch effects or align cells from similar (but not exactly) the same conditions using several different methods in Monocle 3.
+
+```
+cds <- align_cds(cds = cds, alignment_group = "batch")
+```
+
+## Step 4 clustering
+```
+cds <- reduce_dimension(cds = cds)
+
+cds <- cluster_cells(cds = cds)
+```
+
+
+## Step 5 Order cells in pseudotime along a trajectory
+Now, put your cells in order by how much progress they've made through whatever process you're studying, such as differentiation, reprogramming, or an immune response.
+
+```
+cds <- learn_graph(cds = cds)
+
+cds <- order_cells(cds = cds)
+
+plot_cells(cds = cds)
+```
+
+
+## Step 6 Perform differential expression analysis
+Compare groups of cells in myriad ways to find differentially expressed genes, controlling for batch effects and treatments as you like:
+
+```
+# with regression
+gene_fits <- fit_models(cds = cds, model_formula_str = "~embryo.time")
+fit_coefs <- coefficient_table(gene_fits)
+emb_time_term <- emb_time_term %>% mutate(q_value = p.adjust(p_value))
+sig_gene <- emb_time_term %>% filter(q_value < 0.05) %>% pull(gene_short_name)
+
+# with graph autocorrection
+pr_test_res <- graph_test(cds = cds, neighbor_graph = "principal_graph", core = 4)
+pr_deg_ids <- row.names(subset(pr_test_res, q_value < 0.05))
+```
+
+
+
+# Get started
+## Load Monocle3
+```{r, message=FALSE}
+library(monocle3)
+library(ggplot2)
+library(dplyr)
+```
+
+
+##loading your data
+Monocle 3 takes as input cell by gene expression matrix. Monocle 3 is designed for use with absolute transcript counts (e.g. from UMI experiments). Monocle 3 works "out-of-the-box" with the transcript count matrices produced by Cell Ranger, the software pipeline for analyzing experiments from the 10X Genomics Chromium instrument. Monocle 3 also works well with data from other RNA-Seq workflows such as sci-RNA-Seq and instruments like the Biorad ddSEQ.
+
+
+### The `cell_data_set` class
+Monocle holds single-cell expression data in objects of the cell_data_set class. The class is derived from the Bioconductor SingleCellExperiment class, which provides a common interface familiar to those who have analyzed other single-cell experiments with Bioconductor. The class requires three input files:
+
+- `expression_matrix`: a numeric matrix of expression values, where rows are genes, and columns are cells.
+
+- `cell_metadata`: a data frame, where rows are cells, and columns are cell attributes (such as cell type, culture condition, day captured, etc.).  
+
+- `gene_metadata`: a data frame, where rows are features (e.g., genes), and columns are gene attributes, such as biotype, gc content, etc. 
+
+
+**Notes**
+The expression value matrix must: 1) have the same number of columns as the `cell_metadata` has rows.  2) have the same number of rows as the `gene_metadata` has rows.
+
+- row names of the `cell_metadata` object should match the column names of the expression matrix.  
+
+- row names of the `gene_metadata` object should match row names of the expression matrix.
+
+- one of the columns of the `gene_metadata` should be names `gene_short name`, which represents the gene symbol or simple name (generally used for plotting) for each gene.  
+
+
+### Generate a `cell_data_set`
+```{r}
+expression_matrix <- readRDS("../../../data/monocle3/cao/cao_l2_expression.rds")
+cell_metadata <- readRDS("../../../data/monocle3/cao/cao_l2_colData.rds")
+gene_annotation <- readRDS("../../../data/monocle3/cao/cao_l2_rowData.rds")
+
+cds <- new_cell_data_set(
+    expression_data = expression_matrix, 
+    cell_metadata = cell_metadata, 
+    gene_metadata = gene_annotation
+)
+```
+
+
+## Generate a `cell_data_set` from 10X output
+To input data from 10X Genomics Cell Ranger, you can use the `load_cellranger_data` function.
+
+`load_cellranger_data` takes an argument `umi_cutoff` that determines how many reads a cell must have to be included. By default, this is set to 100. If you would like to include all cells, set `umi_cutoff` to 0.
+
+For `load_cellranger_data` to find the correct files, you must provide a path to the folder containing the un-modified Cell Ranger 'outs' folder. Your file structure should look like: `10x_data/outs/filtered_feature_bc_matrix/` where `filtered_feature_bc_matrix` contains files `features.tsv.gz`, `barcodes.tsv.gz` and `matrix.mtx.gz`. (`load_cellranger_data` can also handle Cell Ranger V2 data where "features" is substituted for "gene" and the files are not gzipped.)
+
+
+```
+cds <- load_cellranger_data("path_to_cellranger_out")
+```
+
+Alternatively, you can use `load_mm_data` to load any data in MatrixMarket format by providing the matrix files and two metadata files (features information and cell information).
+
+
+```
+cds <- load_mm_data(mat_path = "path_to_matrix.mtx", 
+                    feature_anno_path = "path_to_feature.csv",
+                    cell_anno_path = "path_to_barcodes.csv")
+```
+
+## Combining CDS objects
+If you have multiple CDS objects that you would like to analyze together, use our `combine_cds`. `combine_cds` takes a list of CDS objects and combines them into a single CDS object.
+
+```{r}
+cds2 <- cds[1:100, ]
+big_cds <- combine_cds(list(cds, cds2))
+```
+
+
+**Options**
+`keep_all_genes`: When TRUE (default), all genes are kept even if they don't match between the different CDSs. Cells that do not have a given gene in their CDS will be marked as having zero expression. When FALSE, only the genes in common among all CDSs will be kept.
+
+`cell_names_unique`: When FALSE (default), the cell names in the CDSs are not assumed to be unique, and so a CDS specifier is appended to each cell name. When TRUE, no specifier is added.
+
+
+
+
+
+
+
