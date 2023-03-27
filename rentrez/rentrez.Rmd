@@ -105,6 +105,7 @@ The set of search terms available varies between databases. You can get a list o
 ```{r}
 entrez_db_searchable(db = "sra")
 ```
+
 ## Using the filter field
 "Filter" is a special field that, as the names suggests, allows you to limit records returned by a search to set of filtering criteria. There is no programmatic way to find the particular terms that can be used with the Filter field. However, the NCBI's website provides an "advanced search" tool for some databases that can be used to discover these terms.
 
