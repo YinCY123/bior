@@ -1,0 +1,173 @@
+---
+title: "01_Tree_Manipulation"
+author: "yincy"
+date: "2023-04-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(ape)
+library(magrittr)
+
+tr <- read.tree(text = "((a:1,b:1):1,(c:1,d:1):1);")
+```
+
+
+**Tree Manipulation Functions**  
+- `drop.tip`: remove one or more tips from a tree.  
+
+- `extract.clade`: keeps all the tips and nodes descending from a node specified by its number or its label.  
+
+- `drop.fossil`: like `drop.tip`, but dropping only the tips that are not contemporaneous with the most distant ones from the root.
+
+- `bind.tree`: build a tree from two trees where the second one is grafted on the first one.
+
+- `rotate`: rotates the internal branch below the most recent common ancestor of a monophyletic group given by the argument group. The resulting tree is equivalent to the original one. This function is convenient when plotting a tree if it is needed to change the order of the tips on the plot.
+
+- `ladderize`: rotates the internal branches of a tree in order to arrange the sister-clades so that the smallest one is on the right-hand side when plotted upwards.  
+
+- `compute.brlen`: modifies or creates the branch lengths of a tree with respect to the second argument, `method`, which may be one of the following.  
+    + A character string specifying the method to be used.
+    + An R function used to generate random branch lengths.  
+    + One or more numeric values(recycled if necessary).  
+    
+- `compute.brtime`: has a similar action than the previous function but the re- turned tree is ultrametric; the argument method may be:
+    + A character string specifying the method to be used to generate the branching times.  
+    + A numeric vector of the same length than the number of nodes.
+
+- `is.rooted`  
+- `root`  
+- `unroot`
+- `multi2di`  
+- `di2multi`  
+- `summary`  
+- `is.ultrametric`: all tips euqally distant from the root  
+- `balance`: returns, for a fully binary tree, the number of descendants of both sister-lineages from each node.
+
+
+
+
+
+```{r}
+drop.tip(tr, tip = 1:2)
+drop.tip(tr, c("a", "b"))
+```
+
+```{r}
+par(mfrow =c(1,3))
+plot(tr)
+drop.tip(tr, tip = 1:2, trim.internal = FALSE) %>% plot
+drop.tip(tr, tip = 1:2, trim.internal = TRUE) %>% plot
+```
+
+
+It is often convenient to identify tips with numbers, but you must be very carful that many operations are likely to change these numbers.
+
+In all situations, it is safest to identify tips with their labels.
+
+```{r}
+t1 <- read.tree(text = "(a:1,b:1):0.5;")
+t2 <- read.tree(text = "(c:1,d:1):0.5;")
+```
+
+```{r}
+par(mfrow = c(2,2))
+plot(t1, main = "t1")
+plot(t2, main = "t2")
+plot(bind.tree(t1, t2), main = "bind t1, t2, position = 0")
+plot(bind.tree(t1, t2, position = 0.5), main = "bind t1,t2,position=0.5")
+```
+
+
+```{r}
+par(mfrow = c(1, 2))
+plot(t1)
+plot(rotate(t1, node = 3)) # 3 is the root node
+```
+
+
+
+# Rooted and Unrooted Trees
+```{r}
+ta <- read.tree(text = "(a,b,c);")
+tb <- read.tree(text = "(a,b,c):;")
+tc <- read.tree(text = "((a,b),c);")
+td <- read.tree(text = "(a,b,c):0;")
+# The presence of a zero `root.edge` allows us to have a rooted tree with a basal trichotomy. 
+```
+
+```{r, message=FALSE, warning=FALSE}
+par(mfrow = c(2, 2))
+plot(ta, main = "ta", type = "cladogram")
+plot(tb, main = "tb", type = "cladogram")
+plot(tc, main = "tc", type = "cladogram")
+plot(td, main = "td", type = "cladogram")
+```
+
+```{r}
+sapply(list(ta, tb, tc, td), is.rooted)
+```
+
+
+```{r}
+td %>% summary
+```
+
+```{r}
+# all tips equally distant from the root
+td %>% is.ultrametric()
+```
+
+```{r}
+tc %>% balance
+```
+
+```{r}
+plot(tc)
+```
+
+
+# Case Study
+warblers cytochrome b sequences
+AJ534526 - AJ534549 and Z73494
+
+```{r}
+x <- paste("AJ5345", 26:49, sep = "")
+x <- c("Z73494", x)
+x
+```
+
+
+```{r}
+sylvia.seq <- read.GenBank(access.nb = x)
+sylvia.seq
+```
+
+```{r}
+sylvia.clus <- clustal(sylvia.seq)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
