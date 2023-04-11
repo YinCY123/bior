@@ -26,7 +26,7 @@ library(magrittr)
 entrez_dbs() %>% sort()
 ```
 
-There is a set of functions with names starting `entrez_db_` that can be used to gether more information about each of these databases.  
+There is a set of functions with names starting `entrez_db_` that can be used to gather more information about each of these databases.  
 
 **Functions that help you learn about NCBI databases**:   
 
