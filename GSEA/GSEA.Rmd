@@ -2,8 +2,7 @@
 title: "GSEA"
 author: "yincy"
 date: "10/10/2021"
-output:
-    bookdown::html_document2
+output: html
 ---
 
 ```{r setup, include=FALSE}
@@ -20,6 +19,8 @@ formatNumber: function (n) {return +n}
 }
 }});</script>
 
+
+[From this site](https://www.pathwaycommons.org/guide/primers/data_analysis/gsea/)
 
 
 # Background
