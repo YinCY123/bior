@@ -17,9 +17,10 @@ The workflow for reconstructing trajectories is very similar to the workflow for
 
 
 ```{r}
-expression_matrix <- readRDS("../../../data/monocle3/packer/packer_embryo_expression.rds")
-cell_metadata <- readRDS("../../../data/monocle3/packer/packer_embryo_colData.rds")
-gene_annotation <- readRDS("../../../data/monocle3/packer/packer_embryo_rowData.rds")
+library(monocle3)
+expression_matrix <- readRDS("../../../data/monocle/packer_embryo_expression.rds")
+cell_metadata <- readRDS("../../../data/monocle/packer_embryo_colData.rds")
+gene_annotation <- readRDS("../../../data/monocle/packer_embryo_rowData.rds")
 
 cds <- new_cell_data_set(expression_data = expression_matrix, 
                          cell_metadata = cell_metadata, 
@@ -52,9 +53,9 @@ plot_cells(cds,
 ```
 
 
-As you can see, despite the fact that we are only looking at a small slice of this dataset, MOnocle reconstructs a trajectory with numerous braches. Overlaying the manual annotations on the UMAP reveals that these branches are principally occupied by one cell type.  
+As you can see, despite the fact that we are only looking at a small slice of this dataset, Monocle reconstructs a trajectory with numerous braches. Overlaying the manual annotations on the UMAP reveals that these branches are principally occupied by one cell type.  
 
-As with clustering analysis, you can use `plot_cells()` to visualize how indivdual genesvary along thetrajectory. Let's look at some genes with interesting patterns of expression in ciliated neurons.  
+As with clustering analysis, you can use `plot_cells()` to visualize how indivdual genes vary along the trajectory. Let's look at some genes with interesting patterns of expression in ciliated neurons.  
 
 ```{r}
 ciliated_gene <- c("che-1", 
@@ -82,7 +83,7 @@ plot_cells(cds = cds, color_cells_by = "partition")
 
 
 # Leran the trajectory graph
-Next, we will fit a pricipal graph within each partition using the `learn_graph()` function. 
+Next, we will fit a principal graph within each partition using the `learn_graph()` function. 
 
 ```{r}
 cds <- learn_graph(cds = cds)
@@ -145,6 +146,7 @@ Note that some of the cells are gray. This means they have infinite pseudotime, 
 It's often desirable to specify the root of the trajectory programmatically, rather than manually picking it. The function below does so by first grouping the cells according to which trajectory graph node they are nearest to. Then, it calculates what fraction of the cells at each node come from the earliest time point. Then it picks the node that is most heavily occupied by early cells and returns that as the root.
 
 ```{r}
+source("../../../mouse-kidney/functions/get_earliest_principal_node.R")
 cds <- order_cells(cds = cds, 
                    root_pr_nodes = get_earliest_principal_node(cds))
 
