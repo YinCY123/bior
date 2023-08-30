@@ -1,0 +1,186 @@
+---
+title: "SCENIC"
+author: "yincy"
+format: html
+editor: visual
+---
+
+# SCENIC workflow
+
+This tutorial goes through the steps in the SCENIC workflow.
+
+Building the **gene regulatory network (GRN)**:
+
+1.  Identify potential targets for each TF based on co-expression.\
+
+-   Filtering the expression matrix and running GENIE3/GRNBoost.
+-   Formatting the targets from GENIE3/GRNBoost into co-expression modules.
+
+2.  Select potential direct-binding targets (regulons) based on DNA-motif analysis (`RcisTarget`: TF motif analysis).
+
+Identify **cell states** and their regulators:
+
+3.  Analyzing the network activity in each individual cell (AUCell)\
+
+-   Scoring regulons in the cells (calculate AUC).\
+-   Optional: Convert the network activity into ON/OFF (binary activity matrix)
+
+4.  Identity stable cell states based on their gene regulatory network activity (cell clustering) and exploring the results.
+
+# Input
+
+## Expression matrix
+
+The input for SCENIC is a single-cell RNA-seq expression matrix (with gene-symbol as `rownames`). The first step is to load this matrix.
+
+For this tutorial we provide a toy example only 200 cells and \<1000 genes from the mouse brain.
+
+```{r}
+loompath <- system.file(package = "SCENIC", "examples/mouseBrain_toy.loom")
+```
+
+Open the loom file and load the expression matrix (and cell annotation if available).
+
+```{r}
+library(SCopeLoomR)
+library(magrittr)
+
+loom <- open_loom(loompath)
+exprMat <- get_dgem(loom)
+cellInfo <- get_cell_annotation(loom)
+close_loom(loom)
+
+exprMat %>% dim
+```
+
+## Cell info/phenodata
+
+In Step 3-4 (scoring the GRN and clsutering), it is interesting to compare the results with known information about the cells. You can already indicate which variables to plot, and assign them a specific color (otherwise one will be assigned automatically).
+
+```{r}
+cellInfo %>% head
+cellInfo <- cellInfo %>% as.data.frame()
+cellInfo$CellType %>% table %>% as.data.frame()
+
+saveRDS(cellInfo, "int/cellInfo.rds")
+```
+
+```{r}
+colVars <- list(CellType = c(
+  "microglia" = "forestgreen", 
+  "endothelial-mural" = "darkorange",
+  "astrocytes_ependymal" = "magenta3",
+  "oligodendrocytes" = "hotpink",
+  "interneurons" = "red3",
+  "pyramidal CA1" = "skyblue",
+  "pyramidal SS" = "darkblue"
+))
+
+colVars$CellType <- colVars$CellType[intersect(names(colVars$CellType), cellInfo$CellType)]
+saveRDS(colVars, "int/colVar.rds")
+
+plot.new(); legend(0, 1, fill = colVars$CellType, 
+                   legend = names(colVars$CellType), 
+                   bty = "n")
+```
+
+## Initialize SCENIC settings
+
+In order to keep consistent settings across the multiple steps of SCENIC, most functions in `SCENIC` packages use a common object where the options for the current run are stored. This object replace the 'arguments' for most functions, and should be created at the beginning of a `SCENIC` run with the function `initializeScenic()`.
+
+The default settings should be valid for most analysis. The parameters that need to be specified in all runs is the organism (`mgi` for mouse, `hgnc` for human, and `dmel` for fly), and the directory where the `RcisTarget` database are stored.
+
+For details on the options that can be modified check the help of `?initializeScenic()` or of the specific function that takes it as input.
+
+```{r}
+library(SCENIC)
+library(RcisTarget)
+dbDir <- "/home/yincy/git/data/SCENIC/mouse/mm9"
+myDatasetTitle <- "SCENIC example on mouse Brain"
+dbs <- defaultDbNames[["mgi"]]
+motifAnnotations_mgi <- read.table("/home/yincy/git/data/SCENIC/mouse/mm9/motifs-v9-nr.mgi-m0.001-o0.0.tbl", 
+                                   sep = "\t", 
+                                   header = T)
+
+# data(package = "RcisTarget")
+data("motifAnnotations_mgi_v9")
+motifAnnotations_mgi <- motifAnnotations_mgi_v9
+ScenicOptions <- initializeScenic(org = "mgi", 
+                                  dbDir = dbDir, 
+                                  dbs = dbs, 
+                                  datasetTitle = myDatasetTitle, 
+                                  nCores = 4)
+
+ScenicOptions@inputDatasetInfo$cellInfo <- "int/cellInfo.rds"
+ScenicOptions@inputDatasetInfo$cellVar <- "int/colVar.rds"
+saveRDS(ScenicOptions, "int/SecnicOptions.rds")
+```
+
+```{r}
+gene_kept <- geneFiltering(exprMat = exprMat, 
+                           scenicOptions = ScenicOptions, 
+                           minCountsPerGene = 3 * 0.01 * ncol(exprMat), 
+                           minSamples = 0.01 * ncol(exprMat))
+
+interesting_genes <- c("Sox9", "Sox10", "Dlx5")
+interesting_genes[which(!interesting_genes %in% gene_kept)]
+```
+
+```{r}
+exprMat_filtered <- exprMat[gene_kept, ]
+exprMat_filtered %>% dim
+```
+
+## Correlation
+
+```{r}
+runCorrelation(exprMat_filtered = exprMat_filtered, 
+               scenicOptions = ScenicOptions)
+```
+
+## GENIE3
+
+```{r}
+exprMat_filtered <- log1p(exprMat_filtered)
+runGenie3(exprMat_filtered, scenicOptions = ScenicOptions)
+```
+
+```{r}
+ScenicOptions <- runSCENIC_1_coexNetwork2modules(scenicOptions = ScenicOptions)
+ScenicOptions <- runSCENIC_2_createRegulons(scenicOptions = ScenicOptions, 
+                                            coexMethods = "top5perTarget")
+
+ScenicOptions <- runSCENIC_3_scoreCells(scenicOptions = ScenicOptions, 
+                                        exprMat = exprMat_filtered)
+saveRDS(ScenicOptions, "int/scenicOptions.rds")
+```
+
+```{r}
+regulons <- loadInt(ScenicOptions, "regulons")
+regulonNames <- getRegulonName(c("Tef", "Dlx5", ""), names(regulons))
+regulon_plotExpression(exprMat = exprMat_filtered, 
+                       regulonsSelected = regulons[regulonNames], 
+                       cellInfo = cellInfo, 
+                       colVars = colVars)
+```
+
+```{r}
+npcs <- 5
+ScenicOptions@settings$seed <- 123
+fileNames <- tsneAUC(scenicOptions = ScenicOptions, 
+                     aucType = "AUC", 
+                     nPcs = npcs, 
+                     perpl = c(5, 10, 15))
+filenames <- tsneAUC(scenicOptions = ScenicOptions, 
+                     aucType = "AUC", 
+                     nPcs = npcs, 
+                     perpl = c(5, 10, 15), 
+                     onlyHighConf = TRUE, 
+                     filePrefix = "int/tsne_oHC")
+```
+
+```{r}
+regulon_auc <- readRDS("int/3.4_regulonAUC.Rds")
+regulon_auc@assays@data@listData$AUC %>% pheatmap::pheatmap()
+methods(class = "SimpleAssays")
+```
