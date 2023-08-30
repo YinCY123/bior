@@ -222,7 +222,7 @@ summary(decideTests(res))
 topTags(res)
 ```
 
-### PUtting it all together
+### Putting it all together
 #### Looping across labels
 
 

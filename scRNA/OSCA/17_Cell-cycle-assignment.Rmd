@@ -16,7 +16,7 @@ On occasion, it can be desirable to determine cell cycle activity from scRNA-seq
 # loading
 library(scRNAseq)
 sce.416b <- LunSpikeInData(which = "416b")
-sce.416b <- readRDS("/home/yincy/git/Data/Bioconductor/scRNAseq/sce.416b.rds")
+# sce.416b <- readRDS("/home/yincy/git/Data/Bioconductor/scRNAseq/sce.416b.rds")
 sce.416b$block <- factor(sce.416b$block)
 
 # gene annotation
