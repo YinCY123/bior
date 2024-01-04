@@ -1,0 +1,104 @@
+---
+title: "nasa"
+author: "YinCY"
+format: html
+---
+
+
+```{r}
+#| message: false
+#| warning: false
+
+
+library(fs)
+library(R.utils)
+library(magrittr)
+library(DropletUtils)
+library(scater)
+library(scran)
+library(bluster)
+library(EnsDb.Mmusculus.v79)
+```
+
+
+```{r}
+files <- dir_ls("/home/yincy/git/data/nasa/")
+for(file in files){unzip(zipfile = file, exdir = "/home/yincy/git/data/nasa/")}
+```
+
+```{r}
+samples <- dir_ls("/home/yincy/git/data/nasa/", type = "directory", recurse = TRUE)
+samples <- grep("filtered$", samples, value = TRUE)
+samples %>% str
+
+sample_names <- strsplit(samples, "/") %>% sapply("[[", 7)
+```
+
+```{r}
+sces <- read10xCounts(samples = samples, 
+                      sample.names = sample_names, 
+                      col.names = TRUE, 
+                      type = "sparse", 
+                      BPPARAM = BiocParallel::MulticoreParam(workers = 6))
+sces %>% rowData()
+sces %>% colData() 
+rowData(sces)$chr <- mapIds(x = EnsDb.Mmusculus.v79, 
+                            keys = rownames(rowData(sces)), 
+                            keytype = "GENEID", 
+                            column = "SEQNAME")
+rowData(sces)
+sces$Sample %>% table
+```
+
+
+```{r}
+# cell qc
+is_mito <- rowData(sces)$chr == "MT"
+is_mito <- ifelse(is.na(is_mito), FALSE, is_mito)
+is_mito %>% table
+stats <- perCellQCMetrics(x = sces, 
+                          subsets = list(mito = is_mito), 
+                          BPPARAM = BiocParallel::MulticoreParam(6))
+
+qc_sum <- isOutlier(stats$sum, type = "both", log = TRUE, batch = sces$Sample)
+qc_sum %>% table
+
+qc_detected <- isOutlier(stats$detected, type = "both", log = TRUE, batch = sces$Sample)
+qc_detected %>% table
+
+qc_mito <- isOutlier(stats$subsets_mito_percent, type = "higher", log = TRUE, batch = sces$Sample)
+qc_mito %>% table
+
+qc <- qc_sum | qc_detected | qc_mito
+qc %>% table
+
+sces <- sces[, !qc]
+```
+
+
+```{r}
+# gene qc
+stats <- perFeatureQCMetrics(sces)
+stats
+qc <- stats$detected > 0
+qc %>% table
+sces <- sces[qc, ]
+```
+
+
+```{r}
+qclusters <- quickCluster(sces, 
+                          method = "igraph", 
+                          use.rank = TRUE, 
+                          d = 100)
+qclusters %>% table
+sces <- computePooledFactors(sces, clusters = qclusters)
+```
+
+
+
+
+
+
+
+
