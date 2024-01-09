@@ -2,6 +2,7 @@
 title: "nasa"
 author: "YinCY"
 format: html
+editor: source
 ---
 
 
@@ -18,20 +19,22 @@ library(scater)
 library(scran)
 library(bluster)
 library(EnsDb.Mmusculus.v79)
-```
-
-
-```{r}
-files <- dir_ls("/home/yincy/git/data/nasa/")
-for(file in files){unzip(zipfile = file, exdir = "/home/yincy/git/data/nasa/")}
+library(batchelor)
+library(SingleCellExperiment)
+library(magrittr)
 ```
 
 ```{r}
-samples <- dir_ls("/home/yincy/git/data/nasa/", type = "directory", recurse = TRUE)
+files <- dir_ls("/home/yincy/git/data/parttime/nasa/data/", type = "file")
+for(file in files){unzip(zipfile = file, exdir = "/home/yincy/git/data/parttime/nasa/data/")}
+```
+
+```{r}
+samples <- dir_ls("/home/yincy/git/data/parttime/nasa/", type = "directory", recurse = TRUE)
 samples <- grep("filtered$", samples, value = TRUE)
 samples %>% str
 
-sample_names <- strsplit(samples, "/") %>% sapply("[[", 7)
+sample_names <- strsplit(samples, "/") %>% sapply("[[", 9)
 ```
 
 ```{r}
@@ -39,9 +42,9 @@ sces <- read10xCounts(samples = samples,
                       sample.names = sample_names, 
                       col.names = TRUE, 
                       type = "sparse", 
-                      BPPARAM = BiocParallel::MulticoreParam(workers = 6))
+                      BPPARAM = BiocParallel::MulticoreParam(workers = 10))
 sces %>% rowData()
-sces %>% colData() 
+sces %>% colData()
 rowData(sces)$chr <- mapIds(x = EnsDb.Mmusculus.v79, 
                             keys = rownames(rowData(sces)), 
                             keytype = "GENEID", 
@@ -50,7 +53,6 @@ rowData(sces)
 sces$Sample %>% table
 ```
 
-
 ```{r}
 # cell qc
 is_mito <- rowData(sces)$chr == "MT"
@@ -58,7 +60,7 @@ is_mito <- ifelse(is.na(is_mito), FALSE, is_mito)
 is_mito %>% table
 stats <- perCellQCMetrics(x = sces, 
                           subsets = list(mito = is_mito), 
-                          BPPARAM = BiocParallel::MulticoreParam(6))
+                          BPPARAM = BiocParallel::MulticoreParam(10))
 
 qc_sum <- isOutlier(stats$sum, type = "both", log = TRUE, batch = sces$Sample)
 qc_sum %>% table
@@ -75,7 +77,6 @@ qc %>% table
 sces <- sces[, !qc]
 ```
 
-
 ```{r}
 # gene qc
 stats <- perFeatureQCMetrics(sces)
@@ -83,19 +84,129 @@ stats
 qc <- stats$detected > 0
 qc %>% table
 sces <- sces[qc, ]
+sces
+saveRDS(sces, "/home/yincy/git/data/parttime/nasa/nasa.rds")
 ```
 
-
 ```{r}
+set.seed(101)
+sces <- readRDS("/home/yincy/git/data/parttime/nasa/nasa.rds")
 qclusters <- quickCluster(sces, 
                           method = "igraph", 
                           use.rank = TRUE, 
-                          d = 100)
+                          d = 100, 
+                          block = sces$Sample, 
+                          BPPARAM = BiocParallel::MulticoreParam(10))
 qclusters %>% table
-sces <- computePooledFactors(sces, clusters = qclusters)
+sces <- computePooledFactors(x = sces, 
+                             clusters = qclusters, 
+                             BPPARAM = BiocParallel::MulticoreParam(10))
+
+sces <- multiBatchNorm(sces, batch = sces$Sample)
+
+stats <- modelGeneVar(x = sces, block = sces$Sample)
+stats[order(stats$bio, decreasing = T), ]
+hvgs <- getTopHVGs(stats, var.threshold = 0)
+hvgs %>% str
 ```
 
+```{r}
+set.seed(101)
+cur <- sces
+cur <- batchCorrect(cur, 
+                    batch = cur$Sample,
+                    subset.row = hvgs, 
+                    correct.all = TRUE, 
+                    PARAM = FastMnnParam(k = 10, d = 100, auto.merge = TRUE))
+assay(sces, "reconstructed") <- assay(cur, "reconstructed")
+reducedDim(sces, "corrected") <- reducedDim(cur, "corrected")
+rm(cur);gc()
+```
 
+```{r}
+set.seed(101)
+sces <- runTSNE(x = sces, 
+                dimred = "corrected", 
+                assay.type = "reconstructed", 
+                perplexity = 50, 
+                num_threads = 10, 
+                BPPARAM = BiocParallel::MulticoreParam(10))
+```
+
+```{r}
+set.seed(101)
+clusters <- clusterRows(x = reducedDim(sces, "corrected"), 
+                        BLUSPARAM = NNGraphParam(BPPARAM = BiocParallel::MulticoreParam(10), k = 30))
+clusters %>% table
+colData(sces)$clusters <- factor(clusters)
+saveRDS(sces, "/home/yincy/git/data/parttime/nasa/preprocessed_nasa.rds")
+```
+
+```{r}
+sces <- readRDS("/home/yincy/git/data/parttime/nasa/preprocessed_nasa.rds")
+sces %>% colData
+
+plotReducedDim(sces, 
+               dimred = "TSNE", 
+               colour_by = "clusters",
+               point_size = 0.5) +
+  theme(legend.position = "none")
+```
+
+# reference
+```{r}
+#| message: false
+#| warning: false
+
+library(data.table)
+library(magrittr)
+library(stringr)
+library(stringr.plus)
+library(EnsDb.Mmusculus.v79)
+library(SingleCellExperiment)
+
+GSE122465 <- fread("/home/yincy/git/data/parttime/nasa/reference/GSE122465/GSE122465_FilteredCounts10x.csv", 
+                   sep = ",", 
+                   header = TRUE) %>% as.data.frame()
+GSE122465 %>% dim
+GSE122465 %>% colnames() %>% tail
+
+
+GSE122465[1:10, 1:10]
+gene_info <- data.frame(symbol = GSE122465$V1, 
+                        ensembl = mapIds(EnsDb.Mmusculus.v79, keys = GSE122465$V1, keytype = "SYMBOL", column = "GENEID"))
+gene_info$ensembl %>% is.na() %>% table
+gene_info <- gene_info %>% dplyr::filter(!is.na(ensembl)) %>% tibble::remove_rownames() %>% magrittr::set_rownames(value = .$ensembl)
+gene_info %>% head
+
+
+GSE122465 <- GSE122465 %>% dplyr::filter(V1 %in% gene_info$symbol)
+```
+
+```{r}
+cell_info <- data.frame(barcodes = GSE122465 %>% colnames() %>% .[-1], 
+                        row.names = GSE122465 %>% colnames() %>% .[-1])
+
+cell_info %>% dim
+cell_info %>% head
+```
+
+```{r}
+mtx <- dplyr::inner_join(GSE122465, gene_info, by = c("V1" = "symbol")) %>% 
+  dplyr::relocate(ensembl, .before = V1)
+mtx <- mtx %>% tibble::column_to_rownames("ensembl") %>% dplyr::select(-V1) %>% as.matrix()
+mtx[1:10, 1:10]
+```
+
+```{r}
+GSE122465 <- SingleCellExperiment(assays = list(counts = as(mtx, "CsparseMatrix")), 
+                                  rowData = gene_info, 
+                                  colData = cell_info)
+GSE122465
+GSE122465 %>% colData()
+GSE122465 %>% rowData()
+saveRDS(GSE122465, "/home/yincy/git/data/parttime/nasa/reference/GSE122465.rds")
+```
 
 
 
