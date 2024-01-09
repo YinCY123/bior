@@ -1,0 +1,143 @@
+---
+title: "maEndToEnd"
+author: "YinCY"
+format: html
+editor: source
+---
+
+# Introduction
+
+In this article we introduce a complete workflow for a typical (Affymetrix) microarray analysis. Data import, preprocessing, differential expression and enrichment analysis are discussed.
+
+The data set used is from a paper studying the differences in gene expression in inflamed and non-inflamed tissue. 14 patients suffering from Ulcerative colitis (UC) and 15 patients with Crohn’s disease (CD) were tested, and from each patient inflamed and non-inflamed colonic mucosa tissue was obtained via a biopsy. This is a typical clinical data set consisting of 58 arrays in total. Our aim is to analyze differential expression (DE) between the tissues. Our results show a substantial overlap with the results of the original paper.
+
+```{r}
+#| message: false
+#| warning: false
+
+library(Biobase)
+library(oligoClasses)
+library(ArrayExpress)
+library(pd.hugene.1.0.st.v1)
+library(hugene10sttranscriptcluster.db)
+
+library(oligo)
+library(arrayQualityMetrics)
+
+library(limma)
+library(topGO)
+
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(janitor)
+library(fs)
+```
+
+# Import data
+```{r}
+sdrf <- read.table("/home/yincy/git/data/zhuyi/dermatomyositis/E-MTAB-2967/E-MTAB-2967.sdrf.txt", 
+                   sep = "\t", 
+                   header = TRUE, 
+                   quote = "\"") %>% 
+  clean_names()
+rownames(sdrf) <- sdrf$array_data_file
+sdrf
+```
+
+```{r}
+files <- list.celfiles("/home/yincy/git/data/zhuyi/dermatomyositis/E-MTAB-2967", 
+                       full.names = TRUE)
+files %>% str
+
+raw_data <- read.celfiles(filenames = files, 
+                          verbose = TRUE)
+stopifnot(validObject(raw_data))
+
+es <- ExpressionSet(assayData = exprs(raw_data), 
+                    phenoData = AnnotatedDataFrame(sdrf))
+
+validObject(es)
+```
+
+```{r}
+pData(es) %>% head
+```
+
+```{r}
+pData(es) <- pData(es)[, c("source_name", "characteristics_individual", "factor_value_disease", "factor_value_phenotype")]
+pData(es)
+```
+
+
+# quality control
+```{r}
+es %>% exprs %>% .[1:5, 1:5]
+```
+
+```{r}
+exp_raw <- es %>% exprs %>% log2
+pcas <- exp_raw %>% t %>% prcomp(scale. = FALSE)
+
+percentVar <- 100 * (pcas$sdev^2 / sum(pcas$sdev^2)) %>% round(digits = 4)
+
+df <- data.frame(PC1 = pcas$x[, 1], 
+                 PC2 = pcas$x[, 2], 
+                 disease = pData(es)$factor_value_disease, 
+                 phenotype = pData(es)$factor_value_phenotype, 
+                 individual = pData(es)$characteristics_individual)
+df
+```
+
+```{r}
+df %>% ggplot(aes(PC1, PC2)) +
+  geom_point(aes(shape = disease, color = phenotype)) +
+  ggtitle("PCA plot of the log-transformed raw expression data") +
+  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  scale_shape_manual(values = c(4, 15)) +
+  scale_color_manual(values = c("darkorange2", "dodgerblue4"))
+```
+
+```{r}
+oligo::boxplot(raw_data, 
+               target = "core", 
+               main = "Boxplot of log2-intensites for the raw data")
+```
+
+```{r}
+arrayQualityMetrics::arrayQualityMetrics(es, 
+                                         outdir = "./", 
+                                         force = TRUE, 
+                                         do.logtransform = TRUE, 
+                                         intgroup = c("factor_value_disease"))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
