@@ -1,0 +1,39 @@
+---
+title: "ExpressionSet"
+author: "YinCY"
+format: html
+editor: source
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+library(Biobase)
+```
+
+
+The package Biobase contains standardized data structures to represent genomic data. The ExpressionSet class is designed to combine several different sources of information (i.e. as contained in the various MAGE-TAB files) into a single convenient structure. An ExpressionSet can be manipulated (e.g., subsetted, copied), and is the input to or output of many Bioconductor functions.
+
+The data in `ExpressionSet` consist of:  
+
+- `assayData`: Expression data from microarray experiments with microarray probes in rows and sample identifiers in columns.  
+
+- `metaData`: 
+  + `phenoData`: A description of the samples in the experiment with sample identifiers in rows and description elements in columns; holds the content of the SDRF file.  
+  + `featureData`: metadata about the features on the chip.  
+  + further annotations for the features, for example gene annotations from biomedical databases (annotation).  
+
+- `ExperimentData`: A flexible structure to describe the experiment.  
+
+The `ExpressionSet` class coordinates all of these data, so that one does not have to worry about the details. However, one should keep in mind that the rownames of the `phenoData` have to match the column names of the assay data, while the row names of the assay data have to match the row names of the `featureData`.  
+
+You can use the functions `pData` and `fData` to extract the sample and feature annotation, respectively, from an `ExpressionSet`. The function `exprs` will return the expression data itself as a matrix.
+
+```{r}
+knitr::include_graphics("figures/2024-01-08_13-24.png")
+```
+
+
+
+
