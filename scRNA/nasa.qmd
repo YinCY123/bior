@@ -10,7 +10,6 @@ editor: source
 #| message: false
 #| warning: false
 
-
 library(fs)
 library(R.utils)
 library(magrittr)
@@ -98,10 +97,10 @@ qclusters <- quickCluster(sces,
                           block = sces$Sample, 
                           BPPARAM = BiocParallel::MulticoreParam(10))
 qclusters %>% table
+
 sces <- computePooledFactors(x = sces, 
                              clusters = qclusters, 
                              BPPARAM = BiocParallel::MulticoreParam(10))
-
 sces <- multiBatchNorm(sces, batch = sces$Sample)
 
 stats <- modelGeneVar(x = sces, block = sces$Sample)
@@ -117,7 +116,8 @@ cur <- batchCorrect(cur,
                     batch = cur$Sample,
                     subset.row = hvgs, 
                     correct.all = TRUE, 
-                    PARAM = FastMnnParam(k = 10, d = 100, auto.merge = TRUE))
+                    PARAM = FastMnnParam(k = 10, d = 100, auto.merge = TRUE, 
+                                         BPPARAM = BiocParallel::MulticoreParam(10)))
 assay(sces, "reconstructed") <- assay(cur, "reconstructed")
 reducedDim(sces, "corrected") <- reducedDim(cur, "corrected")
 rm(cur);gc()
@@ -136,7 +136,7 @@ sces <- runTSNE(x = sces,
 ```{r}
 set.seed(101)
 clusters <- clusterRows(x = reducedDim(sces, "corrected"), 
-                        BLUSPARAM = NNGraphParam(BPPARAM = BiocParallel::MulticoreParam(10), k = 30))
+                        BLUSPARAM = NNGraphParam(BPPARAM = BiocParallel::MulticoreParam(10), k = 10))
 clusters %>% table
 colData(sces)$clusters <- factor(clusters)
 saveRDS(sces, "/home/yincy/git/data/parttime/nasa/preprocessed_nasa.rds")
@@ -303,6 +303,47 @@ plotReducedDim(GSE122465,
 ggsave("/home/yincy/git/data/parttime/nasa/reference/cell_types.tiff")
 ```
 
+```{r}
+cell_types <- c(
+  "1" = "Dendritic cells", "2" = "Monocytes", "3" = "Dendritic cells", "4" = "Monocytes", "5" = "small pre-B.", 
+  "6" = "Erythroblasts", "7" = "small pre-B.", "8" = "Mk prog.", "9" = "Erythroblasts", "10" = "Dendritic cells", 
+  "11" = "Mk prog.", "12" = "Eo/Baso prog.", "13" = "Monocytes", "14" = "NK cells", "15" = "large pre-B.", 
+  "16" = "Monocytes", "17" = "Mono prog.", "18" = "Monocytes", "19" = "Monocytes", "20" = "LMPPs", 
+  "21" = "NK cells",  "22" = "pro-B", "23" = "T cells", "24" = "Dendritic cells", "25" = "B cell", 
+  "26" = "Gran/Mono prog.", "27" = "Ery/Mk prog.", "28" = "B cell", "29" = "Monocytes", "30" = "Monocytes", 
+  "31" = "NK cells", "32" = "Adipo-CAR", "33" = "Monocytes", "34" = "Monocytes", "35" = "Dendritic cells", 
+  "36" = "pro-B", "37" = "Monocytes", "38" = "Monocytes", "39" = "Dendritic cells", "40" = "large pre-B.", 
+  "41" = "Dendritic cells", "42" = "Monocytes", "43" = "Monocytes", "44" = "Monocytes", "45" = "Gran/Mono prog.", 
+  "46" = "Erythroblasts", "47" = "B cell", "48" = "Monocytes", "49" = "Erythroblasts", "50" = "Neutro prog.", 
+  "51" = "Mono prog.", "52" = "large pre-B.", "53" = "Neutro prog.", "54" = "Arteriolar ECs", "55" = "large pre-B.", 
+  "56" = "Dendritic cells", "57" = "Adipo-CAR", "58" = "Mk prog.", "59" = "large pre-B.", "60" = "Monocytes", 
+  "61" = "large pre-B.", "62" = "Mono prog.", "63" = "Monocytes", "64" = "LMPPs", "65" = "Monocytes", 
+  "66" = "Dendritic cells", "67" = "pre-B.", "68" = "Monocytes", "69" = "B cell", "70" = "B cell", 
+  "71" = "Neutro prog.", "72" = "Monocytes", "73" = "Gran/Mono prog.", "74" = "Mk prog.", "75" = "T cells", 
+  "76" = "Neutro prog.", "77" = "NK cells", "78" = "B cell", "79" = "Dendritic cells", "80" = "B cell", 
+  "81" = "Neutro prog.", "82" = "large pre-B.", "83" = "Dendritic cells", "84" = "Neutro prog.", "85" = "B cell", 
+  "86" = "Osteoblasts", "87" = "Dendritic cells", "88" = "Erythroblasts", "89" = "Erythroblasts", "90" = "T cells",
+  "91" = "Monocytes", "92" = "Monocytes", "93" = "Ery/Mk prog.", "94" = "large pre-B.", "95" = "Ery prog.", 
+  "96" = "Dendritic cells", "97" = "Monocytes", "98" = "Monocytes", "99" = "Neutro prog.", "100" = "T cells", 
+  "101" = "large pre-B.", "102" = "Dendritic cells", "103" = "Monocytes", "104" = "Monocytes", "105" = "LMPPs", 
+  "106" = "Erythroblasts", "107" = "Dendritic cells", "108" = "Dendritic cells", "109" = "large pre-B.", "110" = "LMPPs", 
+  "111" = "Monocytes", "112" = "Gran/Mono prog.", "113" = "Eo/Baso prog.", "114" = "NK cells", "115" = "Osteo-CAR", 
+  "116" = "Monocytes", "117" = "Neutro prog.", "118" = "large pre-B.", "119" = "Neutro prog.", "120" = "Monocytes", 
+  "121" = "Neutrophils", "122" = "Monocytes", "123" = "Monocytes", "124" = "Dendritic cells", "125" = "Erythroblasts", 
+  "126" = "Adipo-CAR", "127" = "Eo/Baso prog.", "128" = "B cell", "129" = "Monocytes", "130" = "Monocytes", 
+  "131" = "Dendritic cells", "132" = "Dendritic cells", "133" = "Dendritic cells", "134" = "Mono prog.", "135" = "B cell", 
+  "136" = "Monocytes", "137" = "small pre-B.", "138" = "B cell", "139" = "Dendritic cells", "140" = "Eo/Baso prog.", 
+  "141" = "LMPPs", "142" = "large pre-B.", "143" = "Erythroblasts", "144" = "B cell", "145" = "Dendritic cells", 
+  "146" = "B cell", "147" = "small pre-B.", "148" = "B cell", "149" = "large pre-B.", "150" = "Dendritic cells", 
+  "151" = "B cell", "152" = "B cell", "153" = "Monocytes", "154" = "B cell", "155" = "large pre-B.", 
+  "156" = "B cell", "157" = "large pre-B.", "158" = "Eo/Baso prog.", "159" = "B cell", "160" = "Monocytes", 
+  "161" = "large pre-B.", "162" = "Dendritic cells", "163" = "Mk prog.", "164" = "B cell", "165" = "Erythroblasts", 
+  "166" = "B cell", "167" = "LMPPs", "168" = "T cells", "169" = "Monocytes", "170" = "B cell", 
+  "171" = "Dendritic cells", "172" = "Monocytes"
+)
+```
+
+
 # annotation nasa
 ```{r}
 #| message: false
@@ -316,31 +357,21 @@ library(scater)
 
 GSE122465 <- readRDS("/home/yincy/git/data/parttime/nasa/reference/processed_GSE122465.rds")
 nasa <- readRDS("/home/yincy/git/data/parttime/nasa/preprocessed_nasa.rds")
-nasa_agg <- aggregateAcrossCells(nasa, 
-                                 ids = nasa$clusters,
-                                 use.assay.type = "logcounts",
-                                 BPPARAM = BiocParallel::MulticoreParam(10))
-GSE122465_agg <- aggregateAcrossCells(GSE122465, 
-                                      ids = GSE122465$cell_types,
-                                      use.assay.type = "logcounts",
-                                      BPPARAM = BiocParallel::MulticoreParam(10))
-GSE122465$cell_types %>% table %>% length
-GSE122465_agg$cell_types %>% table %>% length
 
-pred_label <- SingleR(test = nasa_agg, 
-                      ref = GSE122465_agg, 
-                      labels = GSE122465_agg$cell_types, 
+pred_label <- SingleR(test = nasa, 
+                      ref = GSE122465, 
+                      labels = GSE122465$cell_types, 
                       aggr.ref = F, 
-                      de.method = "t",
-                      de.n = 100, 
+                      de.method = "classic",
                       assay.type.test = "logcounts", 
-                      assay.type.ref = "logcounts")
+                      assay.type.ref = "logcounts", 
+                      BPPARAM = BiocParallel::MulticoreParam(10))
+pred_label$pruned.labels %>% table
+setdiff(unique(GSE122465$cell_types), unique(pred_label$pruned.labels))
 
+table(nasa$clusters, pred_label$pruned.labels) %>% prop.table(margin = 1) %>% round(digits = 2) %>% .[171:172, ]
 pred_label$pruned.labels %>% table(useNA = "ifany")
-nasa_agg$cell_type <- pred_label$pruned.labels
-nasa_agg %>% colData()
-cell_types <- setNames(nasa_agg$cell_type, nasa_agg$clusters)
-TRUE
+
 colData(nasa)$cell_type <- cell_types[nasa$clusters]
 colData(nasa)
 nasa <- nasa[, !is.na(nasa$cell_type)]
@@ -351,14 +382,15 @@ saveRDS(nasa, "/home/yincy/git/data/parttime/nasa/preprocessed_nasa.rds")
 
 ```{r}
 plotReducedDim(nasa, 
-               color_by = "cell_type", 
+               color_by = "clusters", 
                text_by = "clusters", 
                dimred = "TSNE", 
                point_size = 0.5, 
                text_size = 2) +
-  theme_classic()
+  theme_classic() +
+  theme(legend.position = "none")
 
-ggsave("/home/yincy/git/data/parttime/nasa/nasa.cell_type.tiff")
+ggsave("/home/yincy/git/data/parttime/nasa/nasa_clusters.tiff")
 ```
 
 # differential expression analysis
