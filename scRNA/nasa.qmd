@@ -5,7 +5,6 @@ format: html
 editor: source
 ---
 
-
 ```{r}
 #| message: false
 #| warning: false
@@ -21,6 +20,7 @@ library(EnsDb.Mmusculus.v79)
 library(batchelor)
 library(SingleCellExperiment)
 library(magrittr)
+library(scDblFinder)
 ```
 
 ```{r}
@@ -139,6 +139,13 @@ clusters <- clusterRows(x = reducedDim(sces, "corrected"),
                         BLUSPARAM = NNGraphParam(BPPARAM = BiocParallel::MulticoreParam(10), k = 10))
 clusters %>% table
 colData(sces)$clusters <- factor(clusters)
+
+# doublet detection
+dbs <- findDoubletClusters(x = nasa, 
+                           clusters = nasa$clusters, 
+                           assay.type = "logcounts")
+dbs
+
 saveRDS(sces, "/home/yincy/git/data/parttime/nasa/preprocessed_nasa.rds")
 ```
 
@@ -280,7 +287,6 @@ GSE122465 <- runTSNE(GSE122465,
 GSE122465
 saveRDS(GSE122465, "/home/yincy/git/data/parttime/nasa/reference/processed_GSE122465.rds")
 ```
-
 
 ```{r}
 source("/home/yincy/git/mouse-kidney/functions/idconv.R")
