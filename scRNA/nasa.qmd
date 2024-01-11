@@ -203,9 +203,23 @@ GSE122465 <- SingleCellExperiment(assays = list(counts = as(mtx, "CsparseMatrix"
                                   rowData = gene_info, 
                                   colData = cell_info)
 GSE122465
-GSE122465 %>% colData()
-GSE122465 %>% rowData()
+GSE122465 %>% colData
+GSE122465 %>% rowData
 saveRDS(GSE122465, "/home/yincy/git/data/parttime/nasa/reference/GSE122465.rds")
+```
+
+```{r}
+library(Seurat)
+library(magrittr)
+load("/home/yincy/git/data/nasa/ref/NicheMetaDataLCM.rda")
+
+NicheMetaDataLCM
+NicheDataLCM 
+NicheMarkers10x
+
+
+NicheData10x <- UpdateSeuratObject(NicheData10x)
+NicheData10x[[]]
 ```
 
 
