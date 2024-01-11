@@ -1,0 +1,30 @@
+---
+title: "RPKM-FPKM"
+author: "YinCY"
+format: html
+---
+
+
+# RPKM
+RPKM(reads per kilobase of transcript per million reads mapped).  
+
+$$RPKM \space or \space FPKM = \frac{R_{g}}{D * L_{g}} * 10^6$$
+
+$R_{g}$: read counts for gene g. 
+$D$: total mapped reads of this sample. 
+$L_{g}$: gene length (kilobase). 
+
+
+
+# FPKM
+FPKM(fragments per kilobase of transcript per million reads mapped). 
+
+$$FPKM = \frac{F_{g}}{D * L_{g}}$$
+
+$F_{g}$: fragments mapped to gene g.  
+$D$: total mapped reads of this sample.  
+$L_{g}$: gene length of gene g.
+
+
+
+

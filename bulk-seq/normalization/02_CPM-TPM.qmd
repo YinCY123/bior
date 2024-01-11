@@ -1,0 +1,27 @@
+---
+title: "CPM-TPM"
+author: "YinCY"
+format: html
+---
+
+
+# CPM
+counts per million(single-end sequencing)
+
+$$CPM = \frac{R_{g}}{D * L_{g}} * 10^6$$
+
+$r_{g}$: read counts for gene g.  
+$D$: total mapped reads for this sample.  
+$L_{g}$: gene length for gene g.  
+
+
+
+# TPM 
+transcript per million(pair-end sequencing).
+
+$$TPM = \frac{F_{g}}{D * L_{g}} * 10^6$$
+$F_{g}$: mapped reads for gene g.  
+$D$: total mapped reads of this sample.  
+$L_{g}$: gene length of gene g (kilobase).  
+
+
