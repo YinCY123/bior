@@ -9,8 +9,8 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Introduction to the SingleCellExperiment
-## Creating SingleCellExperiment instances
+# Introduction to the `SingleCellExperiment`
+## Creating `SingleCellExperiment` instances
 `SingleCellExperiment` objects can be created via the constructor of the same name. For example, if we have a count matrix in `counts`, we can simply call:  
 
 ```{r}
@@ -81,8 +81,9 @@ set.seed(5252)
 tsne_data <- Rtsne(pca_data$x[, 1:50], pca = F)
 
 reducedDims(sce) <- list(PCA = pca_data$x, TSNE = tsne_data$Y)
-sce
+sce %>% colData
 ```
+
 
 The coordinates for all representations can be retrieved from a `SingleCellExperiment` with `reducedDims()` or one at a time with `reducedDim()`. Each row of the coordinate matrix is assumed to correspond to a cell while each column represents a dimension.  
 
