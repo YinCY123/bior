@@ -1,0 +1,32 @@
+---
+title: "tools"
+author: "YinCY"
+format: html
+---
+
+# Normalization
+- RPKM
+- FPKM
+- CPM
+- TPM
+- TMM
+- RLE
+- RUVSeq
+
+
+# Remove Batch Effect
+- sva::Combat
+- BatchQC
+
+
+# Differential expression test
+- DESeq2
+- edgeR
+- baySeq
+- Cuffdiff2
+- DEGseq
+
+
+# Differential Splicing Analysis
+- DEXSeq
+- JunctionSeq
