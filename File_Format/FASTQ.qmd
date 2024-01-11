@@ -1,0 +1,38 @@
+---
+title: "FASTQ"
+author: "YinCY"
+format: html
+---
+
+# FASTQ quality scheme
+
+There are three different quality schemes
+-   Sanger
+-   Solexa
+-   Illumina
+
+| **Name**      | **ASCII character range** | **Offset** | **Quality score type** | **Quality score range** |
+|---------------|---------------|---------------|---------------|---------------|
+| Sanger, Illumina (version 1.8 onward) | 33-126                    | 33         | PHRED                  | 0-93                    |
+| Solexa, early Illinina(before 1.3)    | 59-126                    | 64         | Solexa                 | 5-62                    |
+| Illumina(version 1.3-1.7)             | 64-126                    | 64         | PHRED                  | 0-62                    |
+
+
+# Conversion ASCII code to PHRED score (sanger)
+$Q = ASCII code - 33$
+
+# Base correct probability
+$$P = 10^{-Q/10}$$
+
+# Base quality
+$$Q = -10*log_{10}^{P}$$
+
+
+
+
+
+
+
+
+
+
