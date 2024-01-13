@@ -135,16 +135,16 @@ sces <- runTSNE(x = sces,
 
 ```{r}
 set.seed(101)
+sces <- scDblFinder(sce = sces, clusters = sces$clusters, samples = sces$Sample)
+sces$scDblFinder.class %>% table
+sces <- sces[, sces$scDblFinder.class == "singlet"]
+
+
+set.seed(101)
 clusters <- clusterRows(x = reducedDim(sces, "corrected"), 
                         BLUSPARAM = NNGraphParam(BPPARAM = BiocParallel::MulticoreParam(10), k = 10))
 clusters %>% table
 colData(sces)$clusters <- factor(clusters)
-
-# doublet detection
-dbs <- findDoubletClusters(x = nasa, 
-                           clusters = nasa$clusters, 
-                           assay.type = "logcounts")
-dbs
 
 saveRDS(sces, "/home/yincy/git/data/parttime/nasa/preprocessed_nasa.rds")
 ```
@@ -232,9 +232,7 @@ unzip("/home/yincy/git/data/parttime/nasa/reference/RNAMagnetDataBundle.zip",
 load("/home/yincy/git/data/parttime/nasa/reference/NicheMarkers10x.rda")
 load("/home/yincy/git/data/parttime/nasa/reference/NicheData10x.rda")
 NicheData10x <- Seurat::UpdateSeuratObject(NicheData10x)
-seurat_clusters <- NicheData10x %>% Idents()
 NicheData10x[[]]$cell_type <- Idents(NicheData10x)
-NicheData10x[[]]
 cell_type_df <- NicheData10x[[]]
 cell_types <- setNames(cell_type_df$cell_type, rownames(cell_type_df))
 
@@ -311,41 +309,10 @@ ggsave("/home/yincy/git/data/parttime/nasa/reference/cell_types.tiff")
 
 ```{r}
 cell_types <- c(
-  "1" = "Dendritic cells", "2" = "Monocytes", "3" = "Dendritic cells", "4" = "Monocytes", "5" = "small pre-B.", 
-  "6" = "Erythroblasts", "7" = "small pre-B.", "8" = "Mk prog.", "9" = "Erythroblasts", "10" = "Dendritic cells", 
-  "11" = "Mk prog.", "12" = "Eo/Baso prog.", "13" = "Monocytes", "14" = "NK cells", "15" = "large pre-B.", 
-  "16" = "Monocytes", "17" = "Mono prog.", "18" = "Monocytes", "19" = "Monocytes", "20" = "LMPPs", 
-  "21" = "NK cells",  "22" = "pro-B", "23" = "T cells", "24" = "Dendritic cells", "25" = "B cell", 
-  "26" = "Gran/Mono prog.", "27" = "Ery/Mk prog.", "28" = "B cell", "29" = "Monocytes", "30" = "Monocytes", 
-  "31" = "NK cells", "32" = "Adipo-CAR", "33" = "Monocytes", "34" = "Monocytes", "35" = "Dendritic cells", 
-  "36" = "pro-B", "37" = "Monocytes", "38" = "Monocytes", "39" = "Dendritic cells", "40" = "large pre-B.", 
-  "41" = "Dendritic cells", "42" = "Monocytes", "43" = "Monocytes", "44" = "Monocytes", "45" = "Gran/Mono prog.", 
-  "46" = "Erythroblasts", "47" = "B cell", "48" = "Monocytes", "49" = "Erythroblasts", "50" = "Neutro prog.", 
-  "51" = "Mono prog.", "52" = "large pre-B.", "53" = "Neutro prog.", "54" = "Arteriolar ECs", "55" = "large pre-B.", 
-  "56" = "Dendritic cells", "57" = "Adipo-CAR", "58" = "Mk prog.", "59" = "large pre-B.", "60" = "Monocytes", 
-  "61" = "large pre-B.", "62" = "Mono prog.", "63" = "Monocytes", "64" = "LMPPs", "65" = "Monocytes", 
-  "66" = "Dendritic cells", "67" = "pre-B.", "68" = "Monocytes", "69" = "B cell", "70" = "B cell", 
-  "71" = "Neutro prog.", "72" = "Monocytes", "73" = "Gran/Mono prog.", "74" = "Mk prog.", "75" = "T cells", 
-  "76" = "Neutro prog.", "77" = "NK cells", "78" = "B cell", "79" = "Dendritic cells", "80" = "B cell", 
-  "81" = "Neutro prog.", "82" = "large pre-B.", "83" = "Dendritic cells", "84" = "Neutro prog.", "85" = "B cell", 
-  "86" = "Osteoblasts", "87" = "Dendritic cells", "88" = "Erythroblasts", "89" = "Erythroblasts", "90" = "T cells",
-  "91" = "Monocytes", "92" = "Monocytes", "93" = "Ery/Mk prog.", "94" = "large pre-B.", "95" = "Ery prog.", 
-  "96" = "Dendritic cells", "97" = "Monocytes", "98" = "Monocytes", "99" = "Neutro prog.", "100" = "T cells", 
-  "101" = "large pre-B.", "102" = "Dendritic cells", "103" = "Monocytes", "104" = "Monocytes", "105" = "LMPPs", 
-  "106" = "Erythroblasts", "107" = "Dendritic cells", "108" = "Dendritic cells", "109" = "large pre-B.", "110" = "LMPPs", 
-  "111" = "Monocytes", "112" = "Gran/Mono prog.", "113" = "Eo/Baso prog.", "114" = "NK cells", "115" = "Osteo-CAR", 
-  "116" = "Monocytes", "117" = "Neutro prog.", "118" = "large pre-B.", "119" = "Neutro prog.", "120" = "Monocytes", 
-  "121" = "Neutrophils", "122" = "Monocytes", "123" = "Monocytes", "124" = "Dendritic cells", "125" = "Erythroblasts", 
-  "126" = "Adipo-CAR", "127" = "Eo/Baso prog.", "128" = "B cell", "129" = "Monocytes", "130" = "Monocytes", 
-  "131" = "Dendritic cells", "132" = "Dendritic cells", "133" = "Dendritic cells", "134" = "Mono prog.", "135" = "B cell", 
-  "136" = "Monocytes", "137" = "small pre-B.", "138" = "B cell", "139" = "Dendritic cells", "140" = "Eo/Baso prog.", 
-  "141" = "LMPPs", "142" = "large pre-B.", "143" = "Erythroblasts", "144" = "B cell", "145" = "Dendritic cells", 
-  "146" = "B cell", "147" = "small pre-B.", "148" = "B cell", "149" = "large pre-B.", "150" = "Dendritic cells", 
-  "151" = "B cell", "152" = "B cell", "153" = "Monocytes", "154" = "B cell", "155" = "large pre-B.", 
-  "156" = "B cell", "157" = "large pre-B.", "158" = "Eo/Baso prog.", "159" = "B cell", "160" = "Monocytes", 
-  "161" = "large pre-B.", "162" = "Dendritic cells", "163" = "Mk prog.", "164" = "B cell", "165" = "Erythroblasts", 
-  "166" = "B cell", "167" = "LMPPs", "168" = "T cells", "169" = "Monocytes", "170" = "B cell", 
-  "171" = "Dendritic cells", "172" = "Monocytes"
+  "1" = "pre-B.", 
+  "2" = "Monocytes", 
+  "3" = "Erythroblasts",
+  "4" = "", 
 )
 ```
 
@@ -372,10 +339,11 @@ pred_label <- SingleR(test = nasa,
                       assay.type.test = "logcounts", 
                       assay.type.ref = "logcounts", 
                       BPPARAM = BiocParallel::MulticoreParam(10))
-pred_label$pruned.labels %>% table
+
+pred_label$pruned.labels %>% table(useNA = "ifany")
 setdiff(unique(GSE122465$cell_types), unique(pred_label$pruned.labels))
 
-table(nasa$clusters, pred_label$pruned.labels) %>% prop.table(margin = 1) %>% round(digits = 2) %>% .[171:172, ]
+table(nasa$clusters, pred_label$pruned.labels) %>% prop.table(margin = 1) %>% round(digits = 2) %>% .[, ]
 pred_label$pruned.labels %>% table(useNA = "ifany")
 
 colData(nasa)$cell_type <- cell_types[nasa$clusters]
