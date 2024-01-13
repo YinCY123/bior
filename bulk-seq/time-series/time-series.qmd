@@ -1,0 +1,96 @@
+---
+title: "time-series"
+author: "YinCY"
+format: html
+editor: source
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+library(moanin)
+library(timecoursedata)
+library(magrittr)
+
+data(varoquaux2019leaf)
+names(varoquaux2019leaf)
+```
+
+```{r}
+whSamples <- with(varoquaux2019leaf$meta, which(Genotype == "BT642" & Week > 2))
+preData <- varoquaux2019leaf$data[, whSamples]
+preData %>% dim
+
+preMeta <- varoquaux2019leaf$meta[whSamples, ]
+preMeta %>% dim
+```
+
+```{r}
+moaninObject <- create_moanin_model(data = preData, 
+                                    meta = preMeta,
+                                    group_variable = "Condition", 
+                                    time_variable = "Week")
+
+moaninObject
+```
+
+```{r}
+logMoaninObject <- moaninObject
+
+assay(logMoaninObject) <- log(assay(moaninObject) + 1)
+```
+
+```{r}
+preContrast <- create_timepoints_contrasts(moaninObject, "Preflowering", "Control")
+```
+
+```{r}
+postContrasts <- create_timepoints_contrasts(
+  moaninObject, "Postflowering", "Control"
+)
+
+prepostContrasts <- create_timepoints_contrasts(
+  moaninObject, "Postflowering", "Preflowering"
+)
+```
+
+
+```{r}
+weeklyPre <- DE_timepoints(moaninObject[1:500, ], 
+                           contrasts = c(preContrast, postContrasts, prepostContrasts), 
+                           use_voom_weights = TRUE)
+```
+
+
+# compare change across two time points
+```{r}
+preDiffContrasts <- create_timepoints_contrasts(
+  moaninObject, "Preflowering", type = "per_group_timepoint_diff"
+)
+
+preDiffContrasts %>% head
+```
+
+
+
+
+# Time-course differential expression analysis between two groups
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
