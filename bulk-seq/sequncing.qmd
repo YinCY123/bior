@@ -1,0 +1,49 @@
+---
+title: "sequencing"
+author: "YinCY"
+format: html
+---
+
+Bioconductor enables the analysis and comprehension of high- throughput genomic data. We have a vast number of packages that allow rigorous statistical analysis of large data while keeping technological artifacts in mind. Bioconductor helps users place their analytic results into biological context, with rich opportunities for visualization. Reproducibility is an important goal in Bioconductor analyses. Different types of analysis can be carried out using Bioconductor, for example
+
+- Sequencing: RNASeq, ChIPSeq, variants, copy number...
+- Microarrays: expression, SNP, ...
+- Domain specific analysis: Flow cytometry, Proteomics...
+
+For these analyses, one typically imports and works with diverse sequence-related file types, including fasta, fastq, BAM, gtf, bed, and wig file, among others. Bioconductor packages supports import, common and advanced sequence manipulation operations such as trimming, transformation, and alignment including quality assessment.  
+
+Here is a illustrative description elaborating the different file types at various stages in a typical analysis, with the package names (in pink boxes) that one will use for each stage.
+
+```{r}
+knitr::include_graphics("sequencing-resources.png")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

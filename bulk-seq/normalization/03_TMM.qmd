@@ -1,0 +1,171 @@
+---
+title: "TMM"
+author: "YinCY"
+format: html
+date: 2023/11/3
+---
+
+TMM (trimmed mean of M values) 的假设前提是样本对照组和处理组间绝大多数基因表达没有差异。但是目前视乎没有明确的研究显示是多少的基因没有差异，50% or 80%？
+
+```{r}
+# BiocManager::install("airway")
+data("airway", package = "airway")
+```
+
+
+```{r}
+set.seed(123)
+library(magrittr)
+
+counts1 <- assay(airway) %>% 
+    as.data.frame() %>% 
+    .[sample(nrow(airway), 5000), 1:4]
+```
+
+
+# choose reference sample
+在默认状态下，通过比较每个样本CPM的上四分位数与所有样本CPM的平均上四分位数之间的差值，找出最小的样本作为参考样本。
+
+```{r}
+lib.size <- colSums(counts1)
+counts1_cpm <- apply(counts1, 2, function(x) (x / lib.size)*1e6)
+q75 <- apply(counts1_cpm, 2, function(x){quantile(x, probs = 0.75)})
+refSample <- which.min(q75 - mean(q75))
+refSample
+```
+
+# calculation of sample-reference pairwise M and A
+计算参考样本和非参考样本间校正因子。
+$$M = log2\frac{non-reference \space sample \space count}{reference \space sample \space count}$$
+
+$$A = \frac{log2(non-reference \space sample \space count) + log2(reference\space sample \space count)}{2}$$
+
+```{r}
+obs <- as.numeric(counts1[, 1])
+ref <- as.numeric(counts1[, refSample])
+libsize.obs <- lib.size[1]
+libsize.ref <- lib.size[refSample]
+```
+
+
+计算M value 和A value，为了对M value加权，我们还需要通过delta method估计渐进方差。
+```{r}
+M <- log2((obs/libsize.obs) / (ref/libsize.ref))
+A <- (log2(obs/libsize.obs) + log2(ref/libsize.ref))/2
+v <- (libsize.obs - obs)/(libsize.obs * obs) + (libsize.ref - ref)/(libsize.ref * ref)
+```
+
+保留M和A值均为有限的基因，并过滤掉低表达基因。
+```{r}
+A %>% range
+M %>% range
+Acutoff <- -1e10
+fin <- is.finite(M) & is.finite(A) & (A > Acutoff)
+fin %>% table
+M <- M[fin]
+A <- A[fin]
+v <- v[fin]
+
+M %>% range()
+A %>% range()
+v %>% range()
+```
+
+# trimmed mean of M values
+```{r}
+logratioTrim <- 0.3
+sumTrim <- 0.05
+
+n <- length(M)
+loM <- floor(n * logratioTrim) + 1
+hiM <- n + 1 - loM
+loA <- floor(n * sumTrim) + 1
+hiA <- n + 1 - loA
+
+# filtering based on M and A
+keep <- (rank(M) >= loM & rank(M) <= hiM) & (rank(A) >= loA & rank(A) <= hiA)
+keep %>% table
+
+# weighted mean of M value after trimming
+f <- sum(M[keep]/v[keep], na.rm = TRUE) / sum(1/v[keep], na.rm = TRUE)
+f <- 2^f
+
+# factors should multiple to one
+f <- f / exp(mean(log(f)))
+
+# output
+names(f) <- colnames(counts1)
+```
+
+
+以下循环在选取refColumn后开始
+```{r}
+nsamples <- ncol(counts1)
+
+logratioTrim <- 0.3
+sumTrim <- 0.05
+Acutoff = -1e10
+
+f <- rep_len(NA_real_, nsamples)
+for (i in 1:nsamples) {
+  obs <- as.numeric(counts1[, i])
+  ref <- as.numeric(counts1[, refColumn])
+  libsize.obs <- lib.size[i]
+  libsize.ref <- lib.size[refColumn]
+  
+  # M value: log ratio of expression, accounting for library size
+  M <- log2((obs/libsize.obs)/(ref/libsize.ref))
+  # A value:absolute expression
+  A <- (log2(obs/libsize.obs) + log2(ref/libsize.ref))/2
+  # estimated asymptotic variance
+  v <- (libsize.obs - obs)/libsize.obs/obs + (libsize.ref - ref)/libsize.ref/ref
+  # remove infinite values, cutoff based on A
+  fin <- is.finite(M) & is.finite(A) & (A > Acutoff)
+  
+  M <- M[fin]
+  A <- A[fin]
+  v <- v[fin]
+  
+  # Double trim the upper and lower percentages of the data
+  # trim M values by 30% and A values by 5%
+  
+  n <- length(M)
+  loM <- floor(n * logratioTrim) + 1
+  hiM <- n + 1 - loM
+  loA <- floor(n * sumTrim) + 1
+  hiA <- n + 1 - loA
+  
+  keep <- (rank(M)>=loM & rank(M)<=hiM) & (rank(A)>=loA & rank(A)<=hiA)
+  
+  # Weighted mean of M after trimming 
+  f[i] <- sum(M[keep]/v[keep], na.rm=TRUE) / sum(1/v[keep], na.rm=TRUE)
+  f[i] <- 2^f[i]
+}
+
+#   Factors should multiple to one
+f <- f/exp(mean(log(f)))
+
+#   Output
+names(f) <- colnames(counts1)
+
+f
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

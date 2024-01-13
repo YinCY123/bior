@@ -1,0 +1,46 @@
+---
+title: "NanoString"
+format: html
+---
+
+# Introduction
+The GeoMx Digital Spatial Profile (DSP) is a platform for capturing spatially resolved high-plex gene (or protein) expression data from tissue. In particular, formalin-fixed paraffin-embedded (FFPE) or fresh-frozen (FF) tissue sections are stained with barcoded in-situ hybridization probes that bind to endogenous mRNA transcripts. The user then selects regions of the interest (ROI) to profile; if desired, each ROI segment can be further sub-divided into areas of illumination (AOI) based on tissue morphology. The GeoMx then photo-cleaves and collects expression barcodes for each AOI segment separately for downstream sequencing and data processing.
+
+The final results are spatially resolved unique expression datasets for every protein-coding gene (>18,000 genes) from every individual segment profiled from tissue.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

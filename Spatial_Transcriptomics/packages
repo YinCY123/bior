@@ -1,0 +1,11 @@
+# Spatially variable genes (SVGs)
+- nnSVG: R, Bioconductor
+- SPARK-X: R, GitHub
+- SPARK: R, GitHub
+- SpatialIDE: Python, GitHub
+
+
+# Spatially aware clustering
+- BayesSpace: R, Bioconductor
+- SpaGCN: Python, GitHub
+- PRECAST: R, CRAN

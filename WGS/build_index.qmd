@@ -1,0 +1,48 @@
+---
+title: "build_index"
+author: "YinCY"
+format: html
+---
+
+
+```{r}
+#| message: false
+#| warning: false
+library(Rsubread)
+```
+
+```{r}
+buildindex(basename = "")
+
+align()
+```
+
+
+```{r}
+?align
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

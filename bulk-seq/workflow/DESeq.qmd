@@ -1,0 +1,233 @@
+---
+title: "workflow"
+author: "YinCY"
+format: html
+---
+
+```{r}
+#| message: false
+#| warning: false
+#| label: loading required packages
+library(DESeq2)
+library(magrittr)
+```
+
+
+# starting from SummarizedExperiment
+```{r}
+#| message: false
+data("airway", package = "airway")
+airway
+```
+
+
+```{r}
+dds <- DESeqDataSet(se = airway, 
+                    design = ~ cell + dex)
+dds
+```
+
+
+# starting from count matrices
+```{r}
+countdata <- round(assay(airway, 1))
+countdata %>% head
+```
+
+
+```{r}
+coldata <- colData(airway)
+```
+
+```{r}
+ddsMat <- DESeqDataSetFromMatrix(countData = countdata, 
+                                 colData = coldata, 
+                                 design = ~ cell + dex)
+ddsMat
+```
+
+
+
+# Exploratory analysis and visualization
+There are two separate paths in this workflow, the one we will see first involves transformations of the counts in order to visually explore sample relationships. In the second part, we will go back to the original raw counts for statistical testing. This is critical because the statistical testing methods rely on original count data (not scaled or transformed) for calculating the precision of measurements.
+
+## Pre-filtering the dataset
+Our count matrix with our `DESeqDataSet` contains many rows with only zeros, and additionally many rows with only a few fragments total. In order to reduce the size of the object, and to increase the speed of our functions, we can remove the rows that have no or nearly no information about the amount of gene expression. Here we perform pre-filtering to keep only rows that have a count of at least 10 for a minimal number of samples. The count of 10 is a reasonable choice for bulk RNA-seq. A recommendation for the minimal number of samples is to specify the smallest group size, e.g. here there are 4 samples in each group. If there are not discrete groups, one can use the minimal number of samples where non-zero counts would be considered interesting. Additional weighting/filtering to improve power is applied at a later step in the workflow.
+
+```{r}
+nrow(dds);nrow(ddsMat)
+```
+
+```{r}
+smallestGroupSize <- 4
+keep <- rowSums(counts(dds) >= 10) >= smallestGroupSize
+keep %>% table
+dds <- dds[keep, ]
+dds %>% nrow
+```
+
+
+## The variance stabilizing transformation and the rlog
+**Which transformation to choose?** The VST is much faster to compute and is less sensitive to high count outliers than the rlog. The rlog tends to work well on small datasets (n < 30), potentially outperforming the VST when there is a wide range of sequencing depth across samples (an order of magnitude difference). We therefore recommend the VST for medium-to-large datasets (n > 30).
+
+Note that the two transformations offered by DESeq2 are provided for applications other than differential testing. For differential testing we recommend the DESeq function applied to raw counts, as described later in this workflow, which also takes into account the dependence of the variance of counts on the mean value during the dispersion estimation step.
+
+Both vst and rlog return a DESeqTransform object which is based on the SummarizedExperiment class. The transformed values are no longer counts, and are stored in the assay slot. The colData that was attached to dds is still accessible:
+
+```{r}
+vsd <- vst(object = dds, blind = FALSE)
+vsd
+```
+
+
+```{r}
+vsd %>% colData
+```
+
+```{r}
+rld <- rlog(dds, blind = FALSE)
+rld
+```
+
+```{r}
+rld %>% colData
+```
+
+```{r}
+dds %>% colData
+```
+
+In the above function calls, we specified blind = FALSE, which means that differences between cell lines and treatment (the variables in the design) will not contribute to the expected variance-mean trend of the experiment. The experimental design is not used directly in the transformation, only in estimating the global amount of variability in the counts. For a fully unsupervised transformation, one can set blind = TRUE (which is the default).
+
+To show the effect of the transformation, in the figure below we plot the first sample against the second, first simply using the log2 function (after adding 1)
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+dds <- estimateSizeFactors(dds)
+dds %>% colData
+
+df <- bind_rows(
+    as_data_frame(log2(counts(dds, normalized = TRUE)[, 1:2] + 1)) %>% 
+        mutate(transformation = "log2(x + 1)"),
+    as_data_frame(assay(vsd)[, 1:2]) %>% mutate(transformation = "vst"),
+    as_data_frame(assay(rld)[, 1:2]) %>% mutate(transformation = "rlog")
+)
+
+colnames(df)[1:2] <- c("x", "y")
+df
+
+lvls <- c("log2(x + 1)", "vst", "rlog")
+df$transformation <- factor(df$transformation, levels = lvls)
+
+ggplot(df, aes(x = x,y = y)) + 
+    geom_hex(bins = 80) +
+    coord_fixed() +
+    facet_grid(. ~ transformation)
+```
+
+We can see how genes with low counts (bottom left-hand corner) seem to be excessively variable on the ordinary logarithmic scale, while the VST and rlog compress differences for the low count genes for which the data provide little information about differential expression.
+
+
+## Sample distances
+A useful first step in an RNA-seq analysis is often to assess overall similarity between samples: Which samples are similar to each other, which are different? Does this fit to the expectation from the experiment’s design?
+
+We use the R function dist to calculate the Euclidean distance between samples. To ensure we have a roughly equal contribution from all genes, we use it on the VST data. We need to transpose the matrix of values using t, because the dist function expects the different samples to be rows of its argument, and different dimensions (here, genes) to be columns.
+
+
+```{r}
+sampleDists <- dist(t(assay(vsd)))
+sampleDists
+
+library(pheatmap)
+library(RColorBrewer)
+
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(vsd$dex, vsd$cell, sep = " - ")
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette(rev(brewer.pal(9, "Blues")))(255)
+
+pheatmap(sampleDistMatrix, 
+         clustering_distance_rows = sampleDists, 
+         clustering_distance_cols = sampleDists, 
+         col = colors)
+```
+
+## PCA plot
+```{r}
+pcadata <- plotPCA(vsd, intgroup = c("dex", "cell"), returnData = TRUE)
+pcadata
+
+attributes(pcadata)
+
+percentVar <- round(attr(pcadata, "percentVar") * 100, 2)
+
+ggplot(pcadata, aes(PC1, PC2, color = dex)) +
+    geom_point(size = 2) +
+    xlab(paste0("PC1: ", percentVar[1], "% variance")) +
+    ylab(paste0("PC2: ", percentVar[2], "% variance"))
+```
+
+
+
+# Differential expression analysis
+## Running the differntial expression pipeline
+As we have already specified an experimental design when we created the DESeqDataSet, we can run the differential expression pipeline on the raw counts with a single call to the function DESeq:
+
+```{r}
+dds <- DESeq(dds)
+```
+
+This function will print out a message for the various steps it performs. These are described in more detail in the manual page for DESeq, which can be accessed by typing ?DESeq. Briefly these are: the estimation of size factors (controlling for differences in the sequencing depth of the samples), the estimation of dispersion values for each gene, and fitting a generalized linear model.
+
+A `DESeqDataSet` is returned that contains all the fitted parameters within it, and the following section describes how to extract out  results tables of interest from this object.
+
+## Building the results table
+Calling results without any arguments will extract the estimated log2 fold changes and p values for the last variable in the design formula. If there are more than 2 levels for this variable, results will extract the results table for a comparison of the last level over the first level. The comparison is printed at the top of the output: `dex trt vs untrt`.
+
+```{r}
+res <- results(dds)
+res
+```
+
+We could have equivalently produced this results table with the following more specific command. Because dex is the last variable in the design, we could optionally leave off the `contrast` argument to extract the comparison of the two levels of `dex`.
+
+```{r}
+res <- results(object = dds, contrast = c("dex", "trt", "untrt"))
+res
+```
+
+```{r}
+mcols(res) %>% as.data.frame()
+```
+
+```{r}
+summary(res)
+```
+
+
+
+# Time course experiemnts
+`DESeq2` can be used to analyze time course experiments, for example to find those genes that react in a condition-specific manner over time, compared to a set of baseline samples. Here we demonstrate a basic time course analysis with the fission data package, which contains gene counts for an RNA-seq time course of fission yeast (Leong et al. 2014). The yeast were exposed to oxidative stress, and half of the samples contained a deletion of the gene atf21. We use a design formula that models the strain difference at time 0, the difference over time, and any strain-specific differences over time (the interaction term strain:minute).
+
+```{r}
+library(fission)
+data("fission")
+ddsTC <- DESeqDataSet(fission, 
+                      design = ~ strain + minute + strain:minute)
+
+ddsTC <- DESeq(ddsTC, test = "LRT", reduced = ~ strain + minute)
+resTC <- results(ddsTC)
+resTC$symbol <- mcols(ddsTC)$symbol
+resTC[order(resTC$padj), ] %>% head
+```
+
+
+
+
+
+
+
+

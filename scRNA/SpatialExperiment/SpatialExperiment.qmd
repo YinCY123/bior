@@ -1,0 +1,439 @@
+---
+title: "SpatialExperiment"
+author: "YinCY"
+format: html
+---
+
+# Class Structure
+## Introduction
+The `SpatialExperiment` class is an R/Bioconductor S4 class for storing data from spatial -omics experiments. The class extends the `SingleCellExperiment` class for single-cell data to support storage and retrieval of additional information from spot-based and molecule-based platforms, including spatial coordinates, images, and image metadata. A specialized constructor function is included for data from the 10x Genomics Visium platform.
+
+The following schematic illustrates the `SpatialExperiment` class structure.
+
+```{r}
+knitr::include_graphics("SpatialExperiment.png")
+```
+
+As shown, an object consists of: (i) `assays` containing expression counts, (ii) `rowData` containing information on features, i.e. genes, (iii) `colData` containing information on spots or cells, including nonspatial and spatial metadata, (iv) `spatialCoords` containing spatial coordinates, and (v) `imgData` containing image data. For spot-based ST data (e.g. 10x Genomics Visium), a single assay named counts is used. For molecule-based ST data (e.g. `seqFISH`), two assays named `counts` and `molecules` can be used.
+
+## Load data
+For demonstration of the general class structure, we load an example `SpatialExperiment` object.
+
+```{r}
+library(SpatialExperiment)
+library(magrittr)
+
+example("read10xVisium", echo = FALSE)
+spe
+```
+
+
+## spatialCoords
+In addition to observation metadata stored inside the `colData` slot, the `SpatialExperiment` class stores spatial coordinates as:
+
+- `spatialCoords`, a numeric matrix of spatial coordinates.  
+`spatialCoords` are stored inside the `int_colData`, and are directly accessible via the corresponding accessor:
+
+```{r}
+spatialCoords(spe) %>% head
+```
+
+```{r}
+spatialCoordsNames(spe)
+```
+
+
+## imgData
+All image related data are stored inside the `int_metadata`'s `imgData` field as a `DataFrame` of the following structure.
+
+- each row corresponds to one image for a given sample and with a given unique identifier.  
+- for each image, columns specify: 
+    + which `sample_id` the image belongs to
+    + a unique `image_id` in order to accommodate multiple images for a given sample
+    + the image data
+    + the `scaleFactor` that adjusts pixel positions of the original full-resolution image to pixel positions in the image.
+    
+    
+The `imgData()` accessor can be used to retrieve the image data stored within the object.
+
+```{r}
+imgData(spe)
+```
+
+### The `SpatialImage` class
+Images are stored inside the data field of the imgData as a list of SpatialImages. Each image may be of one of the following sub-classes:
+
+- `LoadedSpatialImage` 
+    + represents an image that is fully realized into memory as a raster object.
+    + `@image` contains a `raster` object: a matrix of RGB colors for each pixel in the image 
+    
+- `StoredSpatialImage`
+    + represents an image that is stored in a local file, and loaded into the memory only on request
+    + `@path` specifies a local file from which to retrieve the image
+    
+- `RemoteSpatialImage`
+    + represents an image that is remotely hosted (under some URL), and retrived only on request.
+    + `@url` specifies where to retrive the image from.
+    
+A `spatialImage` can be accessed using `getImg()`, or retrived directly from the `imgData()`. 
+
+```{r}
+spi <- getImg(spe)
+spi
+```
+
+```{r}
+identical(spi, imgData(spe)$data[[1]])
+```
+
+Data available in an object of class `SpatialImage` may be accessed via the `imgRaster()` and `imgSource()` accessor.
+
+```{r}
+plot(imgRaster(spe))
+```
+
+
+### Adding or removing images
+Image entries amy be added or removed from a `SpatialExperiment`'s `imgData` DataFrame using `addImg()` and `rmvImg()`, respectively.
+
+Besides a path or URL to source the image from and a numeric scale factor, `addImg()` requires specification of the `sample_id` the new image belongs to, and an `image_id` that is not yet in use for that sample.
+
+```{r}
+url <- "https://tse2-mm.cn.bing.net/th/id/OIP-C.Oh9tp29wA4727Yesh5AKegHaGr?pid=ImgDet&rs=1"
+spe <- addImg(spe, 
+              sample_id = "section1", 
+              image_id = "pomeranian", 
+              imageSource = url,
+              scaleFactor = NA_real_, 
+              load = TRUE)
+img <- imgRaster(spe, 
+                 sample_id = "section1", 
+                 image_id = "pomeranian")
+
+plot(img)
+```
+
+
+The `rmvImg()` function is more flexible in the specification of the `sample_id` and `image_id` arguments. Specifically:
+
+- `TRUE` is equivalent to all. 
+- `NULL` defaults to the first entry available.
+
+For example, `sample_id = TRUE`, `image_id = TRUE` will specify all images; `sample_id = NULL`, `image_id = NULL` corresponds to the first image entry in the imgData; `sample_id = TRUE`, `image_id = NULL` equals the first image for all samples; and `sample_id = NULL`, `image_id = TRUE` matches all images for the first sample.
+
+Here, we remove `section1`'s `pomeranian` image added in the previous code chunk, the image is now completely gone from the `imgData`.
+
+```{r}
+imgData(spe <- rmvImg(spe, "section1", "pomeranian"))
+```
+
+
+# Object construction
+## Manually
+The SpatialExperiment constructor provides several arguments to give maximum flexibility to the user.
+
+In particular, these include:
+
+- `spatialCoords`, a numeric `matrix` containing spatial coordinates
+- `spatialCoordsNames`, a character vector specifying which `colData` fields correspond to spatial coordinates.
+
+`spatialCoords` can be supplied via `colData` by specifying the column names that correspond to spatial coordinates with `spatialCoordsNames`.
+
+```{r}
+n <- length(z <- letters)
+y <- matrix(nrow = n, ncol = n)
+cd <- DataFrame(x = seq(n), y = seq(n), z)
+spe1 <- SpatialExperiment(assay = y, 
+                          colData = cd, 
+                          spatialCoordsNames = c("x", "y"))
+spe1
+```
+
+Alternatively, `spatalCoords` may be supplied separately as a `matrix`
+```{r}
+xy <- as.matrix(cd[, c("x", "y")])
+
+spe2 <- SpatialExperiment(assay = y, 
+                          colData = cd["z"], 
+                          spatialCoords = xy)
+```
+
+In general, `spatialCoordsNames` takes precedence over `spatialCoords`, i.e., if both are supplied, the latter will be ignored. In other words, `spatialCoords` are preferentially extracted from the `DataFrame` provided via `colData`. E.g., in the following function call, `spatialCoords` will be ignored, and xy-coordinates are instead extracted from the input `colData` according to the specified `spatialCoordsNames`. In this case, a message is also provided.
+
+```{r}
+n <- 10; m <- 20
+y <- matrix(nrow = n, ncol = m)
+cd <- DataFrame(x = seq(m), y = seq(m))
+xy <- matrix(nrow = m, ncol = 2)
+colnames(xy) <- c("x", "y")
+
+SpatialExperiment(
+    assay = y, 
+    colData = cd, 
+    spatialCoordsNames = c("x", "y"), 
+    spatialCoords = xy
+)
+```
+
+
+## Spot-based
+When working with spot-based ST data, such as 10x Genomics Visium or other platforms providing images, it is possible to store the image information in the dedicated `imgData` structure.
+
+Also, the `SpatialExperiment` class stores a sample_id value in the `colData` structure, which is possible to set with the `sample_id` argument (default is “sample_01”).
+
+Here we show how to load the default Space Ranger data files from a 10x Genomics Visium experiment, and build a `SpatialExperiment` object.
+
+In particular, the `readImgData()` function is used to build an `imgData` `DataFrame` to be passed to the `SpatialExperiment` constructor. The sample_id used to build the `imgData` object must be the same one used to build the `SpatialExperiment` object, otherwise an error is returned.
+
+```{r}
+dir <- system.file(
+    file.path("extdata", "10xVisium", "section1", "outs"),
+    package = "SpatialExperiment"
+)
+
+fnm <- file.path(dir, "raw_feature_bc_matrix")
+sce <- DropletUtils::read10xCounts(fnm)
+
+# read in image data
+img <- readImgData(
+    path = file.path(dir, "spatial"), 
+    sample_id = "foo"
+)
+
+# read in spatial coordinates
+fnm <- file.path(dir, "spatial", "tissue_positions_list.csv")
+xyz <- read.csv(fnm, header = FALSE, 
+                col.names = c("barcode", "in_tissue", "array_row", "array_col", 
+                              "pxl_row_in_fullres", "pxl_col_in_fullres"))
+
+# construct observation & feature metadata
+rd <- S4Vectors::DataFrame(symbol = rowData(sce)$Symbol)
+
+# construct 'SpatialExperiment'
+spe <- SpatialExperiment(assays = list(counts = assay(sce)), 
+                         rowData = rd, 
+                         colData = DataFrame(xyz), 
+                         spatialCoordsNames = c("pxl_col_in_fullres", "pxl_row_in_fullres"), 
+                         imgData = img,
+                         sample_id = "foo")
+spe
+```
+
+Using `read10xVisium()`, the above code to construct the same spe is reduced to.
+
+```{r}
+dir <- system.file(
+    file.path("extdata", "10xVisium"), 
+    package = "SpatialExperiment"
+)
+
+sample_ids <- c("section1", "section2")
+samples <- file.path(dir, sample_ids, "outs")
+
+library(fs)
+dir_ls(samples[1], recurse = T)
+
+spe10x <- read10xVisium(samples = samples, 
+                        sample_id = sample_ids, 
+                        type = "sparse", 
+                        data = "raw", 
+                        images = "lowres", 
+                        load = FALSE)
+
+spe10x
+```
+
+
+## Molecule-based
+To demonstrate how to accommodate molecule-based ST data (e.g. `seqFISH` platform) inside a `SpatialExperiment` object, we generate some mock data of 1000 molecule coordinates across 50 genes and 20 cells. These should be formatted into a `data.frame` where each row corresponds to a molecule, and columns specify the xy-positions as well as which gene/cell the molecule has been assigned to:
+
+```{r}
+n <- 1e3
+ng <- 50
+nc <- 20
+
+x <- runif(n)
+y <- runif(n)
+
+gs <- paste0("gene", seq(ng))
+cs <- paste0("cell", seq(nc))
+gene <- sample(gs, n, TRUE)
+cell <- sample(cs, n, TRUE)
+
+gene <- factor(gene, gs)
+cell <- factor(cell, cs)
+
+df <- data.frame(gene, cell, x, y)
+df %>% head
+```
+
+```{r}
+library(BumpyMatrix)
+# BiocManager::install("BumpyMatrix")
+
+mol <- splitAsBumpyMatrix(x = df[, c("x", "y")], 
+                          row = gene, 
+                          col = cell)
+mol
+```
+
+Finally, it is possible to construct a `SpatialExperiment` object with two data slots:
+- The  `counts` assay stores the number of molecules per gene and cell (equivalent to transcript counts in spot-based data). 
+
+- The `molecules` assay holds the spatial molecule positions (xy-coordinates).  
+
+Each entry in the `molecules` assay is a `DataFrame` that contains the positions of all molecules from a given gene that have been assigned to a given cell.
+
+```{r}
+# get count matrix
+y <- with(df, table(gene, cell))
+y <- as.matrix(unclass(y))
+y[1:5, 1:5]
+```
+
+```{r}
+# construct SpatialExperiment
+spe <- SpatialExperiment(
+    assays = list(counts = y, 
+                  molecules = mol)
+)
+
+spe
+```
+
+The `BumpyMatrix` of molecules locations can be accessed using the dedicated `molecules()` accessor.
+
+```{r}
+molecules(spe)
+```
+
+
+# Common operations
+## Subsetting
+Subetting objects is automatically defined to synchronize across all attributes, as for any other Bioconductor Experiment class.
+
+For example, it is possible to `subset` by `sample_id` as follows.
+
+```{r}
+sub <- spe10x[, spe10x$sample_id == "section1"]
+spe10x %>% colData
+```
+
+```{r}
+spe10x[, colData(spe10x)$in_tissue]
+```
+
+
+## Combining samples
+To work with multiple samples, the `SpatialExperiment` class provides the cbind method, which assumes unique `sample_id`(s) are provided for each sample.
+
+In case the `sample_id`(s) are duplicated across multiple samples, the `cbind` method takes care of this by appending indices to create unique sample identifiers.
+
+```{r}
+spe1 <- spe2 <- spe
+spe3 <- cbind(spe1, spe2)
+```
+
+
+```{r}
+unique(spe3$sample_id)
+```
+
+```{r}
+spe2 <- spe1 <- spe
+spe1$sample_id <- paste(spe1$sample_id, "A", sep = ".")
+spe2$sample_id <- paste(spe2$sample_id, "B", sep = ".")
+sp3 <- cbind(spe1, spe2)
+```
+
+
+## Image transformations
+Both the `SpatialImage` and `SpatialExperiment` class currently support two basic image transformations, namely, rotation (`rotateImg()`) and mirroring (`mirrorImg()`).
+
+- `rotateImg(x, degrees)` expects as `degree` a single numeric in +/-[0,360]. Here, a (negative) positive value corresponds to (counter-)clockwise rotation.
+
+- `mirrorImg(x, axis)` expects as `axis` a character string specifying whether to mirror horizontly or vertically.
+
+Here, we apply various transformations using both a `SpatialImgge` and `SpatialExperiment` as input, and compare the resulting images to the original.
+
+
+### rotation
+```{r}
+spi <- getImg(spe10x)
+spi1 <- rotateImg(spi, -90)
+spi2 <- rotateImg(spi, +90)
+```
+
+```{r}
+par(mfrow = c(1, 3))
+plot(as.raster(spi))
+plot(as.raster(spi1))
+plot(as.raster(spi2))
+```
+
+
+```{r}
+# specify sample & image identifier
+sid <- "section1"
+iid <- "lowres"
+
+# counter-clockwise rotation
+tmp <- rotateImg(spe10x, 
+                 sample_id = sid, 
+                 image_id = iid, 
+                 degree = -90)
+```
+
+
+```{r}
+par(mfrow = c(1, 2))
+plot(imgRaster(spe10x, sid, iid))
+plot(imgRaster(tmp, sid, iid))
+```
+
+
+
+### Mirroring
+```{r}
+spi <- getImg(spe10x)
+
+# mirror horizontally and vertically
+spi1 <- mirrorImg(spi, "h")
+spi2 <- mirrorImg(spi, "v")
+```
+
+
+```{r}
+par(mfrow =c(1, 3))
+
+plot(as.raster(spi))
+plot(as.raster(spi1))
+plot(as.raster(spi2))
+```
+
+
+
+
+# 10x Visum examples
+```{r}
+library(SpatialExperiment)
+library(fs)
+library(DropletUtils)
+
+samples <- file.path("/home/yincy/git/data/Spatial/10x-Visium/sample/out/")
+
+?read10xCounts
+
+read10xVisium(samples = samples, 
+              sample_id = "out",
+              type = "sparse", 
+              data = "raw", 
+              images = "lowres")
+```
+
+
+
+```{r}
+fix(read10xCounts)
+```
+

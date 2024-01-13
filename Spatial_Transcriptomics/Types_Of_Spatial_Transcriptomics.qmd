@@ -1,0 +1,37 @@
+---
+title: "Types_Of_Spatial_Transcriptomics"
+author: "YinCY"
+format: html
+---
+
+
+# spots based (sequencing-based)
+Sequencing-based platforms capture messenger RNA (mRNA) molecules at a large set (up to thousands) of measurement locations from a tissue section placed on a slide, tag the mRNA with unique spatial barcodes for each measurement location, and generate a readout by next-generation sequencing.
+
+These platforms provide full-transcriptome gene resolution due to the use of nest-generation sequencing. The spatial resolution varies between platforms, and depends on the size and spacing between the spatial capture locations. Depending on the spatial resolution and the tissue cell density, each spatial measurement location may capture mRNA from one or more cells.
+
+
+- 10X Genomics Visium: based on this technology (10.1126/science.aaf2403). 
+- Curio Seeker: extension of the original Slide-seqV2.  
+
+
+# molecule based (imaging-based)
+Molecule-based platforms detect the spatial coordinates of individual RNA molecules by sequential in situ hybridization (ISH) or by in situ sequencing (ISS), for targeted sets of hundreds to thousands of genes at up to sub-cellular spatial resolution.
+
+
+Image segmentation is used to identify the boundaries of individual cells and assign RNA molecules to cells or nuclei during preprocessing.
+
+For downstream analysis, gene counts may be aggregated to the cell level, or analyses may be performed directly at the molecule level. Cell-level analyses can re-use methods developed for spot-level spatial transcriptomics data or single-cell data, while molecule-level analyses may require new methods.
+
+
+- 10X Genomics Xenium
+- Vizgen MERSCOPE
+- NanoString CosMx
+
+
+
+
+
+
+
+

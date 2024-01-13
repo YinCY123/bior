@@ -1,0 +1,30 @@
+---
+title: "SAM/BAM"
+author: "YinCY"
+format: html
+---
+
+# SAM Header
+```{bash}
+head -n 10  BioDataSkills/bds-files/chapter-11-alignment/celegans.sam
+```
+
+- `@SQ` header entries store information about the reference sequences.  
+    + `SN`: sequence name
+    + `LN`: sequence length
+    + All separate sequences in your reference have a corresponding entry in the header.
+
+- `@RG` header entries contain important read group and sample metadata. The read group identifier ID is required and must be unique. Some software relies on read groups to indicate a technical groups of reads, to account for batch effects.
+    + `SM`: sample information.
+    + `PL`: sequencing platform.
+    
+- `@PG` header entries contain metadata about the programs used to create and process a set of SAM/BAM files.
+    + `ID`: program ID.
+    + `VN`: program version.
+    + `CL`: command line to produce the BAM file.
+
+
+
+
+
+

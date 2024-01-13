@@ -1,0 +1,134 @@
+---
+title: "tools"
+author: "YinCY"
+format: html
+---
+
+# Alignment
+- STAR
+- cellranger
+- zUMIs
+
+
+# Doublet detection
+- DoubletFinder
+- Scrublet
+- DoubletDetection
+- scDblFinder
+- cxds
+- bcds
+- solo
+
+
+# ambient mRNA remove
+- DecontX
+- SoupX
+
+
+# normalization
+- SCnorm
+- Linnorm
+- sctransform
+- Census
+- scVI
+
+
+# Btach Effects Correction
+- fastMNN
+- Seurat Integration
+- LIGER
+- Scanorama
+- BBKNN
+- Harmony
+- Conos
+- RISC
+
+
+# cell-type annotation
+--Classifiers that do not require marker genes--
+- scmap: based on similarity
+- SingleCellNet: based on random forest classifier
+- scPred: based on support vector machine
+- ACTINN: based on neural network
+- SingleR
+- CHETAH
+- Cell BLAST
+- ItClust
+- CaSTLe
+- OnClass
+- CellO
+
+--Classifiers that require marker genes--
+- Garnett
+- SCINA
+- CellAssign
+- Digital Cell
+- Digital Cell Sorter (DCS)
+- scANVI
+
+
+# Differential expression analysis
+- SCDE
+- MAST
+- D3E
+- scDD
+- BPSC
+- NBID
+- DEsingle
+- DECENT
+- SwarnSeq
+- Monocle3
+- tradeSeq
+
+
+# Trajectory Inference
+--minimum spanning tree--
+- monocle3
+- Slingshot
+- TSCAN
+- Waterfall
+
+--graph theory--
+- DPT (diffusion Pseudotime)
+- PAGA
+- monocle3
+- FateID
+- Waterfall
+- Wanderlust
+- Wishbone
+
+
+# SNV/CNV detection
+- gatk
+- samtools
+- MuTect2
+- VarScan2
+- Strelka2
+- SSrGE
+- Trinity CTAT
+- cellsnp-lite
+
+
+# Alternative Splicing Analysis
+- Outrigger
+- BRIE/BRIE2
+- ODEGR-NMF
+- ASCOT
+- Millefy
+- VALERIE
+- SCATS
+- scQuint
+- DESJ-detection
+
+
+## Gene Regulatory Network Inference
+- SCENIC
+- SCODE
+- SCOUP
+- PIDC
+- LEAP
+- NLNET
+- SCIMITAR
+- GRISLI
+
+
