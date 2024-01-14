@@ -316,53 +316,59 @@ pred_label <- SingleR(test = nasa,
                       BPPARAM = BiocParallel::MulticoreParam(6))
 
 pred_label$pruned.labels %>% table(useNA = "ifany")
-setdiff(unique(GSE122465$cell_types), unique(pred_label$pruned.labels))
-
-table(nasa$clusters, pred_label$pruned.labels) %>% prop.table(margin = 1) %>% round(digits = 2) %>% .[, ]
-pred_label$pruned.labels %>% table(useNA = "ifany")
+cell_types <- setNames(pred_label$pruned.labels, rownames(pred_label))
 
 colData(nasa)$cell_type <- cell_types[nasa$clusters]
+colData(nasa) <- colData(nasa)[, c(1, 2, 3, 9, 10)]
 colData(nasa)
 nasa <- nasa[, !is.na(nasa$cell_type)]
+
+
+samples <- nasa$Sample
+samples <- samples %>% 
+    strsplit(split = "_") %>% 
+    lapply("[", 4:7) %>% 
+    sapply(function(x){str_c(x, collapse = "_")})
+colData(nasa)$sample <- samples
+nasa %>% colData()
+
+group <- nasa$sample %>% 
+    strsplit("_") %>% 
+    lapply("[", c(1, 3)) %>% 
+    sapply(function(x){str_c(x, collapse = "_")})
+colData(nasa)$group <- group
+nasa %>% colData
+nasa$group %>% table
 
 saveRDS(nasa, "/home/yincy/git/data/parttime/nasa/preprocessed_nasa.rds")
 ```
 
 ```{r}
-library(randomForest)
-?randomForest()
-logmtx <- logcounts(GSE122465) %>% as.data.frame()
-logmtx %>% tibble::rownames_to_column("ensembl") %>% 
-    tidyr::pivot_longer(cols = -ensembl, names_to = "barcodes", values_to = "logcounts")
-logmtx <- .Last.value
-cell_meta <- colData(GSE122465) %>% as.data.frame()
-cell_type <- setNames(cell_meta$cell_types, cell_meta$barcodes)
-
-logmtx$cell_type <- cell_type[logmtx$barcodes]
-logmtx$logcounts %>% range()
-
-classifier <- randomForest(cell_type ~., data = logmtx, importance = TRUE, ntree = 500)
+nasa$sample %>% unique
+nasa$group %>% unique()
+nasa$cell_type %>% unique
 ```
-
 
 
 ```{r}
 plotReducedDim(nasa, 
-               color_by = "clusters", 
-               text_by = "clusters", 
+               color_by = "Sample", 
+               text_by = "cell_type", 
                dimred = "TSNE", 
                point_size = 0.5, 
                text_size = 2) +
   theme_classic() +
   theme(legend.position = "none")
-
-ggsave("/home/yincy/git/data/parttime/nasa/nasa_clusters.tiff")
 ```
 
 
 # differential expression analysis
 ```{r}
-
+?findMarkers
+nasa$sample %>% table
+fmarkers <- findMarkers(x = nasa, 
+                        groups = nasa$cell_type, 
+                        restrict = c("FLT_LAR_OLD_FO1", ""))
 ```
 
 
