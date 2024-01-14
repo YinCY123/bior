@@ -175,11 +175,12 @@ library(scran)
 library(scater)
 library(bluster)
 library(batchelor)
-library(patchwork)
+library(Seurat)
 
-GSE122465 <- fread("/home/yincy/git/data/parttime/nasa/ref/GSE122465/GSE122465_FilteredCounts10x.csv.gz", 
+GSE122465 <- fread("/home/yincy/git/data/parttime/nasa/reference/GSE122465/GSE122465_FilteredCounts10x.csv.gz", 
                    sep = ",", 
-                   header = TRUE) %>% as.data.frame()
+                   header = TRUE) %>% 
+    as.data.frame()
 GSE122465 %>% dim
 
 gene_info <- data.frame(symbol = GSE122465$V1, 
@@ -223,14 +224,13 @@ GSE122465 <- SingleCellExperiment(assays = list(counts = as(mtx, "CsparseMatrix"
 GSE122465
 GSE122465 %>% colData
 GSE122465 %>% rowData
-saveRDS(GSE122465, "/home/yincy/git/data/parttime/nasa/ref/GSE122465.rds")
+saveRDS(GSE122465, "/home/yincy/git/data/parttime/nasa/reference/GSE122465.rds")
 ```
 
 
 ```{r}
-unzip("/home/yincy/git/data/parttime/nasa/reference/RNAMagnetDataBundle.zip", 
-      exdir = "/home/yincy/git/data/parttime/nasa/reference/")
-load("/home/yincy/git/data/parttime/nasa/reference/NicheMarkers10x.rda")
+# unzip("/home/yincy/git/data/parttime/nasa/reference/RNAMagnetDataBundle.zip", 
+#       exdir = "/home/yincy/git/data/parttime/nasa/reference/")
 load("/home/yincy/git/data/parttime/nasa/reference/NicheData10x.rda")
 NicheData10x <- Seurat::UpdateSeuratObject(NicheData10x)
 NicheData10x[[]]$cell_type <- Idents(NicheData10x)
@@ -239,7 +239,7 @@ cell_types <- setNames(cell_type_df$cell_type, rownames(cell_type_df))
 
 colData(GSE122465)$cell_types <- cell_types[GSE122465$barcodes]
 colData(GSE122465)
-GSE122465 <- readRDS("/home/yincy/git/data/parttime/nasa/ref/GSE122465.rds")
+saveRDS(GSE122465, "/home/yincy/git/data/parttime/nasa/reference/processed_GSE122465.rds")
 ```
 
 ```{r}
@@ -284,39 +284,7 @@ GSE122465 <- runTSNE(GSE122465,
                      perplexity = 30, 
                      num_threads = 10)
 GSE122465
-saveRDS(GSE122465, "/home/yincy/git/data/parttime/nasa/ref/processed_GSE122465.rds")
-```
-
-
-```{r}
-cell_types <- c(
-<<<<<<< HEAD
-  "1" = "pre-B.", 
-  "2" = "Monocytes", 
-  "3" = "Erythroblasts",
-  "4" = "", 
-=======
-    "1" = "", 
-    "2" = "", 
-    "3" = "", 
-    "4" = "", 
-    "5" = "", 
-    "6" = "", 
-    "7" = "", 
-    "8" = "", 
-    "9" = "", 
-    "10" = "", 
-    "11" = "", 
-    "12" = "", 
-    "13" = "", 
-    "14" = "", 
-    "15" = "", 
-    "16" = "", 
-    "17" = "", 
-    "18" = "", 
-    "19" = "", 
-    "20" = ""
-)
+saveRDS(GSE122465, "/home/yincy/git/data/parttime/nasa/reference/processed_GSE122465.rds")
 ```
 
 
@@ -331,17 +299,21 @@ library(scran)
 library(magrittr)
 library(scater)
 
-GSE122465 <- readRDS("/home/yincy/git/data/parttime/nasa/ref/processed_GSE122465.rds")
+GSE122465 <- readRDS("/home/yincy/git/data/parttime/nasa/reference/processed_GSE122465.rds")
 nasa <- readRDS("/home/yincy/git/data/parttime/nasa/preprocessed_nasa.rds")
+
+GSE122465 %>% colData
+nasa %>% colData
 
 pred_label <- SingleR(test = nasa, 
                       ref = GSE122465, 
                       labels = GSE122465$cell_types, 
-                      aggr.ref = F, 
+                      aggr.ref = TRUE, 
+                      clusters = nasa$clusters, 
                       de.method = "classic",
                       assay.type.test = "logcounts", 
                       assay.type.ref = "logcounts", 
-                      BPPARAM = BiocParallel::MulticoreParam(10))
+                      BPPARAM = BiocParallel::MulticoreParam(6))
 
 pred_label$pruned.labels %>% table(useNA = "ifany")
 setdiff(unique(GSE122465$cell_types), unique(pred_label$pruned.labels))
@@ -356,6 +328,23 @@ nasa <- nasa[, !is.na(nasa$cell_type)]
 saveRDS(nasa, "/home/yincy/git/data/parttime/nasa/preprocessed_nasa.rds")
 ```
 
+```{r}
+library(randomForest)
+?randomForest()
+logmtx <- logcounts(GSE122465) %>% as.data.frame()
+logmtx %>% tibble::rownames_to_column("ensembl") %>% 
+    tidyr::pivot_longer(cols = -ensembl, names_to = "barcodes", values_to = "logcounts")
+logmtx <- .Last.value
+cell_meta <- colData(GSE122465) %>% as.data.frame()
+cell_type <- setNames(cell_meta$cell_types, cell_meta$barcodes)
+
+logmtx$cell_type <- cell_type[logmtx$barcodes]
+logmtx$logcounts %>% range()
+
+classifier <- randomForest(cell_type ~., data = logmtx, importance = TRUE, ntree = 500)
+```
+
+
 
 ```{r}
 plotReducedDim(nasa, 
@@ -369,6 +358,7 @@ plotReducedDim(nasa,
 
 ggsave("/home/yincy/git/data/parttime/nasa/nasa_clusters.tiff")
 ```
+
 
 # differential expression analysis
 ```{r}
