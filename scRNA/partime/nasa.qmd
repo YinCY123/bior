@@ -298,9 +298,10 @@ library(SingleR)
 library(scran)
 library(magrittr)
 library(scater)
+library(stringr)
 
 GSE122465 <- readRDS("/home/yincy/git/data/parttime/nasa/reference/processed_GSE122465.rds")
-nasa <- readRDS("/home/yincy/git/data/parttime/nasa/preprocessed_nasa.rds")
+nasa <- readRDS("/home/yincy/git/data/parttime/nasa/processed_nasa.rds")
 
 GSE122465 %>% colData
 nasa %>% colData
@@ -313,12 +314,13 @@ pred_label <- SingleR(test = nasa,
                       de.method = "classic",
                       assay.type.test = "logcounts", 
                       assay.type.ref = "logcounts", 
-                      BPPARAM = BiocParallel::MulticoreParam(6))
+                      BPPARAM = BiocParallel::MulticoreParam(4))
 
-pred_label$pruned.labels %>% table(useNA = "ifany")
+pred_label$pruned.labels %>% table
 cell_types <- setNames(pred_label$pruned.labels, rownames(pred_label))
 
 colData(nasa)$cell_type <- cell_types[nasa$clusters]
+colData(nasa) %>% colnames()
 colData(nasa) <- colData(nasa)[, c(1, 2, 3, 9, 10)]
 colData(nasa)
 nasa <- nasa[, !is.na(nasa$cell_type)]
@@ -340,7 +342,9 @@ colData(nasa)$group <- group
 nasa %>% colData
 nasa$group %>% table
 
-saveRDS(nasa, "/home/yincy/git/data/parttime/nasa/preprocessed_nasa.rds")
+nasa$levels <- paste(nasa$group, nasa$cell_type, sep = "_")
+nasa %>% colData()
+saveRDS(nasa, "/home/yincy/git/data/parttime/nasa/processed_nasa.rds")
 ```
 
 ```{r}
@@ -359,6 +363,8 @@ plotReducedDim(nasa,
                text_size = 2) +
   theme_classic() +
   theme(legend.position = "none")
+nasa$group %>% table
+nasa %>% colData()
 ```
 
 
@@ -367,8 +373,12 @@ plotReducedDim(nasa,
 ?findMarkers
 nasa$sample %>% table
 fmarkers <- findMarkers(x = nasa, 
-                        groups = nasa$cell_type, 
-                        restrict = c("FLT_LAR_OLD_FO1", ""))
+                        groups = nasa$levels, 
+                        restrict = c("FLT_OLD_large pre-B.", "GC_OLD_large pre-B."), 
+                        # block = nasa$Sample, 
+                        assay.type = "logcounts")
+fmarkers %>% names
+fmarkers[[1]]
 ```
 
 
