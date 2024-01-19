@@ -300,8 +300,8 @@ library(magrittr)
 library(scater)
 library(stringr)
 
-GSE122465 <- readRDS("/home/yincy/git/data/parttime/nasa/reference/processed_GSE122465.rds")
-nasa <- readRDS("/home/yincy/git/data/parttime/nasa/processed_nasa.rds")
+GSE122465 <- readRDS("/home/yincy/git/data/partime/nasa/reference/processed_GSE122465.rds")
+nasa <- readRDS("/home/yincy/git/data/partime/nasa/processed_nasa.rds")
 
 GSE122465 %>% colData
 nasa %>% colData
@@ -344,25 +344,19 @@ nasa$group %>% table
 
 nasa$levels <- paste(nasa$group, nasa$cell_type, sep = "_")
 nasa %>% colData()
-saveRDS(nasa, "/home/yincy/git/data/parttime/nasa/processed_nasa.rds")
-```
-
-```{r}
-nasa$sample %>% unique
-nasa$group %>% unique()
-nasa$cell_type %>% unique
+saveRDS(nasa, "/home/yincy/git/data/partime/nasa/processed_nasa.rds")
 ```
 
 
 ```{r}
 plotReducedDim(nasa, 
-               color_by = "Sample", 
+               color_by = "cell_type", 
                text_by = "cell_type", 
                dimred = "TSNE", 
                point_size = 0.5, 
                text_size = 2) +
   theme_classic() +
-  theme(legend.position = "none")
+  theme(legend.position = "right")
 nasa$group %>% table
 nasa %>% colData()
 ```
@@ -370,15 +364,78 @@ nasa %>% colData()
 
 # differential expression analysis
 ```{r}
-?findMarkers
-nasa$sample %>% table
+#| message: false
+#| warning: false
+
+library(scran)
+library(ggplot2)
+library(magrittr)
+library(scater)
+
+nasa <- readRDS("../../../data/partime/nasa/processed_nasa.rds")
+nasa %>% colData()
+```
+
+```{r}
+nasa$Sample %>% unique
+```
+
+
+```{r}
+nasa$cell_type %>% unique()
+```
+
+```{r}
+nasa$group %>% unique
+```
+
+
+```{r}
 fmarkers <- findMarkers(x = nasa, 
                         groups = nasa$levels, 
-                        restrict = c("FLT_OLD_large pre-B.", "GC_OLD_large pre-B."), 
-                        # block = nasa$Sample, 
-                        assay.type = "logcounts")
+                        restrict = paste(c("FLT", "GC"), contr[1], sep = "_"), 
+                        assay.type = "logcounts", 
+                        pval.type = "all")
 fmarkers %>% names
-fmarkers[[1]]
+
+nasa$levels %>% unique()
+```
+
+```{r}
+contr <- gsub("^FLT_|GC_", "", unique(nasa$levels)) %>% unique
+degs <- vector(mode = "list")
+
+for(i in seq_along(contr)){
+    cur <- findMarkers(nasa, 
+                       groups = nasa$levels, 
+                       restrict = paste(c("FLT", "GC"), contr[i], sep = "_"), 
+                       assay.type = "logcounts", 
+                       pval.type = "all")
+    
+    degs[[contr[i]]] <- cur
+}
+degs %>% length
+degs %>% names
+
+# GC as control
+degs[[1]] %>% names
+markers <- lapply(degs, function(x){
+    x[[1]]
+})
+
+markers %>% length
+markers %>% names
+names(markers) <- paste("FLT", names(markers), sep = "_")
+saveRDS(markers, "../../../data/partime/nasa/all_degs.rds")
+```
+
+
+# differential expression analysis
+```{r}
+#| message: false
+#| warning: false
+
+library(xlsx)
 ```
 
 
