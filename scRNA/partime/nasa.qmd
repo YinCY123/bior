@@ -373,13 +373,11 @@ library(magrittr)
 library(scater)
 
 nasa <- readRDS("../../../data/partime/nasa/processed_nasa.rds")
-nasa %>% colData()
 ```
 
 ```{r}
 nasa$Sample %>% unique
 ```
-
 
 ```{r}
 nasa$cell_type %>% unique()
@@ -389,39 +387,28 @@ nasa$cell_type %>% unique()
 nasa$group %>% unique
 ```
 
-
 ```{r}
-fmarkers <- findMarkers(x = nasa, 
-                        groups = nasa$levels, 
-                        restrict = paste(c("FLT", "GC"), contr[1], sep = "_"), 
-                        assay.type = "logcounts", 
-                        pval.type = "all")
-fmarkers %>% names
+library(stringr)
 
-nasa$levels %>% unique()
-```
+# all combinations
+contr <- combn(unique(nasa$group), 2)
+cells <- nasa$cell_type %>% unique
+all_contrast_markers <- vector(mode = "list")
 
-```{r}
-contr <- gsub("^FLT_|GC_", "", unique(nasa$levels)) %>% unique
-degs <- vector(mode = "list")
-
-for(i in seq_along(contr)){
-    cur <- findMarkers(nasa, 
-                       groups = nasa$levels, 
-                       restrict = paste(c("FLT", "GC"), contr[i], sep = "_"), 
-                       assay.type = "logcounts", 
-                       pval.type = "all")
-    
-    degs[[contr[i]]] <- cur
+for(i in seq_len(ncol(contr))){
+    for(cell in cells){
+        cur_cell <- findMarkers(x = nasa, 
+                                groups = nasa$levels, 
+                                restrict = paste(contr[, i, drop = TRUE], cell, sep = "_"), 
+                                assay.type = "logcounts", 
+                                pval.type = "all", 
+                                test.type = "t")
+        all_contrast_markers[[str_c(contr[, i], collapse = "_v.s._")]][[cell]] <- cur_cell
+    }
 }
-degs %>% length
-degs %>% names
+all_contrast_markers %>% names
 
-
-markers %>% length
-markers %>% names
-names(markers) <- paste("FLT", names(markers), sep = "_")
-saveRDS(markers, "../../../data/partime/nasa/all_degs.rds")
+saveRDS(all_contrast_markers, "../../../data/partime/nasa/res/all_contrast_markers.rds")
 ```
 
 
@@ -433,23 +420,23 @@ saveRDS(markers, "../../../data/partime/nasa/all_degs.rds")
 library(tidyverse)
 library(stringr.plus)
 
-all_degs <- readRDS("../../../data/partime/nasa/all_degs.rds")
-
-immune_cells <- c("large pre-B.", "Dendritic cells", "Monocytes", 
-                  "Neutro prog.", "small pre-B.", "B cell", 
-                  "Neutrophils", "NK cells", "Mono prog.", 
-                  "T cells")
-
-
+all_contrast_markers <- readRDS("../../../data/partime/nasa/res/all_contrast_markers.rds")
 ```
 
 ```{r}
-all_degs %>% names
+# all of the 6 contrast
+all_contrast_markers %>% names
 ```
+
 
 # binary matrix
 ```{r}
-union_genes <- Reduce(union, lapply(all_degs, rownames))
+# retain only the first df
+all_contrast_markers <- lapply(all_contrast_markers, function(x){
+    lapply(x, function(y){y = y[[1]]})
+})
+
+union_genes <- lapply(all_contrast_markers, function(x){sapply(x, rownames)}) %>% Reduce(union, x = .)
 union_genes %>% str
 
 cells <- c("Adipo-CAR", "Osteo-CAR", 
@@ -459,60 +446,109 @@ cells <- c("Adipo-CAR", "Osteo-CAR",
 ```
 
 ```{r}
-mtx_old <- matrix(0, 
-                  nrow = length(union_genes), 
-                  ncol = length(cells), 
-                  dimnames = list(union_genes, cells))
+mtx_list <- vector(mode = "list", length = length(all_contrast_markers))
+names(mtx_list) <- names(all_contrast_markers)
 
-mtx_old %>% dim
-mtx_old[1:10, 1:5]
-```
+mtx_list <- lapply(mtx_list, function(x){
+    x <- matrix(data = 0, 
+                nrow = length(union_genes), 
+                ncol = length(cells), 
+                dimnames = list(union_genes, cells))
+})
 
-```{r}
-all_degs_old <- all_degs[1:21]
-all_degs_yng <- all_degs[22:42]
-```
+mtx_list %>% length
+mtx_list %>% names
 
-```{r}
-names(all_degs_old) <- str_extract_after(names(all_degs_old), pattern = "_", which = "last")
-all_degs_old %>% names
-```
-
-```{r}
-for(cell in names(all_degs_old)){
-    up <- all_degs_old[[cell]] %>% as.data.frame() %>%  dplyr::filter(FDR < 0.05, summary.logFC > 0) %>% rownames()
-    down <- all_degs_old[[cell]] %>% as.data.frame() %>% dplyr::filter(FDR < 0.05, summary.logFC < 0) %>% rownames()
-    # nc <- setdiff(rownames(all_degs_old[[cell]]), unique(c(up, down)))
-    mtx_old[up, cell] <- 1
-    mtx_old[down, cell] <- -1
+for(con in names(mtx_list)){
+    for(cell in colnames(mtx_list[[con]])){
+        up <- all_contrast_markers[[con]][[cell]] %>% as.data.frame %>% dplyr::filter(FDR <= 0.05, summary.logFC > 0) %>% rownames
+        down <- all_contrast_markers[[con]][[cell]] %>% as.data.frame %>% dplyr::filter(FDR <= 0.05, summary.logFC < 0) %>% rownames
+        mtx_list[[con]][up, cell] <- 1
+        mtx_list[[con]][down, cell] <- -1
+    }
 }
 
-mtx_old %>% table
+mtx_list %>% names
+```
+
+```{r}
+st <- mtx_list %>% lapply(function(x){apply(x, 2, table)})
+contrs <- names(st)
+n <- c(-1, 0, 1) %>% as.character()
+cells <- st[[1]] %>% names
+
+for(con in contrs){
+    for(cell in cells){
+        if(length(setdiff(n, names(st[[con]][[cell]]))) > 0){
+            cur <- setdiff(n, names(st[[con]][[cell]]))
+            for(j in cur){
+                st[[con]][[cell]][j] <- 0
+            }
+        }
+        # sorting the orders
+        st[[con]][[cell]] <- st[[con]][[cell]][c("-1", "0", "1")]
+    }
+}
+
+st %>% names
+
+st <- lapply(st, function(x){
+    sapply(x, function(y){as.matrix(y)})
+})
+
+for(con in contrs){
+    rownames(st[[con]]) <- c("down", "nc", "up")
+}
+
+write.csv(st, "../../../data/partime/nasa/res/all_DEG_stats.rds")
 ```
 
 ```{r}
 library(pheatmap)
-pheatmap(mtx_old, 
-         show_rownames = F, 
-         cluster_cols = F, 
-         angle_col = 315, 
-         legend_breaks = c(-0.7, 0, 0.7), 
-         legend_labels = c("down", "NC", "up"), 
-         clustering_method = "ward.D2", 
-         color = colorRampPalette(colors = c("blue", "grey90", "red"))(3))
+
+ac <- data.frame("class" = rep(c("Mesenchymal Cells", "Immune Cells", "HSPCs", "Endothelial Cells"), 
+                               times = c(2, 9, 9, 1)), 
+                 row.names = cells)
+cols <- RColorBrewer::brewer.pal(4, "Dark2")
+anno_cols <- list(class = c("Mesenchymal Cells" = cols[1], "Immune Cells" = cols[2], 
+                            "HSPCs" = cols[3], "Endothelial Cells" = cols[4]))
+
+for(con in contrs){
+    pdf(paste("../../../data/partime/nasa/res/heatmap_", con, ".pdf", sep = ""), width = 9)
+    pheatmap(mat = mtx_list[[con]], 
+             show_rownames = FALSE, 
+             cluster_cols = FALSE, 
+             legend_breaks = c(-0.7, 0, 0.7), 
+             legend_labels = c("down", "nc", "up"), 
+             color = colorRampPalette(colors = c("darkblue", "grey90", "red"))(3), 
+             gaps_col = c(2, 11, 20), 
+             annotation_col = ac, 
+             annotation_colors = anno_cols, 
+             pagecentre = TRUE,
+             angle_col = 315)
+    
+    dev.off()
+}
 ```
 
+
+# GO analysis
+```{r}
+#| message: false
+#| warning: false
+
+library(msigdbr)
+library(fgsea)
+```
 
 ```{r}
-library(ggheatmap)
+msigdbr_collections()
+df <- msigdbr(species = "mouse", category = "C5", subcategory = "GO:BP")
+gene_sets <- split(df$ensembl_gene, df$gs_name)
+gene_sets %>% sapply(length) %>% range
 
-ggheatmap(mtx_old, 
-          cluster_cols = F, 
-          cluster_rows = TRUE, 
-          hclust_method = "ward.D2", 
-          text_show_rows = FALSE)
+all_contrast_markers[[1]]
 ```
-
 
 
 
