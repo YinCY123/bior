@@ -1,0 +1,36 @@
+---
+title: "tidy_data"
+author: "YinCY"
+format: html
+editor: source
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+library(xlsx)
+```
+
+
+```{r}
+examples <- read.xlsx("/home/yincy/git/data/partime/tidy_data/example.xlsx")
+g <- read.table("/home/yincy/git/data/partime/tidy_data/G.csv", encoding = "utf-8")
+```
+
+```{r}
+Encoding("fa\xE7ile")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
