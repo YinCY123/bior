@@ -1,0 +1,119 @@
+---
+title: "singleCellNet"
+author: "YinCY"
+format: html
+editor: source
+---
+
+
+```{r}
+#| message: false
+#| warning: false
+
+library(singleCellNet)
+library(cancerCellNet)
+```
+
+
+# data
+```{r}
+download.file("https://s3.amazonaws.com/cnobjects/singleCellNet/examples/sampTab_Park_MouseKidney_062118.rda", "../../../data/singleCellNet/sampTab_Park_MouseKidney_062118.rda")
+
+download.file("https://s3.amazonaws.com/cnobjects/singleCellNet/examples/expMatrix_Park_MouseKidney_Oct_12_2018.rda", "../../../data/singleCellNet/expMatrix_Park_MouseKidney_Oct_12_2018.rda")
+
+download.file("https://s3.amazonaws.com/cnobjects/singleCellNet/examples/expMatrix_TM_Raw_Oct_12_2018.rda", "../../../data/singleCellNet/expMatrix_TM_Raw_Oct_12_2018.rda")
+
+download.file("https://s3.amazonaws.com/cnobjects/singleCellNet/examples/sampTab_TM_053018.rda", 
+              "../../../data/singleCellNet/sampTab_TM_053018.rda")
+
+## For cross-species analyis:
+download.file("https://s3.amazonaws.com/cnobjects/singleCellNet/examples/human_mouse_genes_Jul_24_2018.rda", "../../../data/singleCellNet/human_mouse_genes_Jul_24_2018.rda")
+
+download.file("https://s3.amazonaws.com/cnobjects/singleCellNet/examples/6k_beadpurfied_raw.rda", 
+              "../../../data/singleCellNet/6k_beadpurfied_raw.rda")
+
+download.file("https://s3.amazonaws.com/cnobjects/singleCellNet/examples/stDat_beads_mar22.rda", 
+              "../../../data/singleCellNet/stDat_beads_mar22.rda")
+
+## To demonstrate how to integrate loom files to SCN
+download.file("https://s3.amazonaws.com/cnobjects/singleCellNet/examples/pbmc_6k.loom", 
+              "../../../data/singleCellNet/pbmc_6k.loom")
+```
+
+# load query data
+```{r}
+sample_info_park <- utils_loadObject("../../../data/singleCellNet/sampTab_Park_MouseKidney_062118.rda")
+mtx_park <- utils_loadObject("../../../data/singleCellNet/expMatrix_Park_MouseKidney_Oct_12_2018.rda")
+mtx_park %>% class
+mtx_park %>% dim
+
+genes_park <- rownames(mtx_park)
+genes_park %>% str
+```
+
+
+# load train data 
+```{r}
+mtx_TM <- utils_loadObject("../../../data/singleCellNet/expMatrix_TM_Raw_Oct_12_2018.rda")
+sample_info_TM <- utils_loadObject("../../../data/singleCellNet/sampTab_TM_053018.rda")
+
+sample_info_TM <- droplevels(sample_info_TM)
+sample_info_TM
+```
+
+
+# find common gene between train and test dataset
+```{r}
+common_genes <- intersect(rownames(mtx_TM), genes_park)
+mtx_TM <- mtx_TM[common_genes, ]
+```
+
+# split train data
+```{r}
+set.seed(101)
+List <- splitCommon(sampTab = sample_info_TM, dLevel = "newAnn")
+
+sample_train <- List[[1]]
+mtx_train <- mtx_TM[, rownames(sample_train)]
+```
+
+
+# train the classifier
+```{r}
+classifier <- scn_train(stTrain = sample_train, 
+                        expTrain = mtx_train, 
+                        nTopGenes = 100, 
+                        nRand = 70, 
+                        nTrees = 1000, 
+                        nTopGenePairs = 50, 
+                        dLevel = "newAnn", 
+                        colName_samp = "cell")
+classifier %>% names
+```
+
+
+# assessing the classifier
+```{r}
+test_List <- splitCommon(sampTab = List[[2]], dLevel = "newAnn")
+
+sample_test <- test_List[[1]]
+mtx_test <- mtx_TM[common_genes, rownames(sample_test)]
+
+class_res <- scn_predict(cnProc = classifier[["cnProc"]], 
+                         expDat = mtx_test, 
+                         nrand = 50)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
