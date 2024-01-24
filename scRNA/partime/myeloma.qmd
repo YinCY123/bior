@@ -1,0 +1,28 @@
+---
+title: "myeloma"
+author: "YinCY"
+format: html
+---
+
+# single cell dataset
+GSE193531
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
