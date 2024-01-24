@@ -347,7 +347,6 @@ nasa %>% colData()
 saveRDS(nasa, "/home/yincy/git/data/partime/nasa/processed_nasa.rds")
 ```
 
-
 ```{r}
 plotReducedDim(nasa, 
                color_by = "cell_type", 
