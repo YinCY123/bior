@@ -1,0 +1,86 @@
+---
+title: "myeloma"
+author: "YinCY"
+format: html
+---
+
+# single cell dataset
+GSE193531
+GSE124310
+```{r}
+#| message: false
+#| warning: false
+
+
+library(fs)
+library(GEOquery)
+library(SingleCellExperiment)
+library(scran)
+library(scater)
+library(batchelor)
+library(bluster)
+library(data.table)
+library(magrittr)
+library(EnsDb.Hsapiens.v86)
+
+# dir_create("/home/yincy/git/data/partime/myeloma")
+# getGEOSuppFiles("GSE193531", baseDir = "/home/yincy/git/data/partime/myeloma/")
+```
+
+```{r}
+sample_info <- read.table("../../../data/partime/myeloma/GSE193531/GSE193531_cell-level-metadata.csv.gz", 
+                          sep = ",", 
+                          header = TRUE)
+sample_info %>% head
+```
+
+```{r}
+mtx <- fread("../../../data/partime/myeloma/GSE193531/GSE193531_umi-count-matrix.csv.gz", 
+             sep = ",", 
+             header = TRUE) %>% 
+    as.data.frame()
+
+mtx <- mtx %>% 
+    dplyr::mutate(ensembl = mapIds(EnsDb.Hsapiens.v86, keys = .$V1, keytype = "SYMBOL", column = "GENEID")) %>% 
+    dplyr::relocate(ensembl, .before = V1) %>% 
+    dplyr::filter(!is.na(ensembl))
+mtx$ensembl %>% duplicated() %>% table
+mtx <- mtx %>% tibble::column_to_rownames("ensembl") %>% dplyr::select(-V1)
+
+EnsDb.Hsapiens.v86 %>% columns()
+
+gene_info <- data.frame(ensembl = rownames(mtx), 
+                        symbol = mapIds(EnsDb.Hsapiens.v86, keys = rownames(mtx), keytype = "GENEID", column = "SYMBOL"), 
+                        type = mapIds(EnsDb.Hsapiens.v86, keys = rownames(mtx), keytype = "GENEID", column = "GENEBIOTYPE"))
+gene_info %>% head
+```
+
+```{r}
+GSE193531 <- SingleCellExperiment(assay = list(counts = as(as.matrix(mtx), "CsparseMatrix")), 
+                                  rowData = gene_info, 
+                                  colData = sample_info %>% tibble::column_to_rownames("index"))
+GSE193531
+GSE193531 %>% colData
+GSE193531 %>% rowData
+saveRDS(GSE193531, "../../../data/partime/myeloma/GSE193531.rds")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

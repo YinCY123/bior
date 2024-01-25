@@ -9,28 +9,98 @@ editor: source
 #| message: false
 #| warning: false
 
+library(tidyverse)
+# library(openxlsx)
 library(xlsx)
 ```
 
 
 ```{r}
-examples <- read.xlsx("/home/yincy/git/data/partime/tidy_data/example.xlsx", 
-                      sheetIndex = 2)
-g <- read.table("/home/yincy/git/data/partime/tidy_data/G.csv", encoding = "utf-8")
+# examples <- read.xlsx("/home/yincy/git/data/partime/tidy_data/example.xlsx", 
+#                       sheetIndex = 2)
+g <- read.xlsx("/home/yincy/git/data/partime/tidy_data/G.xlsx", 
+               sheetIndex = 1)
+g %>% head
+```
+
+
+```{r}
+stations <- g$站名 %>% unique
+stations %>% str
+
+mtx_g <- matrix(0, ncol = length(stations), nrow = length(stations))
+rownames(mtx_g) <- stations
+colnames(mtx_g) <- stations
+
+mtx_g %>% dim
 ```
 
 ```{r}
-Encoding("fa\xE7ile")
+g_list <- split(g$站名, g$车次)
+g_list %>% length
+g_list[1]
+```
+
+```{r}
+for(train in names(g_list)){
+    for(station in g_list[[train]]){
+        mtx_g[station, setdiff(g_list[[train]], station)] <- 1
+    }
+}
+
+write.table(mtx_g %>% as.data.frame() %>%  tibble::rownames_to_column("车站"),
+            "/home/yincy/git/data/partime/tidy_data/formated_G.tsv",
+            sep = "\t",
+            row.names = FALSE,
+            col.names = TRUE,
+            quote = TRUE,
+            fileEncoding = "UTF-8")
+
+# write.xlsx(mtx_g, 
+#            "/home/yincy/git/data/partime/tidy_data/formated_G.xlsx", 
+#            row.names = TRUE, 
+#            col.names = TRUE)
+
+mtx_g[1:20, 1:20]
 ```
 
 
+```{r}
+d <- readxl::read_xlsx("/home/yincy/git/data/partime/tidy_data/D.xlsx", sheet = 1)
+d %>% head
+```
 
+```{r}
+stations <- d$站名 %>% unique
+mtx_d <- matrix(0, nrow = length(stations), ncol = length(stations))
+rownames(mtx_d) <- stations
+colnames(mtx_d) <- stations
+mtx_d[1:10, 1:10]
+```
 
+```{r}
+d_list <- split(d$站名, d$车次)
+d_list %>% length
+d_list[1]
+```
 
+```{r}
+for(train in names(d_list)){
+    for(station in d_list[[train]]){
+        mtx_d[station, setdiff(d_list[[train]], station)] <- 1
+    }
+}
 
+mtx_d %>% table
 
-
-
+write.table(mtx_d %>% as.data.frame() %>%  tibble::rownames_to_column("车站"),
+            "/home/yincy/git/data/partime/tidy_data/formated_D.tsv",
+            sep = "\t",
+            row.names = FALSE,
+            col.names = TRUE,
+            quote = TRUE,
+            fileEncoding = "UTF-8")
+```
 
 
 
