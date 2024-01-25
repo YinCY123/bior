@@ -14,7 +14,8 @@ library(xlsx)
 
 
 ```{r}
-examples <- read.xlsx("/home/yincy/git/data/partime/tidy_data/example.xlsx")
+examples <- read.xlsx("/home/yincy/git/data/partime/tidy_data/example.xlsx", 
+                      sheetIndex = 2)
 g <- read.table("/home/yincy/git/data/partime/tidy_data/G.csv", encoding = "utf-8")
 ```
 
