@@ -66,6 +66,12 @@ saveRDS(GSE193531, "../../../data/partime/myeloma/GSE193531.rds")
 ```
 
 
+# GSE161195
+```{r}
+dir_create("/home/yincy/git/data/partime/myeloma/GSE161195/samples")
+untar("/home/yincy/git/data/partime/myeloma/GSE161195/GSE161195_RAW.tar", 
+      exdir = "/home/yincy/git/data/partime/myeloma/GSE161195/samples/")
+```
 
 
 
