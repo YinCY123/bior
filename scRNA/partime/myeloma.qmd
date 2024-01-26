@@ -22,6 +22,7 @@ library(bluster)
 library(data.table)
 library(magrittr)
 library(EnsDb.Hsapiens.v86)
+library(BiocParallel)
 
 # dir_create("/home/yincy/git/data/partime/myeloma")
 # getGEOSuppFiles("GSE193531", baseDir = "/home/yincy/git/data/partime/myeloma/")
@@ -65,9 +66,35 @@ GSE193531 %>% rowData
 saveRDS(GSE193531, "../../../data/partime/myeloma/GSE193531.rds")
 ```
 
+```{r}
+qclusters <- quickCluster(GSE193531, 
+                          use.ranks = TRUE, 
+                          d = 50, 
+                          method = "igraph", 
+                          BPPARAM = MulticoreParam(4))
+qclusters %>% table
 
+GSE193531 <- computePooledFactors(GSE193531, clusters = qclusters)
+GSE193531 <- logNormCounts(GSE193531)
+```
 
+```{r}
+dec <- modelGeneVar(GSE193531, block = GSE193531$sample_ID)
+hvgs <- getTopHVGs(dec, var.threshold = 0)
+hvgs %>% str
+```
 
+```{r}
+cur <- GSE193531
+cur <- fastMNN(cur, 
+               auto.merge = TRUE, 
+               batch = cur$sample_ID, 
+               subset.row = hvgs, 
+               correct.all = TRUE)
+reducedDim(GSE193531, "corrected") <- reducedDim(cur, "corrected")
+assay(GSE193531, "reconstructed") <- assay(cur, "reconstructed")
+rm(cur, hvgs);gc()
+```
 
 
 
