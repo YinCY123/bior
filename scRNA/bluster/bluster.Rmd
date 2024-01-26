@@ -106,7 +106,7 @@ plotUMAP(sce, colour_by = I(mbkmeans.out))
 ```
 
 ### Self-organizing maps
-We can use self-organizing maps (SOMs) from the `kohonen` package. This allocates observations to nodes of a simple neural network; wach node is treated as a cluster.  
+We can use self-organizing maps (SOMs) from the `kohonen` package. This allocates observations to nodes of a simple neural network, each node is treated as a cluster.  
 
 ```{r}
 set.seed(1000)
@@ -115,7 +115,7 @@ plotUMAP(sce, colour_by = I(som.out))
 ```
 
 ## graph-based clustering
-We can shared or direct nearest neighor graphs and perform community detection with `igraph`. Here, the number of neighors `k` controls the resolution of the clusters.  
+We can shared or direct nearest neighbor graphs and perform community detection with `igraph`. Here, the number of neighbors `k` controls the resolution of the clusters.  
 
 ```{r}
 set.seed(101)
