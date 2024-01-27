@@ -2,6 +2,7 @@
 title: "SAM/BAM"
 author: "YinCY"
 format: html
+editor: source
 ---
 
 # SAM Header

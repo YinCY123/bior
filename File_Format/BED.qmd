@@ -2,6 +2,7 @@
 title: "BED"
 author: "YinCY"
 format: html
+editor: source
 ---
 
 The BED format consists of one line per feature, each containing 3-12 columns of data, plus optional track definition lines.

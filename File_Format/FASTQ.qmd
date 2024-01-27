@@ -2,6 +2,7 @@
 title: "FASTQ"
 author: "YinCY"
 format: html
+editor: source
 ---
 
 # FASTQ quality scheme
