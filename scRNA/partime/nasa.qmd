@@ -466,8 +466,6 @@ for(con in names(mtx_list)){
         mtx_list[[con]][down, cell] <- -1
     }
 }
-
-mtx_list %>% names
 ```
 
 ```{r}
@@ -499,7 +497,7 @@ for(con in contrs){
     rownames(st[[con]]) <- c("down", "nc", "up")
 }
 
-write.csv(st, "../../../data/partime/nasa/res/all_DEG_stats.rds")
+saveRDS(st, "../../../data/partime/nasa/res/all_DEG_stats.rds")
 ```
 
 ```{r}
@@ -513,14 +511,14 @@ anno_cols <- list(class = c("Mesenchymal Cells" = cols[1], "Immune Cells" = cols
                             "HSPCs" = cols[3], "Endothelial Cells" = cols[4]))
 
 for(con in contrs){
-    pdf(paste("../../../data/partime/nasa/res/heatmap_", con, ".pdf", sep = ""), width = 9)
+    pdf(paste("../../../data/partime/nasa/res/heatmap_", con, ".pdf", sep = ""), width = 11)
     pheatmap(mat = mtx_list[[con]], 
              show_rownames = FALSE, 
              cluster_cols = FALSE, 
              legend_breaks = c(-0.7, 0, 0.7), 
              legend_labels = c("down", "nc", "up"), 
              color = colorRampPalette(colors = c("darkblue", "grey90", "red"))(3), 
-             gaps_col = c(2, 11, 20), 
+             # gaps_col = c(2, 11, 20), 
              annotation_col = ac, 
              annotation_colors = anno_cols, 
              pagecentre = TRUE,
@@ -530,6 +528,15 @@ for(con in contrs){
 }
 ```
 
+```{r}
+all_DEG_stats <- readRDS("/home/yincy/git/data/partime/nasa/res/all_DEG_stats.rds")
+all_DEG_stats %>% names
+all_DEG_stats[["FLT_OLD_v.s._FLT_YNG"]][c(1, 3, 2), ] 
+
+for(con in names(all_DEG_stats)){
+    write.csv(all_DEG_stats[[con]][c(1, 3, 2), ], file = paste("/home/yincy/git/data/partime/nasa/res/", con, ".csv", sep = ""))
+}
+```
 
 # GO analysis
 ```{r}
@@ -538,16 +545,145 @@ for(con in contrs){
 
 library(msigdbr)
 library(fgsea)
+library(magrittr)
+library(ggplot2)
+
+all_contrast_markers <- readRDS("../../../data/partime/nasa/res/all_contrast_markers.rds")
+```
+
+```{r}
+gene_rank_list <- vector(mode = "list", length = length(all_contrast_markers))
+all_contrast_markers %>% names
+names(gene_rank_list) <- names(all_contrast_markers)
+
+to_go <- c("small pre-B.", "large pre-B.", "B cell", 
+           "NK cells", "Dendritic cells", "Monocytes", 
+           "Neutro prog.")
+```
+
+```{r}
+for(con in names(gene_rank_list)){
+    for(cell in to_go){
+        gene_rank_list[[con]][[cell]] <- setNames(sign(all_contrast_markers[[con]][[cell]][[1]]$summary.logFC) * (-log10(all_contrast_markers[[con]][[cell]][[1]]$p.value)), 
+                                                 all_contrast_markers[[con]][[cell]][[1]] %>% rownames)
+    }
+}
+
+gene_rank_list %>% sapply(names)
+```
+
+```{r}
+gene_rank_list[[1]][[1]] %>% str
 ```
 
 ```{r}
 msigdbr_collections()
 df <- msigdbr(species = "mouse", category = "C5", subcategory = "GO:BP")
+df$gs_name <- gsub("^GOBP_", "", x = df$gs_name) %>% tolower
+
 gene_sets <- split(df$ensembl_gene, df$gs_name)
 gene_sets %>% sapply(length) %>% range
-
-all_contrast_markers[[1]]
+gene_sets %>% sapply(length) %>% quantile(probs = seq(0, 1, 0.01))
 ```
 
+```{r}
+go_res <- vector(mode = "list", length = length(all_contrast_markers))
+names(go_res) <- names(all_contrast_markers)
+go_res
+```
+
+```{r}
+set.seed(101)
+for(con in names(all_contrast_markers)){
+    for(cell in to_go){
+        go_res[[con]][[cell]] <- fgsea(pathways = gene_sets, 
+                                       stats = gene_rank_list[[con]][[cell]], 
+                                       minSize = 10, 
+                                       maxSize = 500)
+    }
+}
+
+go_res$FLT_OLD_v.s._FLT_YNG$Monocytes %>% dplyr::filter(NES < 0) %>% dplyr::arrange(pval)
+go_res %>% lapply(function(x){print(x)})
+```
+
+## visulization
+```{r}
+size <- 3
+offset <- 0.2
+expand <- 15
+for(con in names(go_res)){
+    for(cell in to_go){
+        df <- rbind(go_res[[con]][[cell]] %>% dplyr::filter(NES > 0) %>% dplyr::arrange(pval) %>% head(10), 
+                    go_res[[con]][[cell]] %>% dplyr::filter(NES < 0) %>% dplyr::arrange(pval) %>% head(10))
+        
+        df <- df %>% 
+            dplyr::mutate(log10pval = ifelse(NES > 0, -log10(pval), log10(pval)), 
+                          color = ifelse(NES > 0, "tomato", "steelblue")) %>% 
+            dplyr::group_by(color) %>% 
+            dplyr::arrange(-log10pval) %>% 
+            dplyr::ungroup() %>% 
+            dplyr::mutate(y = nrow(.):1)
+        
+        # print(paste(con, "--", cell, sep = ""))
+        # print(df)
+        
+        rng <- df$log10pval %>% range
+        
+        df %>% 
+            ggplot(aes(log10pval, reorder(pathway, log10pval))) +
+            geom_bar(aes(fill = color), stat = "identity") +
+            geom_text(data = df[df$NES > 0, ], aes(x = -offset, y = y, label = pathway), hjust = 1, size = size) +
+            geom_text(data = df[df$NES < 0, ], aes(x = offset, y = y, label = pathway), hjust = 0, size = size) +
+            scale_y_discrete(name = NULL, label = NULL) +
+            scale_fill_identity() +
+            scale_x_continuous(name = "-log10 P-value",
+                               breaks = round(c(rev(seq(0, min(-expand, rng[1]), -5)), seq(5, max(expand, rng[2]), 5)), 0),
+                               labels = round(abs(c(rev(seq(0, min(-expand, rng[1]), -5)), seq(5, max(expand, rng[2]), 5))), 0), 
+                               limits = range(min(-expand, rng[1]), max(expand, rng[2]))) +
+            theme_classic() +
+            theme(axis.ticks.y = element_blank(), 
+                  panel.grid.major.y = element_line(linetype = 2, linewidth = 0.3))
+        
+        ggsave(paste("/home/yincy/git/data/partime/nasa/res/GO/", con, "_", cell, ".tiff", sep = ""), 
+               width = 12)
+    }
+}
+```
+
+
+## KEGG
+```{r}
+msigdbr_collections()
+df <- msigdbr(species = "mouse", category = "C2", subcategory = "CP:KEGG")
+df$gs_name <- gsub("^KEGG_", "", df$gs_name) %>% tolower()
+df
+gene_sets <- split(df$ensembl_gene, df$gs_name)
+gene_sets %>% sapply(length) %>% quantile(probs = seq(0, 1, 0.01))
+```
+
+```{r}
+kegg_res <- vector(mode = "list", length = length(all_contrast_markers))
+names(kegg_res) <- names(all_contrast_markers)
+```
+
+```{r}
+set.seed(101)
+for(con in names(all_contrast_markers)){
+    for(cell in to_go){
+        kegg_res[[con]][[cell]] <- fgsea(pathways = gene_sets, 
+                                       stats = gene_rank_list[[con]][[cell]], 
+                                       minSize = 10, 
+                                       maxSize = 500)
+    }
+}
+```
+
+```{r}
+library(openxlsx)
+for(con in names(kegg_res)){
+    write.xlsx(kegg_res[[con]], file = paste("/home/yincy/git/data/partime/nasa/res/GO/", con, "_kegg.xlsx", sep = ""))
+}
+```
 
 
