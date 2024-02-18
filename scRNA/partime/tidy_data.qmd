@@ -14,7 +14,6 @@ library(tidyverse)
 library(xlsx)
 ```
 
-
 ```{r}
 # examples <- read.xlsx("/home/yincy/git/data/partime/tidy_data/example.xlsx", 
 #                       sheetIndex = 2)
@@ -22,7 +21,6 @@ g <- read.xlsx("/home/yincy/git/data/partime/tidy_data/G.xlsx",
                sheetIndex = 1)
 g %>% head
 ```
-
 
 ```{r}
 stations <- g$站名 %>% unique
@@ -64,7 +62,6 @@ write.table(mtx_g %>% as.data.frame() %>%  tibble::rownames_to_column("车站"),
 mtx_g[1:20, 1:20]
 ```
 
-
 ```{r}
 d <- readxl::read_xlsx("/home/yincy/git/data/partime/tidy_data/D.xlsx", sheet = 1)
 d %>% head
@@ -101,7 +98,3 @@ write.table(mtx_d %>% as.data.frame() %>%  tibble::rownames_to_column("车站"),
             quote = TRUE,
             fileEncoding = "UTF-8")
 ```
-
-
-
-
