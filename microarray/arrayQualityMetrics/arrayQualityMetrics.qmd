@@ -1,0 +1,39 @@
+---
+title: "arrayQualityMetrics"
+author: "YinCY"
+format: html
+editor: source
+---
+
+# Introduction
+The arrayQualityMetrics package produces, through a single function call, a comprehensive HTML report of quality metrics about a microarray dataset. The quality metrics are mainly on the per array level, i.e. they can be used to assess the relative quanlity of different arrays within a dataset. Some of the metrics can also be used to diagnose batch effects, and thus the quality of the overall dataset. 
+
+The aim of the arrayQualityMetrics package is to produce information that is relevant for your decision making - not, to make the decision. It will often be applied to two, somewhat distinct, use cases: (i) assessing quality of a “raw” dataset, in order to get feedback on the experimental procedures that produced the data; (ii) assessingquality of a normalised dataset, in order to decide whether and how to use the dataset (or subsets of arrays in it) for subsequent data analysis.
+
+Different types of microarray data (one colour, two colour, Affymetrix, Illumina) are represented by different object classes in Bioconductor. The function arrayQuality Metrics will work in the same way for all of them.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

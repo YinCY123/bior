@@ -1,0 +1,173 @@
+---
+title: "oligo"
+author: "YinCY"
+format: html
+editor: source
+---
+
+# Introduction
+
+Oligo is a Bioconductor package for preprocessing oligonucleotide microarrays. It currently supports chips produced by `Affymetrix` and `NimbleGen` and uses files provided by these manufacturers in their native format. The package provides a unified framework for preprocessing and uses the data representation established by the Bioconductor project, which simplifies the interface with other packages in the project.
+
+The `oligo` package allows users to preprocess their microarray data using R. This is a convenient approach as analaysis can combine the preprocessed data with a number of tools already implemented in R, like downstream analyses and visualization.
+
+The software is designed to support large datasets and also provides parallel execution of common tasks like background subtraction, normalization and summarization.
+
+# Importing Data
+
+## Affymetrix Data
+
+The `CEL` files can be in either binary or text formats. Regardless the internal structure of the files, `oligo` can import them transparently via the command `read.celfiles`.
+
+```{r}
+#| message: false
+#| warning: false
+#| eval: false
+
+library(fs)
+library(oligo)
+
+celfiles <- dir_ls(path = "path_to_cel_files", type = "file", regexp = "*.CEL$")
+rawData <- read.celfiles(celfiles)
+```
+
+## NimbleGen Data
+
+```{r}
+xysfiles <- dir_ls(path = "path_to_XYS", type = "file", regexp = "*.xys$")
+rawData <- read.xysfiles(xysfiles)
+```
+
+# Containers for raw data
+
+oligo uses different containers to store data at the feature-level. This approach improves the flexibility of the package as it allows any method to behave differently depending on the type of array from which the data were obtained. As a consequence, the user benefits from the simplicity of the software, as algorithms should be able to handle data appropriately independent of their origin.
+
+| **Type**            | **Array**  |
+|:--------------------|:-----------|
+| `ExonFeatureSet`    | Exon ST    |
+| `ExpressionFeature` | Expression |
+| `GeneFeatureSet`    | Gene ST    |
+| `TilingFeatureSet`  | Tiling     |
+| `SnpFeatureSet`     | SNP        |
+
+One simple example is the RMA algorithm. When it is applied to expression data, the software software uses the usual definition of sets of features (often referred to as probesets) to group features together for summarization. If the same method is applied to `Affymetrix` exon arrays, the software is able to identify that and use the definition of meta-probesets given by `Affymetrix` to provide summaries at the transcript level, if such behavior is requested.
+
+# Visualization and QC Tools
+```{r}
+#| warning: false
+#| message: false
+
+library(magrittr)
+library(oligoData)
+data("affyExpressionFS")
+```
+
+This dataset is comprised of 59 samples on expression arrays provided by `Affymetrix`. This dataset is the Human Genome U95 Data Set, used to validade preprocessing algorithms, as it contains genes that were spiked-in in known concentrations. Below we create a table containing sample information, using descriptors found on the `Affymetrix` website.
+
+The user must pay attention to the fact that the objects handled by `oligo` always carry information about channels. This information must be reported on a metadata object, which is represented below by the metadata `data.frame`. Because `Affymetrix` expression arrays are one-color devices and the information we provide is valid for this channel, we fill the channel column with the value `ALL`.
+
+```{r}
+affyExpressionFS
+
+sns <- sampleNames(affyExpressionFS)
+sns %>% str
+sns <- gsub("1521", "1251", sns)
+
+# removing the 'r' (repeat) flag from the name
+sns <- gsub("r\\.CEL$", "\\.CEL", sns)
+wafer <- substr(sns, 1, 4)
+experiment <- substr(sns, 5, 5)
+tmp <- substr(sns, 6, 7)
+complex <- rep("+", length(tmp))
+complex[tmp == "00"] <- "-"
+info <- data.frame(wafer = wafer, 
+                   experiment = experiment, 
+                   complex = complex)
+rownames(info) <- sns
+
+metadata <- data.frame(labelDescription = c("wafer", "experiment", "complex"), 
+                       channel = factor("ALL"))
+sampleNames(affyExpressionFS) <- sns
+
+pd <- new("AnnotatedDataFrame", data = info, varMetadata = metadata)
+phenoData(affyExpressionFS) <- pd
+affyExpressionFS
+```
+
+## Pseudo-image Plots
+```{r}
+par(mfrow = c(1, 2))
+oligo::image(affyExpressionFS, which = 1, transfo = log2)
+oligo::image(affyExpressionFS, which = 1, transfo = rank)
+```
+
+## MA plots
+Plotting log-ratios, M, versus average log-intensities, A, is a strategy to visualize the relationship
+between these two variables. Both M and A are computed as a function of a reference.
+
+```{r}
+x1 <- c(2.8, 4)
+y1 <- c(-1, 1)
+MAplot(affyExpressionFS[, 1:3], pairs = TRUE, ylim = y1, xlim = x1)
+```
+
+## Boxplots
+```{r}
+par(mfrow = c(1, 2))
+boxplot(x = affyExpressionFS, 
+        which = "pm", 
+        transfo = log2)
+
+boxplot(x = affyExpressionFS, 
+        which = "pm", 
+        transfo = identity)
+```
+
+## Density plots
+```{r}
+hist(affyExpressionFS)
+```
+
+## Accessing Probe Sequences
+The annotation packages used by `oligo` store feature sequences. This is done through instances of `DNAStringSet` objects implemented in the `Biostrings` package. The sequences for PM probes can be easily accessed via the `pmSequence` function. 
+
+```{r}
+pmSeq <- pmSequence(affyExpressionFS)
+```
+
+```{r}
+affyExpressionFS %>% pm
+```
+
+```{r}
+coefs <- getAffinitySplineCoefficients(pm(affyExpressionFS) %>% log2, pmSeq)
+coefs %>% class
+coefs %>% dim
+coefs[, 1:10]
+getBaseProfile(coefs = coefs, plot = TRUE)
+```
+
+
+# Preprocessing
+## Background Subtraction
+```{r}
+backgroundCorrectionMethods()
+```
+
+```{r}
+bgData1 <- backgroundCorrect(affyExpressionFS, method = "rma")
+bgData2 <- backgroundCorrect(affyExpressionFS, method = "mas")
+```
+
+```{r}
+boxplot(bgData1)
+```
+
+## Normalization
+```{r}
+normData <- normalize(bgData1)
+```
+
+
+
+
