@@ -1,0 +1,168 @@
+---
+title: "clustree"
+author: "YinCY"
+format: html
+editor: source
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+library(clustree)
+library(magrittr)
+```
+
+To build a clustering tree we need to look at how cells move as the clustering resolution is increased. Each cluster forms a node in the tree and edges are constructed by considering the cells in a cluster at a lower resolution (say k=2
+) that end up in a cluster at the next highest resolution (say k=3
+). By connecting clusters in this way we can see how clusters are related to each other, which are clearly distinct and which are unstable. Extra information about the cells in each node can also be overlaid in order to help make the decision about which resolution to use.
+
+# the data
+The nba_clusts dataset consists of some basic statistics from 150 NBA players in 2017, 50 from each of three positions (Center, Point Guard and Shooting Guards). 
+
+```{r}
+data("nba_clusts")
+nba_clusts
+```
+
+# plotting a tree
+This clustering information is all we need to build a clustering tree. Each column must consist of numeric values indicating which cluster each sample has been assigned to. To plot the tree we just pass this information to the clustree function. We also need to specify a prefix string to indicate which columns contain the clusterings.
+
+```{r}
+clustree(nba_clusts, prefix = "K")
+```
+
+We can see that one cluster is very distinct and does not change with the value of k
+. This is the Center players which are very different to the other positions. On the other side of the tree we see a single cluster that splits into the two clusters we would expect to see. After this the tree becomes messier and there are node with multiple incoming edges. This is a good indication that we have over clustered the data.
+
+# controlling aesthetics
+```{r}
+clustree(x = nba_clusts,
+         prefix = "K", 
+         node_color = "purple", 
+         node_size = 10, 
+         node_alpha = 0.8)
+```
+
+We can also link these aesthetics to other information we have about the samples. All the additional columns in the dataset are available to be added as attributes to the nodes in our tree. 
+
+```{r}
+clustree(x = nba_clusts, 
+         prefix = "K", 
+         node_colour = "ReboundPct", 
+         node_colour_aggr = "mean")
+```
+
+# SC3 stability index
+Apart from information in the dataset itself it can useful to display measures of clustering quality as aesthetics. The stability index from the `{SC3}` package (Kiselev et al. 2017) measures the stability of clusters across resolutions and is automatically calculated when a clustering tree is built.
+
+```{r}
+clustree(x = nba_clusts, 
+         prefix = "K", 
+         node_colour = "sc3_stability")
+```
+
+# layout
+```{r}
+clustree(x = nba_clusts, 
+         prefix = "K", 
+         layout = "sugiyama")
+```
+
+
+# adding labels
+```{r}
+clustree(x = nba_clusts, 
+         prefix = "K", 
+         node_label = "AssistPct", 
+         node_label_aggr = "max")
+```
+
+```{r}
+label_position <- function(labels){
+    if(length(unique(labels)) == 1){
+        position <- as.character(unique(labels))
+    }else{
+        position <- "mixed"
+    }
+    return(position)
+}
+
+clustree(x = nba_clusts, 
+         prefix = "K", 
+         node_label = "Position", 
+         node_label_aggr = "label_position")
+```
+
+# Clustering trees for scRNA-seq data
+## `SingleCellExperiment` object
+```{r}
+#| message: false
+library(SingleCellExperiment)
+sc_example$counts[1:10, 1:10]
+sc_example$logcounts[1:10, 1:10]
+sc_example$sc3_clusters %>% head
+sc_example$tsne %>% head
+
+sce <- SingleCellExperiment(assays = list(counts = sc_example$counts, 
+                                          logcounts = sc_example$logcounts), 
+                            colData = sc_example$sc3_clusters, 
+                            reducedDims = SimpleList(TSNE = sc_example$tsne))
+sce
+```
+
+```{r}
+clustree(x = sce, 
+         prefix = "sc3_", 
+         suffix = "_clusters")
+```
+
+## Seurat object
+```{r}
+#| message: false
+library(Seurat)
+library(Matrix)
+
+seurat <- CreateSeuratObject(counts = as(sc_example$counts, "CsparseMatrix"), 
+                             data = as(sc_example$logcounts, "CsparseMatrix"), 
+                             meta.data = sc_example$seurat_clusters)
+seurat[["TSNE"]] <- CreateDimReducObject(embeddings = sc_example$tsne, 
+                                         k = "tSNE_")
+seurat[[]]
+```
+
+```{r}
+clustree(seurat, 
+         prefix = "res.")
+```
+
+
+## Using genes as aesthetics
+```{r}
+clustree(x = seurat, 
+         prefix = "res.",
+         node_colour = "Gene730", 
+         node_colour_aggr = "median")
+```
+
+# Overlaying clustering trees
+```{r}
+clustree_overlay(x = nba_clusts, prefix = "K", x_value = "PC1", y_value = "PC2")
+```
+
+The easiest way to understand this plot is to imagine that you are looking down on the clustering tree from above. The x and y axes are the chosen dimensions in the data and the z axis is the clustering resolution. Each cluster node is placed at the mean x and y values of the samples it contains. We can also see points corresponding to the individual samples.
+
+# Modifying appearance
+The `clustree()` function returns a `ggplot2` object which can be modified using functions in the `ggplot2` or `ggraph` packages. 
+
+```{r}
+#| message: false
+
+clustree(x = nba_clusts, prefix = "K") +
+    scale_color_brewer(palette = "Set1") +
+    scale_edge_color_continuous(low = "blue", high = "red")
+```
+
+
+
+

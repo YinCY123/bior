@@ -1,0 +1,146 @@
+---
+title: "GEOquery"
+author: "YinCY"
+format: html
+editor: source
+---
+
+# Overview of GEO
+The NCBI Gene Expression Omnibus (GEO) serves as a public repository for a wide range of high-throughput experimental data. These data include single and dual channel microarray-based experiments measuring mRNA, genomic DNA, and protein abundance, as well as non-array techniques such as serial analysis of gene expression (SAGE), mass spectrometry proteomic data, and high-throughput sequencing data.
+
+At the most basic level of organization of GEO, there are four basic entity types. The first three (Sample, Platform, and Series) are supplied by users; the fourth, the dataset, is compiled and curated by GEO staff from the user-submitted data.
+
+## Platforms
+A Platform record describes the list of elements on the array (e.g., cDNAs, oligonucleotide probesets, ORFs, antibodies) or the list of elements that may be detected and quantified in that experiment (e.g., SAGE tags, peptides). Each Platform record is assigned a unique and stable GEO accession number (GPLxxx). A Platform may reference many Samples that have been submitted by multiple submitters.
+
+## Samples
+A Sample record describes the conditions under which an individual Sample was handled, the manipulations it underwent, and the abundance measurement of each element derived from it. Each Sample record is assigned a unique and stable GEO accession number (GSMxxx). A Sample entity must reference only one Platform and may be included in multiple Series.
+
+## Series
+A Series record defines a set of related Samples considered to be part of a group, how the Samples are related, and if and how they are ordered. A Series provides a focal point and description of the experiment as a whole. Series records may also contain tables describing extracted data, summary conclusions, or analyses. Each Series record is assigned a unique and stable GEO accession number (GSExxx). Series records are available in a couple of formats which are handled by GEOquery independently. The smaller and new GSEMatrix files are quite fast to parse; a simple flag is used by GEOquery to choose to use GSEMatrix files.
+
+## Datasets
+GEO DataSets (GDSxxx) are curated sets of GEO Sample data. A GDS record represents a collection of biologically and statistically comparable GEO Samples and forms the basis of GEO’s suite of data display and analysis tools. Samples within a GDS refer to the same Platform, that is, they share a common set of probe elements. Value measurements for each Sample within a GDS are assumed to be calculated in an equivalent manner, that is, considerations such as background processing and normalization are consistent across the dataset. Information reflecting experimental design is provided through GDS subsets.
+
+# Getting Started using GEOquery
+Getting data from GEO is really quite easy. There is only one command that is needed, getGEO. This one function interprets its input to determine how to get the data from GEO and then parse the data into useful R data structures.
+
+```{r}
+#| message: false
+#| warning: false
+
+library(GEOquery)
+library(magrittr)
+
+gds <- getGEO(GEO = "GDS507")
+gds
+
+gsm <- getGEO(GEO = "GSM11805")
+gsm
+```
+
+
+# GEOquery Data Structures
+The GEOquery data structures really come in two forms. The first, comprising GDS, GPL, and GSM all behave similarly and accessors have similar effects on each. The fourth GEOquery data structure, GSE is a composite data type made up of a combination of GSM and GPL objects. I will explain the first three together first.
+
+## The GDS, GSM, and GPL classes
+Each of these classes is comprised of a metadata header (taken nearly verbatim from the SOFT format header) and a GEODataTable. The GEODataTable has two simple parts, a Columns part which describes the column headers on the Table part. There is also a `show` method for each class.  
+
+```{r}
+gsm %>% Meta() %>% head
+```
+
+```{r}
+gsm %>% Table()
+```
+
+```{r}
+gsm %>% Columns()
+```
+
+```{r}
+gds %>% Columns() %>% head
+```
+
+```{r}
+gds %>% Table()
+```
+
+## The GSE class
+The GSE entity is the most confusing of the GEO entities. A GSE entry can represent an arbitrary number of samples run on an arbitrary number of platforms. The GSE class has a metadata section, just like the other classes. However, it doesn’t have a `GEODataTable`. Instead, it contains two lists, accessible using the `GPLList` and `GSMList` methods, that are each lists of GPL and GSM objects.
+
+```{r}
+gse <- getGEO(GEO = "GSE781", GSEMatrix = FALSE)
+gse %>% Meta %>% head
+```
+
+```{r}
+GSMList(gse) %>% names
+GSMList(gse)[[1]] %>% Table
+```
+
+```{r}
+GPLList(gse) %>% names
+```
+
+# Converting to Bioconductor ExpressionSets and limma MALists
+GEO datasets are (unlike some of the other GEO entities), quite similar to the limma data structure MAList and to the Biobase data structure ExpressionSet. Therefore, there are two functions, GDS2MA and GDS2eSet that accomplish that task.
+
+## Getting GSE Series Matrix files as an ExperssionSet
+GEO Series are collections of related experiments. In addition to being available as SOFT format files, which are quite large, NCBI GEO has prepared a simpler format file based on tab-delimited text. The getGEO function can handle this format and will parse very large GSEs quite quickly. The data structure returned from this parsing is a list of ExpressionSets.
+
+```{r}
+gse2553 <- getGEO(GEO = "GSE2553", GSEMatrix = TRUE)
+gse2553
+```
+
+```{r}
+gse2553[[1]] %>% phenoData %>% pData
+```
+
+
+## Converting GDSto an ExpressionSet
+```{r}
+eset <- GDS2eSet(GDS = gds, do.log2 = TRUE)
+eset
+```
+
+```{r}
+eset %>% pData %>% head
+```
+
+## Converting GDS to an MAList
+```{r}
+GDS2MA(GDS = gds) %>% class
+```
+
+## Converting GSE to an ExpressionSet
+
+
+
+
+# Accessing Raw Data from GEO
+NCBI GEO accepts (but has not always required) raw data such as .CEL files, .CDF files, images, etc. Sometimes, it is useful to get quick access to such data. A single function, getGEOSuppFiles, can take as an argument a GEO accession and will download all the raw data associate with that accession. By default, the function will create a directory in the current working directory to store the raw data for the chosen GEO accession. Combining a simple sapply statement or other loop structure with getGEOSuppFiles makes for a very simple way to get gobs of raw data quickly and easily without needing to know the specifics of GEO raw data URLs.
+
+# Use Cases
+## Getting all Series Records for a Given Platform
+For data mining purposes, it is sometimes useful to be able to pull all the GSE records for a given platform. GEOquery makes this very easy, but a little bit of knowledge of the GPL record is necessary to get started. The GPL record contains both the GSE and GSM accessions that reference it.
+
+```{r}
+gpl97 <- getGEO(GEO = "GPL97")
+
+gpl97 %>% Meta() %>% names
+gpl97 %>% Meta() %>% .$title
+```
+
+```{r}
+gpl97 %>% Meta() %>% .$series_id
+```
+
+```{r}
+gpl97 %>% Meta %>% .$sample_id %>% str
+```
+
+
+
+
