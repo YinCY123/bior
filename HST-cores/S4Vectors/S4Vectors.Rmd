@@ -22,8 +22,7 @@ All vector-like objects have three main properties:
 
 The main functions for these three operations are `length`, `[`, and `c`.   
 
-Some vector-like objects can also have a list-like semantic, which means that individual
-elements can be extracted with `[[`.  
+Some vector-like objects can also have a list-like semantic, which means that individual elements can be extracted with `[[`.  
 
 In `S4Vectors` and many other Bioconductor packages, vector-like and list-like objects derive from the `Vector` and `List` virtual classes, respectively. **Note that List is a subclass of Vector**.  
 
