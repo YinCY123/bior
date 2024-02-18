@@ -10,6 +10,7 @@ editor: source
 In this article we introduce a complete workflow for a typical (Affymetrix) microarray analysis. Data import, pre-processing, differential expression and enrichment analysis are discussed.
 
 The data set used is from a paper studying the differences in gene expression in inflamed and non-inflamed tissue. 14 patients suffering from Ulcerative colitis (UC) and 15 patients with Crohn’s disease (CD) were tested, and from each patient inflamed and non-inflamed colonic mucosa tissue was obtained via a biopsy. This is a typical clinical data set consisting of 58 arrays in total. Our aim is to analyze differential expression (DE) between the tissues. Our results show a substantial overlap with the results of the original paper.
+
 ```{r}
 #| message: false
 #| warning: false
@@ -33,7 +34,6 @@ library(janitor)
 library(fs)
 ```
 
-
 # Import data
 ```{r}
 sdrf <- read.table("/home/yincy/git/data/zhuyi/dermatomyositis/E-MTAB-2967/E-MTAB-2967.sdrf.txt", 
@@ -46,7 +46,7 @@ sdrf
 ```
 
 ```{r}
-files <- list.celfiles("/home/yincy/git/data/zhuyi/dermatomyositis/E-MTAB-2967", 
+files <- list.celfiles("/home/yincy/git/data/zhuyi/dermatomyositis/E-MTAB-2967/data", 
                        full.names = TRUE)
 files %>% str
 
@@ -69,7 +69,6 @@ pData(es) <- pData(es)[, c("source_name", "characteristics_individual", "factor_
 pData(es)
 ```
 
-
 # quality control
 ```{r}
 es %>% exprs %>% .[1:5, 1:5]
@@ -90,7 +89,8 @@ df
 ```
 
 ```{r}
-df %>% ggplot(aes(PC1, PC2)) +
+df %>% 
+  ggplot(aes(PC1, PC2)) +
   geom_point(aes(shape = disease, color = phenotype)) +
   ggtitle("PCA plot of the log-transformed raw expression data") +
   xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
@@ -106,6 +106,10 @@ oligo::boxplot(raw_data,
 ```
 
 ```{r}
+oligo::hist(raw_data, target = "core", which = "pm")
+```
+
+```{r}
 arrayQualityMetrics::arrayQualityMetrics(es, 
                                          outdir = "./", 
                                          force = TRUE, 
@@ -113,39 +117,32 @@ arrayQualityMetrics::arrayQualityMetrics(es,
                                          intgroup = c("factor_value_disease"))
 ```
 
-
 # Background adjustment, calibration, summarization and annotation
 ## Bacground adjustment
 After the initial import and quality assessment, the next step in processing of microarray data is background adjustment. This is essential because a proportion of the measured probe intensities are due to non-specific hybridization and the noise in the optical detection system. Therefore, observed intensities need to be adjusted to give accurate measurements of specific hybridization.
 
-
 ## Across-array normalization (calibration)
 Normalization across arrays is needed in order to be able to compare measurements from different array hybridizations due to many obscuring sources of variation. These include different efficiencies of reverse transcription, labeling or hybridization reactions, physical problems with the arrays, reagent batch effects, and laboratory conditions.
 
-
 ## Summarization
-After normalization, summarization is necessary to be done because on the Affymetrix platform, transcripts are represented by multiple probes, that is multiple locations on the array. For each gene, the background-adjusted and normalized intensities of all probes need to be summarized into one quantity that estimates an amount proportional to the amount of RNA transcript.
+After normalization, summarization is necessary to be done because on the `Affymetrix` platform, transcripts are represented by multiple probes, that is multiple locations on the array. For each gene, the background-adjusted and normalized intensities of all probes need to be summarized into one quantity that estimates an amount proportional to the amount of RNA transcript.
 
 After the summarization step, the summarized data can be annotated with various information, e.g. gene symbols and ENSEMBL gene identifiers. There is an annotation database available from Bioconductor for our platform, namely the package `hugene10sttranscriptcluster.db`.
-
 
 ## Old nand new 'probesets' of Affymetrix microarrays
 Traditionally, Affymetrix arrays (the so-called 3’ IVT arrays) were probeset based: a certain fixed group of probes were part of a probeset which represented a certain gene or transcript (note however, that a gene can be represented by multiple probesets).
 
 The more recent “Gene” and “Exon” Affymetrix arrays are exon based and hence there are two levels of summarization to get to the gene level. The “probeset” summarization leads to the exon level. The gene / transcript level is given by “transcript clusters”. Hence, the appropriate annotation package for our chip type is called `hugene10sttranscriptcluster.db`.
 
-“Gene” arrays were created as affordable versions of the “Exon” arrays, by only taking the “good” probes from the Exon array. Initially on the Exon array, at least four probes were part of one “Exon”. With the thinned out “Gene” array, many probesets were made up of three or fewer probes. Single probesets are indicated by single colours; probesets representing one gene are indicated by a colour shade: e.g., all yellow probes belong to one Exon, and all yellow, orange and red probesets belong to one gene:
-
+“Gene” arrays were created as affordable versions of the “Exon” arrays, by only taking the “good” probes from the Exon array. Initially on the Exon array, at least four probes were part of one “Exon”. With the thinned out “Gene” array, many probesets were made up of three or fewer probes. Single probesets are indicated by single colours; probesets representing one gene are indicated by a colour shade: e.g., all yellow probes belong to one Exon, and all yellow, orange and red probesets belong to one gene.
 
 ## One-step preprocessing in oligo
 The package `oligo` allows us to perform background correction, normalization and summarization in one single step using a deconvolution method for background correction, quantile normalization and RMA (robust multichip average) algorithm for summarization.
 
 This series of steps as a whole is commonly referred to as RMA algorithm, although strictly speaking RMA is merely a summarization method.
 
-
 # Relative log expression data quality analysis
 Before calibrating and evaluating the data, we want to perform another quality control procedure, namely Relative log expression (RLE), as described in the article by Gandolfo. To this end, we first perform an RMA without prior normalization.
-
 
 ## Computing the RLE
 The RLE is performed by calculating the median log2 intensity of every transcript across all arrays.
@@ -156,13 +153,26 @@ Note that we do not have to apply the log2 manually, as the output data of the R
 
 We then substract this transcript median intensity from every transcript intensity via the `sweep` function.
 
-
 # RMA calibration of the data
 Now, we can apply the full RMA algorithm to our data in order to background-correct, normalize and summarize.
 
 ```{r}
 palmieri_eset_norm <- oligo::rma(raw_data, target = "core")
 ```
+
+## Quality assessment of the calibrated data
+```{r}
+expr_palmieri <- palmieri_eset_norm %>% exprs
+pcas <- prcomp(t(expr_palmieri), scale = FALSE)
+
+percentVar <- round(100 * pcas$sdev^2 / sum(pcas$sdev^2), digits = 1)
+df <- data.frame(
+  pc1 <- pcas$x[, 1], 
+  pc2 <- pcas$x[, 2], 
+  disease = pData(palmieri_eset_norm)$,
+)
+```
+
 
 
 # Filtering based on intensity
