@@ -577,7 +577,7 @@ gene_rank_list[[1]][[1]] %>% str
 ```
 
 ```{r}
-msigdbr_collections()
+# msigdbr_collections()
 df <- msigdbr(species = "mouse", category = "C5", subcategory = "GO:BP")
 df$gs_name <- gsub("^GOBP_", "", x = df$gs_name) %>% tolower
 
@@ -603,8 +603,12 @@ for(con in names(all_contrast_markers)){
     }
 }
 
-go_res$FLT_OLD_v.s._FLT_YNG$Monocytes %>% dplyr::filter(NES < 0) %>% dplyr::arrange(pval)
-go_res %>% lapply(function(x){print(x)})
+# go_res$FLT_OLD_v.s._FLT_YNG$Monocytes %>% dplyr::filter(NES < 0) %>% dplyr::arrange(pval)
+
+library(openxlsx)
+for(con in names(go_res)){
+    write.xlsx(go_res[[con]], file = paste("/home/yincy/git/data/partime/nasa/res/GO/", con, "_GO.xlsx", sep = ""))
+}
 ```
 
 ## visulization
@@ -645,7 +649,7 @@ for(con in names(go_res)){
             theme(axis.ticks.y = element_blank(), 
                   panel.grid.major.y = element_line(linetype = 2, linewidth = 0.3))
         
-        ggsave(paste("/home/yincy/git/data/partime/nasa/res/GO/", con, "_", cell, ".tiff", sep = ""), 
+        ggsave(paste("/home/yincy/git/data/partime/nasa/res/GO/", con, "_", cell, "_GO.tiff", sep = ""), 
                width = 12)
     }
 }
@@ -682,7 +686,7 @@ for(con in names(all_contrast_markers)){
 ```{r}
 library(openxlsx)
 for(con in names(kegg_res)){
-    write.xlsx(kegg_res[[con]], file = paste("/home/yincy/git/data/partime/nasa/res/GO/", con, "_kegg.xlsx", sep = ""))
+    write.xlsx(kegg_res[[con]], file = paste("/home/yincy/git/data/partime/nasa/res/KEGG/", con, "_kegg.xlsx", sep = ""))
 }
 ```
 
