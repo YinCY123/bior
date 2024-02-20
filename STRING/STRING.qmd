@@ -1,0 +1,82 @@
+---
+title: "STRING"
+author: "YinCY"
+format: html
+---
+
+# Introduction
+STRING (https://www.string-db.org) is a database of known and predicted protein-protein interactions. The interactions include direct (physical) and indirect (functional) associations. The database contains information from numerous sources, including experimental repositories, computational prediction methods and public text collections. Each interaction is associated with a combined confidence score that integrates the various evidences.
+
+In the STRINGdb R package we use the new ReferenceClasses of R (search for "ReferenceClasses" in the R documentation.). Besides we make use of the iGraph package (http://igraph.sourceforge.net) as a data structure to represent our protein-protein interaction network.
+
+```{r}
+#| message: false
+#| warning: false
+
+library(STRINGdb)
+library(magrittr)
+
+string_db <- STRINGdb$new(version = "11.5", 
+                          species = 9606, 
+                          score_threshold = 200, 
+                          network_type = "full", 
+                          input_directory = "")
+```
+
+As it has been shown in the above commands, you start instantiating the `STRINGdb` reference class. In the constructor of the class you can also define the STRING version to be used and a threshold for the combined scores of the interactions, such that any interaction below that threshold is not loaded in the object (by default the score threshold is set to 400).
+
+You can also specify the network type "functional" for full functional STRING network or "physical" for physical subnetwork, which link only the proteins which share a physical complex. Besides, if you specify a local directory to the parameter input-directory, the database files will downloaded into this directory and most of the methods can be used off-line. Otherwise, the database file will be saved and cached in a temporary directory that will be cleaned automatically when the R session is closed.
+
+For a better understanding of the package two other commands can be useful.
+
+```{r}
+# to list all the methods available
+STRINGdb$methods() %>% head(10)
+```
+
+```{r}
+# to visualize their documentation
+STRINGdb$help("get_graph")
+```
+
+For all the methods that we are going to explain below, you can always use the help function in order to get additional information/parameters with respect to those explained in thsi guide.
+
+As an example, we use the analyzed data of a microarray study taken from GEO(GSE9008). This study investigates the activity of Reveratrol, a natural phytoestrogen found in red wine and a variety of plants, in A549 lung cancer cells. Microarray gene expression profiling after 48 hours exposure to Revestarol has been performed and compared to a control composed by A549 lung cancer cells threated only with ethanol. This data is already analyzed for differetial expression using the limma package: the genes are sorted by fdr corrected pvalues and the log fold change of the differential expression is also reported in the table.
+
+```{r}
+data("diff_exp_example1")
+diff_exp_example1
+```
+
+
+
+```{r}
+library(babelgene)
+species()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
