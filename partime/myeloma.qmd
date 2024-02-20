@@ -78,18 +78,10 @@ GSE193531 <- computePooledFactors(GSE193531, clusters = qclusters)
 GSE193531 <- logNormCounts(GSE193531)
 ```
 
-<<<<<<< HEAD
 ```{r}
 dec <- modelGeneVar(GSE193531, block = GSE193531$sample_ID)
 hvgs <- getTopHVGs(dec, var.threshold = 0)
 hvgs %>% str
-=======
-# GSE161195
-```{r}
-dir_create("/home/yincy/git/data/partime/myeloma/GSE161195/samples")
-untar("/home/yincy/git/data/partime/myeloma/GSE161195/GSE161195_RAW.tar", 
-      exdir = "/home/yincy/git/data/partime/myeloma/GSE161195/samples/")
->>>>>>> 9f160b36c23f7a3f630d71d998e82007b3d66d59
 ```
 
 ```{r}
@@ -104,6 +96,10 @@ assay(GSE193531, "reconstructed") <- assay(cur, "reconstructed")
 rm(cur, hvgs);gc()
 ```
 
+```{r}
+GSE193531 <- runTSNE(GSE193531, dimred = "corrected")
+saveRDS(GSE193531, "/home/yincy/git/data/partime/myeloma/GSE193531.rds")
+```
 
 
 
