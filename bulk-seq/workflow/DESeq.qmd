@@ -1,25 +1,120 @@
 ---
-title: "workflow"
+title: "DESeq"
 author: "YinCY"
 format: html
+editor: source
 ---
 
 ```{r}
 #| message: false
 #| warning: false
 #| label: loading required packages
+
 library(DESeq2)
 library(magrittr)
 ```
 
+# Introduction
+A basic task in the analysis of count data from RNA-seq is the detection of differentially expressed genes. The count data are presented as a table which reports, for each sample, the number of sequence fragments that have been assigned to each gene. Analogous data also arise for other assay types, including comparative ChIP-Seq, HiC, shRNA screening, and mass spectrometry. An important analysis question is the quantification and statistical inference of systematic changes between conditions, as compared to within-condition variability. The package `DESeq2` provides methods to test for differential expression by use of negative binomial generalized linear models; the estimates of dispersion and logarithmic fold changes incorporate data-driven prior distributions.
 
-# starting from SummarizedExperiment
+# Quick start
+This code chunk assumes that you have a count matrix called `cts` and a table of sample information called `coldata`. The `design` indicates how to model the samples, here, that we want to measure the effect of the condition, controlling for batch differences. The two factor variables `batch` and `condition` should be columns of `coldata`.
+```{r}
+#| eval: false
+dds <- DESeqDataSetFromMatrix(countData = cts, 
+                              colData = coldata, 
+                              design = ~ batch + condition)
+
+dds <- DESeq(object = dds)
+res <- results(object = dds, name = "condition_trt_vs_untrt")
+res <- lfcShrink(dds = dds, coef = "condition_trt_vs_untrt", type = "apeglm")
+```
+
+# Input data
+## Why un-normalized counts?
+As input, the `DESeq2` package expects count data as obtained, e.g., from RNA-seq or another high-throughput sequencing experiment, in the form of a matrix of integer values. The value in the i-th row and the j-th column of the matrix tells how many reads can be assigned to gene i in sample j. Analogously, for other types of assays, the rows of the matrix might correspond e.g. to binding regions (with ChIP-Seq) or peptide sequences (with quantitative mass spectrometry). 
+
+The values in the matrix should be un-normalized counts or estimated counts of sequencing reads (for single-end RNA-seq) or fragments (for paired-end RNA-seq). It is important to provide count matrices as input for `DESeq2`’s statistical model (Love, Huber, and Anders 2014) to hold, as only the count values allow assessing the measurement precision correctly. The `DESeq2` model internally corrects for library size, so transformed or normalized values such as counts scaled by library size should not be used as input.
+
+## The DESeqDataSet
+The object class used by the `DESeq2` package to store the read counts and the intermediate estimated quantities during statistical analysis is the DESeqDataSet, which will usually be represented in the code here as an object dds.
+
+A technical detail is that the `DESeqDataSet` class extends the `RangedSummarizedExperiment` class of the `SummarizedExperiment` package. The “Ranged” part refers to the fact that the rows of the assay data (here, the counts) can be associated with genomic ranges (the exons of genes). This association facilitates downstream exploration of results, making use of other Bioconductor packages’ range-based functionality (e.g. find the closest ChIP-seq peaks to the differentially expressed genes).
+
+A `DESeqDataSet` object must have an associated design formula. The design formula expresses the variables which will be used in modeling. The formula should be a tilde (~) followed by the variables with plus signs between them (it will be coerced into an formula if it is not already). The design can be changed later, however then all differential analysis steps should be repeated, as the design formula is used to estimate the dispersions and to estimate the log2 fold changes of the model.
+
+Note: In order to benefit from the default settings of the package, you should put the variable of interest at the end of the formula and make sure the control level is the first level.
+
+We will now show 4 ways of constructing a DESeqDataSet, depending on what pipeline was used upstream of DESeq2 to generated counts or estimated counts:
+
+1. from transcript abundance files and tximport
+2. from a count matrix
+3. from htseq-count files
+4. from a `SummarizedExperiment` object
+
+### transcript abundance files and tximport / tximeta
+
+### Count matrix input
+To demonstate the use of `DESeqDataSetFromMatrix`, we will read in count data from the `pasilla` package. We read in a count matrix, which we will name `cts`, and the sample information table, which we will name `coldata`.
+
 ```{r}
 #| message: false
+#| warning: false
+
+library(pasilla)
+
+pasCts <- system.file("extdata", 
+                      "pasilla_gene_counts.tsv", 
+                      package = "pasilla", 
+                      mustWork = TRUE)
+pasAnno <- system.file("extdata", 
+                       "pasilla_sample_annotation.csv", 
+                       package = "pasilla", 
+                       mustWork = TRUE)
+
+cts <- as.matrix(read.csv(pasCts, sep = "\t", row.names = "gene_id"))
+cts[1:10, ]
+
+coldata <- read.csv(pasAnno, row.names = 1)
+coldata <- coldata[, c("condition", "type")]
+coldata$condition <- factor(coldata$condition)
+coldata$type <- factor(coldata$type)
+```
+
+It is absolutely critical that the columns of the count matrix and the rows of the column data (information about samples) are in the same order. DESeq2 will not make guesses as to which column of the count matrix belongs to which row of the column data, these must be provided to DESeq2 already in consistent order.
+
+```{r}
+rownames(coldata) <- gsub("fb$", "", rownames(coldata))
+
+# match sample order
+cts <- cts[, rownames(coldata)]
+cts[1:10, ]
+
+all(colnames(cts) == rownames(coldata))
+```
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = cts, 
+                              colData = coldata, 
+                              design = ~ condition)
+dds
+```
+
+```{r}
+featuredata <- data.frame(gene = rownames(cts), 
+                          row.names = rownames(cts))
+featuredata
+mcols(dds) <- DataFrame(mcols(dds), featuredata)
+```
+
+
+## starting from SummarizedExperiment
+```{r}
+#| message: false
+
 data("airway", package = "airway")
 airway
 ```
-
 
 ```{r}
 dds <- DESeqDataSet(se = airway, 
@@ -27,13 +122,11 @@ dds <- DESeqDataSet(se = airway,
 dds
 ```
 
-
 # starting from count matrices
 ```{r}
 countdata <- round(assay(airway, 1))
 countdata %>% head
 ```
-
 
 ```{r}
 coldata <- colData(airway)
@@ -45,8 +138,6 @@ ddsMat <- DESeqDataSetFromMatrix(countData = countdata,
                                  design = ~ cell + dex)
 ddsMat
 ```
-
-
 
 # Exploratory analysis and visualization
 There are two separate paths in this workflow, the one we will see first involves transformations of the counts in order to visually explore sample relationships. In the second part, we will go back to the original raw counts for statistical testing. This is critical because the statistical testing methods rely on original count data (not scaled or transformed) for calculating the precision of measurements.
@@ -66,7 +157,6 @@ dds <- dds[keep, ]
 dds %>% nrow
 ```
 
-
 ## The variance stabilizing transformation and the rlog
 **Which transformation to choose?** The VST is much faster to compute and is less sensitive to high count outliers than the rlog. The rlog tends to work well on small datasets (n < 30), potentially outperforming the VST when there is a wide range of sequencing depth across samples (an order of magnitude difference). We therefore recommend the VST for medium-to-large datasets (n > 30).
 
@@ -78,7 +168,6 @@ Both vst and rlog return a DESeqTransform object which is based on the Summarize
 vsd <- vst(object = dds, blind = FALSE)
 vsd
 ```
-
 
 ```{r}
 vsd %>% colData
@@ -100,7 +189,6 @@ dds %>% colData
 In the above function calls, we specified blind = FALSE, which means that differences between cell lines and treatment (the variables in the design) will not contribute to the expected variance-mean trend of the experiment. The experimental design is not used directly in the transformation, only in estimating the global amount of variability in the counts. For a fully unsupervised transformation, one can set blind = TRUE (which is the default).
 
 To show the effect of the transformation, in the figure below we plot the first sample against the second, first simply using the log2 function (after adding 1)
-
 
 ```{r}
 library(dplyr)
@@ -130,12 +218,10 @@ ggplot(df, aes(x = x,y = y)) +
 
 We can see how genes with low counts (bottom left-hand corner) seem to be excessively variable on the ordinary logarithmic scale, while the VST and rlog compress differences for the low count genes for which the data provide little information about differential expression.
 
-
 ## Sample distances
 A useful first step in an RNA-seq analysis is often to assess overall similarity between samples: Which samples are similar to each other, which are different? Does this fit to the expectation from the experiment’s design?
 
 We use the R function dist to calculate the Euclidean distance between samples. To ensure we have a roughly equal contribution from all genes, we use it on the VST data. We need to transpose the matrix of values using t, because the dist function expects the different samples to be rows of its argument, and different dimensions (here, genes) to be columns.
-
 
 ```{r}
 sampleDists <- dist(t(assay(vsd)))
@@ -169,8 +255,6 @@ ggplot(pcadata, aes(PC1, PC2, color = dex)) +
     xlab(paste0("PC1: ", percentVar[1], "% variance")) +
     ylab(paste0("PC2: ", percentVar[2], "% variance"))
 ```
-
-
 
 # Differential expression analysis
 ## Running the differntial expression pipeline
@@ -206,8 +290,6 @@ mcols(res) %>% as.data.frame()
 ```{r}
 summary(res)
 ```
-
-
 
 # Time course experiemnts
 `DESeq2` can be used to analyze time course experiments, for example to find those genes that react in a condition-specific manner over time, compared to a set of baseline samples. Here we demonstrate a basic time course analysis with the fission data package, which contains gene counts for an RNA-seq time course of fission yeast (Leong et al. 2014). The yeast were exposed to oxidative stress, and half of the samples contained a deletion of the gene atf21. We use a design formula that models the strain difference at time 0, the difference over time, and any strain-specific differences over time (the interaction term strain:minute).
