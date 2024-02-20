@@ -32,6 +32,7 @@ library(tidyr)
 library(dplyr)
 library(janitor)
 library(fs)
+library(stringr)
 ```
 
 # Import data
@@ -167,44 +168,159 @@ pcas <- prcomp(t(expr_palmieri), scale = FALSE)
 
 percentVar <- round(100 * pcas$sdev^2 / sum(pcas$sdev^2), digits = 1)
 df <- data.frame(
-  pc1 <- pcas$x[, 1], 
-  pc2 <- pcas$x[, 2], 
-  disease = pData(palmieri_eset_norm)$,
+  pc1 = pcas$x[, 1, drop = TRUE], 
+  pc2 = pcas$x[, 2, drop = TRUE], 
+  disease = pData(es)$factor_value_disease,
+  phenotype = pData(es)$factor_value_phenotype
 )
+
+df %>% 
+  ggplot(aes(pc1, pc2)) +
+  geom_point(aes(shape = disease, color = phenotype)) +
+  ggtitle("PCA plot of the calibrated, summarized data") +
+  labs(x = paste("PC1, VarExp: ", percentVar[1], "%", sep = ""), 
+       y = paste("PC2, VarExp: ", percentVar[2], "%", sep = "")) +
+  scale_shape_manual(values = c(4, 15)) +
+  scale_color_manual(values = c("darkorange2", "dodgerblue4"))
 ```
 
+```{r}
+phenotype <- ifelse(str_detect(pData(es)$factor_value_phenotype, "non-"), "non_infl", "infl")
+disease <- ifelse(str_detect(pData(es)$factor_value_disease, "Crohn"), "CD", "UC")
 
+annotation_for_heatmap <- data.frame(phenotype = phenotype, 
+                                     disease = disease, 
+                                     row.names = rownames(pData(palmieri_eset_norm)))
+
+annotation_for_heatmap
+```
+
+```{r}
+dists <- dist(t(expr_palmieri), method = "euclidean") %>% as.matrix()
+diag(dists) <- NA
+
+ann_colors <- list(phenotype = c(non_infl = "chartreuse4", infl = "burlywood3"), 
+                   disease = c(CD = "blue4", UC = "cadetblue2"))
+
+pheatmap::pheatmap(mat = dists, 
+                   annotation_row = annotation_for_heatmap, 
+                   annotation_colors = ann_colors, 
+                   legend = TRUE, 
+                   legend_breaks = c(min(dists, na.rm = TRUE) * 1.3, max(dists, na.rm = TRUE) * 0.9), 
+                   legend_labels = c("low", "high"), 
+                   color = viridis::viridis(255, option = "B"), 
+                   main = "Clustering heatmap for the calibrated samples")
+```
 
 # Filtering based on intensity
 We now filter out lowly expressed genes. Microarray data commonly show a large number of probes in the background intensity range. These probes also do not change much across arrays. Hence they combine a low variance with a low intensity. Thus, they could end up being detected as differentially expressed although they are barely above the "detection" limit and are not very informative in general.
 
-We will perform a "soft" intensity based filtering here, since this recommended by the limma user guide. 
+We will perform a "soft" intensity based filtering here, since this recommended by the `limma` user guide. 
 
 However, note that a variance based filtering might exclude a similar set of probes in practice. For intensity-based filtering, we calculate the row-wise medians from the expression data, as they represent the transcript medians. 
+
+```{r}
+palmieri_medians <- rowMedians(exprs(palmieri_eset_norm))
+table(palmieri_medians > 4) %>% prop.table()
+
+man_threshold <- 4
+hist_res <- hist(palmieri_medians, 
+                 breaks = 150, 
+                 col = "cornsilk1", 
+                 freq = FALSE, 
+                 border = "antiquewhite4", 
+                 main = "Histogram of the median intensities")
+abline(v = 4, lwd = 2, col = "coral4")
+```
+
+```{r}
+palmieri_row_var <- palmieri_eset_norm %>% exprs() %>% matrixStats::rowSds()
+hist(palmieri_row_var, 
+     breaks = 150, 
+     col = "cornsilk1", 
+     freq = FALSE, 
+     border = "antiquewhite4", 
+     main = "Histogram of the row standard deviation")
+abline(v = 0.2322)
+```
 
 From the histogram of the gene-wise medians, we can clearly see an enrichment of low medians on the left hand side. These represent the genes we want to filter. In order to infer a cutoff from the data, we inspect the histogram. We visually set a cutoff line to the left of the histogram peak in order not to exclude too many genes. In our example, we choose a threshold of 4. We plot the same histogram as before and add the threshold line with the `abline` function.
 
 Transcripts that do not have intensities larger than the threshold in at least as many arrays as the smallest experimental group are excluded.
 
 In order to do so, we first have to get a list with the number of samples (=arrays) in the experimental groups.
+```{r}
+no_of_samples <- table(paste0(pData(es)$factor_value_disease, 
+                              "_", 
+                              pData(es)$factor_value_phenotype))
+no_of_samples
+```
+
+```{r}
+sample_cutoff <- min(no_of_samples)
+idx_man_threshold <- apply(exprs(palmieri_eset_norm), 1, function(x){
+  sum(x > man_threshold) >= sample_cutoff
+})
+
+table(idx_man_threshold)
+```
+
+```{r}
+palmieri_manfiltered <- subset(palmieri_eset_norm, idx_man_threshold)
+```
 
 
-# Removing multiple mappings
+# Annotation of the transcript clusters
+```{r}
+hugene10sttranscriptcluster.db %>% columns
+anno_palmieri <- AnnotationDbi::select(x = hugene10sttranscriptcluster.db, 
+                                       keys = featureNames(palmieri_manfiltered), 
+                                       keytype = "PROBEID", 
+                                       columns = c("SYMBOL", "GENENAME"))
+anno_palmieri <- subset(anno_palmieri, !is.na(SYMBOL))
+```
+
+## Removing multiple mappings
 Filtering out probes mapped to multiple genes.
+```{r}
+anno_summarized <- anno_palmieri %>% 
+  dplyr::group_by(PROBEID) %>%
+  dplyr::summarise(no_of_matches = n_distinct(SYMBOL))
 
+anno_summarized
 
+anno_filtered <- anno_summarized %>% dplyr::filter(no_of_matches > 1)
+anno_filtered
+ids_to_exclude <- (featureNames(palmieri_manfiltered) %in% anno_filtered$PROBEID)
+ids_to_exclude %>% table
 
-# Building custom annotations
+palmieri_final <- subset(palmieri_manfiltered, !ids_to_exclude)
+palmieri_final
+```
 
+```{r}
+fData(palmieri_final)$PROBEID <- rownames(fData(palmieri_final))
+palmieri_final
+
+fData(palmieri_final) <- dplyr::left_join(fData(palmieri_final), anno_palmieri, by = "PROBEID")
+rownames(fData(palmieri_final)) <- fData(palmieri_final)$PROBEID
+palmieri_final %>% fData
+
+palmieri_final %>% validObject()
+```
 
 # Linear models
-## Linear models for microarrays
-We now apply linear models to microarrays. Specifically, we discuss how to use the limma package for differential expression analysis. The package is designed to analyze complex experiments involving comparisons between many experimental groups simultaneously while remaining reasonably easy to use for simple experiments. The main idea is to fit a linear model to the expression data for each gene. Empirical Bayes and other methods are used to borrow information across genes for the residual variance estimation leading to “moderated” t
--statistics, and stabilizing the analysis for experiments with just a small number of arrays. Conceptually, the final per gene variance is a mix of a prior variance and the per gene variance.
+In order to analyse which genes are differentially expressed between inflamed and non-inflamed tissue, we have to fit a linear model to our expression data. Linear models are the “workhorse” for the analysis of experimental data. They can be used to analyse almost arbitrarily complex designs, however they also take a while to learn and understand and a thorough description is beyond the scope of this workflow.
 
+## Linear models for microarrays
+We now apply linear models to microarrays. Specifically, we discuss how to use the limma package for differential expression analysis. The package is designed to analyze complex experiments involving comparisons between many experimental groups simultaneously while remaining reasonably easy to use for simple experiments. The main idea is to fit a linear model to the expression data for each gene. Empirical Bayes and other methods are used to borrow information across genes for the residual variance estimation leading to “moderated” t-statistics, and stabilizing the analysis for experiments with just a small number of arrays. Conceptually, the final per gene variance is a mix of a prior variance and the per gene variance.
 
 ## A linear model for the data
+For the subsequent linear modelling of the data, we introduce the abbreviations “UC” and “CD” for the disease types, and “non_infl.” and “infl.” for the phenotypes, respectively.
 
+```{r}
+individual <- as.character(pData(palmieri_final))
+```
 
 
 ## Analysis of differential expression based on a single gene
@@ -213,10 +329,6 @@ For linear model fitting and subsequent testing for differential expression by t
 **Illustration of the fitted linear model on the CRAT gene**  
 
 Before fitting the linear model, we have a look at the expression intensities of this gene for each patient in non-inflamed and inflamed tissue, respectively.
-
-```{r}
-
-```
 
 
 
