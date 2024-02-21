@@ -1,0 +1,51 @@
+---
+title: "dermatomyositis"
+author: "YinCY"
+format: html
+editor: source
+date: 2024-02-19
+---
+
+# data
+- GSE46239 (52 samples): Gene expression profiling of healthy donor and dermatomyositis patient skin biopsy specimens.
+- GSE39582 (585 samples): The aim of this study was to build up a robust molecular classification of mRNA expression profiles (Affymetrix U133Plus2) of a large series of 443 CC and 19 non-tumoral colorectal mucosas, and to validate it on an independent series of 123 CC and 906 public dataset.
+- GSE1551 (23 samples): muscle biopsies of normal and dermatomyositis patients
+
+
+# download data
+```{r}
+library(GEOquery)
+getGEOSuppFiles(GEO = "GSE39582", baseDir = "../../../data/zhuyi/dermatomyositis/data/")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
