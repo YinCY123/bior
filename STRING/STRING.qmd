@@ -7,7 +7,7 @@ format: html
 # Introduction
 STRING (https://www.string-db.org) is a database of known and predicted protein-protein interactions. The interactions include direct (physical) and indirect (functional) associations. The database contains information from numerous sources, including experimental repositories, computational prediction methods and public text collections. Each interaction is associated with a combined confidence score that integrates the various evidences.
 
-In the STRINGdb R package we use the new ReferenceClasses of R (search for "ReferenceClasses" in the R documentation.). Besides we make use of the iGraph package (http://igraph.sourceforge.net) as a data structure to represent our protein-protein interaction network.
+In the `STRINGdb` R package we use the new `ReferenceClasses` of R (search for "ReferenceClasses" in the R documentation.). Besides we make use of the `igraph` package (http://igraph.sourceforge.net) as a data structure to represent our protein-protein interaction network.
 
 ```{r}
 #| message: false
@@ -16,11 +16,12 @@ In the STRINGdb R package we use the new ReferenceClasses of R (search for "Refe
 library(STRINGdb)
 library(magrittr)
 
-string_db <- STRINGdb$new(version = "11.5", 
+string_db <- STRINGdb$new(version = "12", 
                           species = 9606, 
                           score_threshold = 200, 
                           network_type = "full", 
-                          input_directory = "")
+                          input_directory = "../../data/STRINGdb")
+string_db
 ```
 
 As it has been shown in the above commands, you start instantiating the `STRINGdb` reference class. In the constructor of the class you can also define the STRING version to be used and a threshold for the combined scores of the interactions, such that any interaction below that threshold is not loaded in the object (by default the score threshold is set to 400).
@@ -31,44 +32,99 @@ For a better understanding of the package two other commands can be useful.
 
 ```{r}
 # to list all the methods available
-STRINGdb$methods() %>% head(10)
+STRINGdb$methods() 
 ```
 
 ```{r}
 # to visualize their documentation
-STRINGdb$help("get_graph")
+STRINGdb$help("map")
 ```
 
 For all the methods that we are going to explain below, you can always use the help function in order to get additional information/parameters with respect to those explained in thsi guide.
 
-As an example, we use the analyzed data of a microarray study taken from GEO(GSE9008). This study investigates the activity of Reveratrol, a natural phytoestrogen found in red wine and a variety of plants, in A549 lung cancer cells. Microarray gene expression profiling after 48 hours exposure to Revestarol has been performed and compared to a control composed by A549 lung cancer cells threated only with ethanol. This data is already analyzed for differetial expression using the limma package: the genes are sorted by fdr corrected pvalues and the log fold change of the differential expression is also reported in the table.
+As an example, we use the analyzed data of a microarray study taken from GEO(GSE9008). This study investigates the activity of Reveratrol, a natural phytoestrogen found in red wine and a variety of plants, in A549 lung cancer cells. Microarray gene expression profiling after 48 hours exposure to Revestarol has been performed and compared to a control composed by A549 lung cancer cells threated only with ethanol. This data is already analyzed for differetial expression using the `limma` package: the genes are sorted by fdr corrected pvalues and the log fold change of the differential expression is also reported in the table.
 
 ```{r}
 data("diff_exp_example1")
 diff_exp_example1
 ```
 
-
+As a first step, we map the gene names to the STRING database identifiers using the "map" method. In this particular example, we map from gene HUGO names, but our mapping function supports several other common identifiers. 
 
 ```{r}
-library(babelgene)
-species()
+example1_mapped <- string_db$map(my_data_frame = diff_exp_example1,
+                                 my_data_frame_id_col_names = "gene", 
+                                 removeUnmappedRows = TRUE)
 
+example1_mapped
+```
+
+As you may have noticed, the previous command prints a warning showing the number of genes that we failed to map. If we remove all these gene before the mapping we obtain a much lower percentage of unmapped gene.
+
+If you set to FALSE the "removeUnmappedRows" parameter, than the rows which corresponds to unmapped genes areleft and you can manually inspect them.
+
+Finally, we extract the most siginificant 200 genes and we produce an image of the STRING network for those. The image shows clearly the genes and how they are possibly functionally related. On the top of the plot, we insert a pvalue that represents the probability that you can expect such an equal or greater number of interaction by chance.
+
+```{r}
+hits <- example1_mapped$STRING_id[1:200]
+string_db$plot_network(hits)
 ```
 
 
+# Payload Mechanism
+This R library provides the ability to interact with the STRING payload mechanism. The payload appears as an additional colored "halo" around the bubbles. 
+
+For example, this allows to color in green the genes that are down-regulated and in red the genes that are up-regulated. For this mechanism to work, we provide a function that posts the information on our web server. 
+
+```{r}
+example1_mapped_pval05 <- string_db$add_diff_exp_color(subset(example1_mapped, pvalue < 0.05), logFcColStr = "logFC")
+
+payload_id <- string_db$post_payload(example1_mapped_pval05$STRING_id, 
+                                     colors = example1_mapped_pval05$color)
+
+string_db$plot_network(string_ids = hits, 
+                       payload_id = payload_id)
+```
 
 
+# Enrichment
+We provide a method to compute the enrichment in Gene Ontology (process, function and component), KEGG and Reactome pathway, PubMed publications, Uniprot Keywords, and PFAM/INTERPRO/SMART domains for your set of proteins all in one simple call. The enrichment itself is computed using an hypergeometric test and the FDR is calculated using Benjamini-Hochberg procedure.
 
+```{r}
+enrichment <- string_db$get_enrichment(hits)
+enrichment
+```
 
+If you have performed your experiment on a predefined set of proteins, it is important to run the enrichment statistics using that set as a background. Hence, before to launch the method above, you may want to set the background.
 
+```{r}
+background <- exmaple1_mapped$STRING_id[1:2000]
+string_db$set_background(background)
 
+string_db <- STRINGdb$new(score_threshold = 200, 
+                          backgroundV = background)
+```
 
+```{r}
+annotations <- string_db$get_annotations(hits)
+annotations
+```
 
+# Clustering
+The igraph package provides serveral clustering/community algorithms: "fastgreedy", "walktrap", "spinglass", "edge.betweenness"。 We encapsulate this in an easy-to-use function that returns the clusters in a list. 
 
+```{r}
+clustersList <- string_db$get_clusters(example1_mapped$STRING_id[1:600])
+```
 
+```{r}
+par(mfrow = c(2, 2))
+for(i in seq(1, 4)){
+    string_db$plot_network(clustersList[[i]])
+}
+```
 
-
+# Additional protein information
 
 
 
