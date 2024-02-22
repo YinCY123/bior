@@ -1,0 +1,66 @@
+---
+title: "antimicrobial"
+format: html
+---
+
+
+```{r}
+#| message: false
+#| warning: false
+
+
+library(tidyverse)
+library(tidygraph)
+library(ggraph)
+
+camp <- read.table("../../data/partime/string_interactions.tsv", 
+                   sep = "\t", 
+                   header = TRUE)
+camp <- camp %>% dplyr::select(node1, node2, combined_score)
+```
+
+
+```{r}
+g <- as_tbl_graph(camp)
+g
+```
+
+```{r}
+set.seed(101)
+ggraph(graph = g, layout = "lgl") +
+    geom_edge_link(aes(edge_width = combined_score)) +
+    geom_node_point(aes(filter = (.N()$name == "CAMP")), size = 13, color = "gold") +
+    geom_node_point(aes(filter = (.N()$name != "CAMP")), size = 13) +
+    geom_node_text(aes(label = .N()$name), color = "red", size = 3) +
+    scale_edge_width(name = "interaction\nstrength", range = c(0.1, 2)) +
+    theme_classic() +
+    scale_x_continuous(name = NULL) +
+    scale_y_continuous(name = NULL) +
+    theme(panel.grid.major = element_blank(), 
+          axis.ticks = element_blank(), 
+          axis.text = element_blank(), 
+          axis.line = element_blank(), 
+          legend.position = "none")
+
+ggsave("../../data/partime/antimicrobial/networks.tiff")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

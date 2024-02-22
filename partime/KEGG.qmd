@@ -1,0 +1,72 @@
+---
+title: "KEGG"
+author: "YinCY"
+format: html
+---
+
+```{r}
+#|mmessage: false
+#|wattr-warning: false
+library(tidyverse)
+```
+
+
+```{r}
+kegg <- read.csv("/mnt/c/Users/yincy/Downloads/KEGG.csv")
+kegg
+```
+
+```{r}
+kegg %>% 
+    ggplot(aes(richFactor, pathway)) +
+    geom_point(aes(size = Count, color = log10pval), stat = "identity") +
+    scale_x_continuous(name = "rich factor") +
+    scale_y_discrete(name = NULL) +
+    scale_color_gradient(name = "-log10Pval", low = "blue", high = "tomato")+
+    ggtitle(label = "KEGG Pathway (Top 20)") +
+    theme_classic() +
+    theme(panel.grid.major = element_line(linetype = 2, linewidth = 0.2, color = "grey60"))
+
+ggsave("/mnt/c/Users/yincy/Downloads/KEGG_pathway_top_20.tiff", width = 9)
+```
+
+```{r}
+kegg_enrich <- read.csv("/mnt/c/Users/yincy/Downloads/KEGG_enrich.csv", sep = "\t")
+kegg_enrich$pathway <- factor(kegg_enrich$pathway, levels = rev(kegg_enrich$pathway))
+kegg_enrich
+```
+
+```{r}
+kegg_enrich %>% 
+    ggplot(aes(rich.factor, pathway)) +
+    geom_point(aes(color = Pvalue, size = Count)) +
+    scale_x_continuous(name = "rich factor") +
+    scale_y_discrete(name = NULL) +
+    scale_color_gradient(name = "Pvalue", low = "red3", high = "green") +
+    theme_classic() +
+    theme(panel.grid.major = element_line(linetype = 2, linewidth = 0.2, color = "grey60")) +
+    ggtitle(label = "KEGG pathway enrichment")
+
+ggsave("/mnt/c/Users/yincy/Downloads/KEGG_enrich.tiff", width = 9)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
