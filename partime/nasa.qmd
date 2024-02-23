@@ -155,9 +155,13 @@ sces %>% colData
 
 plotReducedDim(sces, 
                dimred = "TSNE", 
-               colour_by = "clusters",
+               colour_by = "cell_type",
+               text_by = "cell_type", 
+               text_size = 3,
                point_size = 0.5) +
-  theme(legend.position = "none")
+  theme(legend.position = "right")
+
+ggsave("../../data/partime/nasa/res/cell_type.tiff")
 ```
 
 # reference
@@ -322,7 +326,6 @@ colData(nasa) %>% colnames()
 colData(nasa) <- colData(nasa)[, c(1, 2, 3, 9, 10)]
 colData(nasa)
 nasa <- nasa[, !is.na(nasa$cell_type)]
-
 
 samples <- nasa$Sample
 samples <- samples %>% 
