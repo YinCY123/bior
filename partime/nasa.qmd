@@ -227,7 +227,6 @@ GSE122465 %>% rowData
 saveRDS(GSE122465, "/home/yincy/git/data/partime/nasa/reference/GSE122465.rds")
 ```
 
-
 ```{r}
 # unzip("/home/yincy/git/data/parttime/nasa/reference/RNAMagnetDataBundle.zip", 
 #       exdir = "/home/yincy/git/data/parttime/nasa/reference/")
@@ -286,7 +285,6 @@ GSE122465 <- runTSNE(GSE122465,
 GSE122465
 saveRDS(GSE122465, "/home/yincy/git/data/parttime/nasa/reference/processed_GSE122465.rds")
 ```
-
 
 # annotation nasa
 ```{r}
@@ -359,7 +357,6 @@ plotReducedDim(nasa,
 nasa$group %>% table
 nasa %>% colData()
 ```
-
 
 # differential expression analysis
 ```{r}
