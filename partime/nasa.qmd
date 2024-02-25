@@ -346,19 +346,34 @@ nasa$group %>% table
 nasa$levels <- paste(nasa$group, nasa$cell_type, sep = "_")
 nasa %>% colData()
 saveRDS(nasa, "/home/yincy/git/data/partime/nasa/processed_nasa.rds")
+nasa$cell_type %>% unique
 ```
 
+
 ```{r}
+#| warning: false
+#| warning: false
+cell_types <- c("Adipo-CAR", "Osteo-CAR", 
+                "Neutrophils", "pro-B", "small pre-B.", "large pre-B.", 
+                "B cell", "T cells", "NK cells", "Dendritic cells", "Monocytes",
+                "Neutro prog.", "Gran/Mono prog.", "Mono prog.","Erythroblasts", 
+                "Ery prog.", "Ery/Mk prog.", "Mk prog.", "LMPPs", "Eo/Baso prog.",
+                "Sinusoidal ECs")
+nasa$cell_type <- factor(nasa$cell_type, levels = cell_types)
+nasa %>% colData()
+
 plotReducedDim(nasa, 
-               color_by = "cell_type", 
+               color_by = "sample", 
                text_by = "cell_type", 
                dimred = "TSNE", 
                point_size = 0.5, 
                text_size = 2) +
   theme_classic() +
-  theme(legend.position = "right")
-nasa$group %>% table
-nasa %>% colData()
+  theme(legend.position = "right") +
+    viridis::scale_color_viridis(name = "samples", discrete = TRUE, option = "D") +
+    guides(color = guide_legend(override.aes = list(size = 3)))
+
+ggsave("../../data/partime/nasa/res/samples.tiff", width = 9)
 ```
 
 # differential expression analysis
@@ -548,7 +563,7 @@ library(fgsea)
 library(magrittr)
 library(ggplot2)
 
-all_contrast_markers <- readRDS("../../../data/partime/nasa/res/all_contrast_markers.rds")
+all_contrast_markers <- readRDS("../../data/partime/nasa/res/all_contrast_markers.rds")
 ```
 
 ```{r}
@@ -561,6 +576,57 @@ to_go <- c("small pre-B.", "large pre-B.", "B cell",
            "Neutro prog.")
 ```
 
+# volcano
+```{r}
+library(EnsDb.Mmusculus.v79)
+
+con <- all_contrast_markers %>% names()
+```
+
+```{r}
+for(con in names(all_contrast_markers)){
+    for(cell in to_go){
+        df = all_contrast_markers[[con]][[cell]][[1]]
+        
+        df$symbol = mapIds(EnsDb.Mmusculus.v79, keys = rownames(df), keytype = "GENEID", column = "SYMBOL")
+        
+        df = df %>% 
+            as.data.frame %>% 
+            dplyr::mutate(log10pval = -log10(p.value), 
+                          col = ifelse(log10pval >= -log10(0.05) & summary.logFC >= 0.5, "tomato", 
+                                       ifelse(log10pval >= log10(0.05) & summary.logFC <= -0.5, "steelblue", "grey")), 
+                          size = ifelse(log10pval >= -log10(0.05) & abs(summary.logFC) >= 0.5, 2.5, 0.5))
+        
+        up_genes <- df %>% 
+            as.data.frame %>%  
+            dplyr::filter(summary.logFC > 0.5, log10pval >= -log10(0.05)) %>% 
+            dplyr::pull(symbol)
+        
+        down_genes <- df %>% as.data.frame() %>% 
+            dplyr::filter(summary.logFC < -0.5, log10pval >= -log10(0.05)) %>% 
+            dplyr::pull(symbol)
+        
+        top_genes <- c(up_genes, down_genes)
+        top_df <- df %>% dplyr::filter(symbol %in% top_genes)
+        
+        df %>% 
+            ggplot(aes(summary.logFC, log10pval)) +
+            geom_point(aes(size = size, color = col)) +
+            geom_text(data = top_df, aes(summary.logFC, log10pval, label = symbol), size = 3) +
+            geom_vline(xintercept = c(0.5, 0, -0.5), linetype = 2, linewidth = 0.2) +
+            geom_hline(yintercept = -log10(0.05), linetype = 2, linewidth = 0.2) +
+            scale_color_identity() +
+            scale_size_identity() +
+            scale_x_continuous(name = "log2 flod change") +
+            scale_y_continuous(name = "-log10 P value") +
+            theme_classic()
+        
+        ggsave(paste("../../data/partime/nasa/res/volcano/", con, "_", cell, ".tiff", sep = ""))
+    }
+}
+```
+
+
 ```{r}
 for(con in names(gene_rank_list)){
     for(cell in to_go){
@@ -570,10 +636,6 @@ for(con in names(gene_rank_list)){
 }
 
 gene_rank_list %>% sapply(names)
-```
-
-```{r}
-gene_rank_list[[1]][[1]] %>% str
 ```
 
 ```{r}
@@ -603,15 +665,17 @@ for(con in names(all_contrast_markers)){
     }
 }
 
-# go_res$FLT_OLD_v.s._FLT_YNG$Monocytes %>% dplyr::filter(NES < 0) %>% dplyr::arrange(pval)
 
 library(openxlsx)
 for(con in names(go_res)){
     write.xlsx(go_res[[con]], file = paste("/home/yincy/git/data/partime/nasa/res/GO/", con, "_GO.xlsx", sep = ""))
 }
+
+saveRDS(go_res, "../../data/partime/nasa/res/go_res.rds")
 ```
 
 ## visulization
+### barplot
 ```{r}
 size <- 3
 offset <- 0.2
@@ -688,6 +752,51 @@ library(openxlsx)
 for(con in names(kegg_res)){
     write.xlsx(kegg_res[[con]], file = paste("/home/yincy/git/data/partime/nasa/res/KEGG/", con, "_kegg.xlsx", sep = ""))
 }
+
+saveRDS(kegg_res, "../../data/partime/nasa/res/kegg_res.rds")
 ```
 
+# visualization
+```{r}
+size <- 3
+offset <- 0.2
+expand <- 15
+for(con in names(kegg_res)){
+    for(cell in to_go){
+        df <- rbind(go_res[[con]][[cell]] %>% dplyr::filter(NES > 0) %>% dplyr::arrange(pval) %>% head(10), 
+                    go_res[[con]][[cell]] %>% dplyr::filter(NES < 0) %>% dplyr::arrange(pval) %>% head(10))
+        
+        df <- df %>% 
+            dplyr::mutate(log10pval = ifelse(NES > 0, -log10(pval), log10(pval)), 
+                          color = ifelse(NES > 0, "tomato", "steelblue")) %>% 
+            dplyr::group_by(color) %>% 
+            dplyr::arrange(-log10pval) %>% 
+            dplyr::ungroup() %>% 
+            dplyr::mutate(y = nrow(.):1)
+        
+        # print(paste(con, "--", cell, sep = ""))
+        # print(df)
+        
+        rng <- df$log10pval %>% range
+        
+        df %>% 
+            ggplot(aes(log10pval, reorder(pathway, log10pval))) +
+            geom_bar(aes(fill = color), stat = "identity") +
+            geom_text(data = df[df$NES > 0, ], aes(x = -offset, y = y, label = pathway), hjust = 1, size = size) +
+            geom_text(data = df[df$NES < 0, ], aes(x = offset, y = y, label = pathway), hjust = 0, size = size) +
+            scale_y_discrete(name = NULL, label = NULL) +
+            scale_fill_identity() +
+            scale_x_continuous(name = "-log10 P-value",
+                               breaks = round(c(rev(seq(0, min(-expand, rng[1]), -5)), seq(5, max(expand, rng[2]), 5)), 0),
+                               labels = round(abs(c(rev(seq(0, min(-expand, rng[1]), -5)), seq(5, max(expand, rng[2]), 5))), 0), 
+                               limits = range(min(-expand, rng[1]), max(expand, rng[2]))) +
+            theme_classic() +
+            theme(axis.ticks.y = element_blank(), 
+                  panel.grid.major.y = element_line(linetype = 2, linewidth = 0.3))
+        
+        ggsave(paste("/home/yincy/git/data/partime/nasa/res/KEGG/", con, "_", cell, "_KEGG.tiff", sep = ""), 
+               width = 12)
+    }
+}
+```
 
