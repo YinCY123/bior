@@ -1,0 +1,217 @@
+---
+title: "20240225"
+author: "YinCY"
+format: html
+---
+
+
+```{r}
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(DropletUtils)
+library(scran)
+library(scater)
+library(bluster)
+library(BiocParallel)
+library(R.utils)
+library(fs)
+library(stringr)
+library(stringr.plus)
+library(EnsDb.Hsapiens.v86)
+```
+
+# ref
+```{r}
+annotations <- read.table(file = "../../../data/partime/GSE205049/GSE205049_scRNA-seq-annotations.csv.gz", 
+                          sep = ",", 
+                          header = TRUE, 
+                          row.names = 1)
+annotations
+```
+
+
+```{r}
+mtx <- data.table::fread("../../../data/partime/GSE205049/GSE205049_scRNA-seq-integrated_GEM.csv.gz", 
+                         sep = ",", 
+                         header = TRUE) %>% 
+    as.data.frame() %>% 
+    tibble::column_to_rownames("V1")
+mtx %>% dim
+mtx[1:10, 1:10]
+```
+
+```{r}
+gene_df <- data.frame(symbol = rownames(mtx), 
+                      ensembl = mapIds(EnsDb.Hsapiens.v86, keys = rownames(mtx), keytype = "SYMBOL", column = "GENEID"), 
+                      row.names = rownames(mtx))
+gene_df
+```
+
+```{r}
+ref <- SingleCellExperiment(assay = list(counts = as(as.matrix(mtx), "CsparseMatrix")), 
+                                         colData = annotations, 
+                                         rowData = gene_df)
+ref %>% colData
+ref %>% rowData
+saveRDS(ref, "../../../data/partime/GSE205049/ref.rds")
+```
+
+
+```{r}
+ref <- readRDS("../../../data/partime/GSE205049/ref.rds")
+ref %>% colData()
+```
+
+```{r}
+ref <- computePooledFactors(x = ref, clusters = ref$type)
+ref <- logNormCounts(x = ref)
+ref %>% colData
+dec <- modelGeneVar(x = ref, block = ref$orig.ident)
+hvgs <- getTopHVGs(dec, var.threshold = 0.001)
+hvgs %>% str
+```
+
+```{r}
+ref <- runPCA(ref, subset_row = hvgs)
+ref <- runTSNE(x = ref, dimred = "PCA")
+
+clusters <- clusterRows(x = reducedDim(ref, type = "PCA"), 
+                        BLUSPARAM = NNGraphParam(k=15))
+clusters %>% table
+colData(ref)$clusters <- factor(clusters)
+
+saveRDS(ref, "../../../data/partime/GSE205049/processed_GSE205049.rds")
+```
+
+```{r}
+table(ref$clusters, ref$major) %>% prop.table(margin = 1) %>% round(3)
+```
+
+
+```{r}
+ref %>% colData
+plotReducedDim(ref, 
+               dimred = "TSNE", 
+               color_by = "clusters", 
+               text_by = "clusters",
+               point_size = 0.5) +
+    guides(color = guide_legend(override.aes = list(size = 3)))
+```
+
+
+# data
+GSE205049
+```{r}
+# rename and move files
+dir_create("../../../data/partime/GSE205049/data")
+untar(tarfile = "../../../data/partime/GSE205049/GSE205049_RAW.tar",
+      exdir = "../../../data/partime/GSE205049/data")
+
+files <- dir_ls(path = "../../../data/partime/GSE205049/data/", type = "file")
+sample_names <- str_extract_between(files, pattern1 = "/", pattern2 = "-", 
+                                    which_pattern1 = "last", 
+                                    which_pattern2 = "last")
+sample_names
+dir_create(path = paste("../../../data/partime/GSE205049/data/", sample_names, sep = ""))
+
+base_names <- files %>% basename() %>% 
+    str_extract_after(pattern = "-", which = "last")
+
+new_files <- paste("../../../data/partime/GSE205049/data/", 
+                   sample_names, "/", base_names, sep = "")
+new_files
+file_move(path = files, new_path = new_files)
+```
+
+```{r}
+samples <- dir_ls("../../../data/partime/GSE205049/data/", type = "directory")
+sces <- read10xCounts(samples = samples, 
+                      sample.names = sample_names, 
+                      col.names = TRUE, 
+                      type = "sparse", 
+                      row.names = "id")
+sces %>% colData
+sces %>% rowData
+sces
+saveRDS(sces, "../../../data/partime/GSE205049/GSE205049.rds")
+```
+
+```{r}
+# cell qc
+is_mito <- grepl("^MT-", rowData(sces)$Symbol, ignore.case = F)
+is_mito %>% table
+rowData(sces)$Symbol[is_mito]
+
+stats <- perCellQCMetrics(x = sces, subsets = list(mito = is_mito))
+qc_mito <- isOutlier(stats$subsets_mito_percent, log = TRUE, type = "high")
+qc_sum <- isOutlier(stats$sum, log = TRUE, type = "both")
+qc_sum %>% table
+
+qc_detected <- isOutlier(stats$detected, log = TRUE, type = "both")
+qc_detected %>% table
+
+qc <- qc_mito | qc_sum | qc_detected
+qc %>% table
+```
+
+```{r}
+cbind(stats, qc) %>% as.data.frame() %>% 
+    ggplot(aes(sum, detected)) +
+    geom_point(aes(color = qc)) +
+    scale_x_continuous(trans = "log") +
+    scale_y_continuous(trans = "log")
+```
+
+```{r}
+cbind(stats, qc_mito) %>% as.data.frame() %>% 
+    ggplot(aes(sum, detected)) +
+    geom_point(aes(color = qc_mito)) +
+    scale_x_continuous(trans = "log") +
+    scale_y_continuous(trans = "log")
+```
+
+```{r}
+sces <- sces[, !qc]
+
+# qc gene
+stats <- perFeatureQCMetrics(sces)
+qc <- stats$detected > 0.01
+qc %>% table
+sces <- sces[qc, ]
+sces
+saveRDS(sces, "../../../data/partime/GSE205049/GSE205049.rds")
+```
+
+```{r}
+qclusters <- quickCluster(x = sces, 
+                          use.rank = TRUE, 
+                          d = 100, 
+                          )
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

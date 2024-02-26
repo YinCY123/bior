@@ -11,7 +11,6 @@ GSE124310
 #| message: false
 #| warning: false
 
-
 library(fs)
 library(GEOquery)
 library(SingleCellExperiment)
@@ -23,16 +22,18 @@ library(data.table)
 library(magrittr)
 library(EnsDb.Hsapiens.v86)
 library(BiocParallel)
+library(magrittr)
 
 # dir_create("/home/yincy/git/data/partime/myeloma")
 # getGEOSuppFiles("GSE193531", baseDir = "/home/yincy/git/data/partime/myeloma/")
 ```
 
 ```{r}
-sample_info <- read.table("../../../data/partime/myeloma/GSE193531/GSE193531_cell-level-metadata.csv.gz", 
+sample_info <- read.table("../../data/partime/myeloma/GSE193531/GSE193531_cell-level-metadata.csv.gz", 
                           sep = ",", 
                           header = TRUE)
 sample_info %>% head
+sample_info$disease_stage %>% table
 ```
 
 ```{r}

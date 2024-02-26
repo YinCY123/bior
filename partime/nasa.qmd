@@ -364,16 +364,15 @@ nasa %>% colData()
 
 plotReducedDim(nasa, 
                color_by = "sample", 
-               text_by = "cell_type", 
                dimred = "TSNE", 
-               point_size = 0.5, 
+               point_size = 0.3, 
                text_size = 2) +
   theme_classic() +
-  theme(legend.position = "right") +
+  theme(legend.position = "none") +
     viridis::scale_color_viridis(name = "samples", discrete = TRUE, option = "D") +
     guides(color = guide_legend(override.aes = list(size = 3)))
 
-ggsave("../../data/partime/nasa/res/samples.tiff", width = 9)
+ggsave("../../data/partime/nasa/res/samples_show.tiff", width = 7)
 ```
 
 # differential expression analysis
