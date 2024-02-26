@@ -1,0 +1,138 @@
+---
+title: "02 Counting reads into windows"
+author: "YinCY"
+format: html
+---
+
+# Background
+
+The key step in the DB analysis is the manner in which reads are counted. The most obvious strategy is to count reads into pre-defined regions of interest, like promoters or gene bodies (Pal et al. 2013). This is simple but will not capture changes outside of those regions. In contrast, de novo analyses do not depend on pre-specified regions, instead using empirically defined peaks or sliding windows for read counting. Peak-based methods are implemented in the DiffBind and DBChIP software packages (Ross-Innes et al. 2012; Liang and Keles 2012), which count reads into peak intervals that have been identified with software like MACS (Zhang et al. 2008). This requires some care to maintain statistical rigour as peaks are called with the same data used to test for DB.
+
+Alternatively, window-based approaches count reads into sliding windows across the genome. This is a more direct strategy that avoids problems with data re-use and can provide increased DB detection power (Lun and Smyth 2014). In csaw, we define a window as a fixed-width genomic interval and we count the number of fragments overlapping that window in each library. For single-end data, each fragment is imputed by directional extension of the read to the average fragment length (Figure 2.1), while for paired-end data, the fragment is defined from the interval spanned by the paired reads. This is repeated after sliding the window along the genome to a new position. A count is then obtained for each window in each library, thus quantifying protein binding intensity across the genome.
+
+![Reads are extended to the average fragment length(`ext`) and the number of overlapping extended reads is counted for each window of size `width`](figures/02_01.png)
+
+For single-end data, we estimate the average fragment length from a cross-correlation plot for use as `ext`. Alternatively, the length can be estimated from diagnostics during ChIP or library preparation, e.g., post-fragmentation gel electrophoresis images. Typical values range from 100 to 300 bp, depending on the efficiency of sonication and the use of size selection steps in library preparation.
+
+We interpret the window size (`width`) as the width of the binding site for the target protien, i.e., its physical "footprint" on the genome. This is user-specified and has important implications for the power and resolution for a DB analysis. For TF analysis with small windows, the choice of spacing interval will also be affectd by the choice of window size.
+
+# Obtaining window-level counts
+To demonstrate, we will use some publicly availble data from the `chipseqDBData` package. The dataset below focuses on changes in the binding profile of the NF-YA transcription factor between embryonic stem cells and terminal neurons (Tiwari et al. 2012).
+
+```{r}
+#| message: false
+#| warning: false
+
+library(chipseqDBData)
+tf.data <- NFYAData()
+tf.data
+```
+
+```{r}
+bam.files <- head(tf.data$Path, -1)
+bam.files
+```
+
+The `windowCounts()` function uses a sliding window approach to count fragments for a set of BAM files, supplied as either a character vector or as a list of `BamFile` objects (from the `Rsamtools` package). We assume that the BAM files are sorted by position and have been indexed - for character inputs, the index files are assumed to have the same prefixes as the BAM files. It’s worth pointing out that a common mistake is to replace or update the BAM file without updating the index, which will cause `csaw` some grief.
+
+```{r}
+library(csaw)
+library(magrittr)
+
+frag.len <- 110
+win.width <- 10
+param <- readParam(minq = 20)
+data <- windowCounts(bam.files = bam.files, 
+                     ext = frag.len, 
+                     width = win.width, 
+                     param = param)
+data
+```
+
+The function returns a `RangedSummarizedExperiment` object where the matrix of counts is stored as the first `assy`. Each row corresponds to a genomic window while each column corresponds to a library. The coordinates of each window are stored in the `rowRanges`. The total number of reads in each library (also referred to as the library size) is stored as `totals` in the `colData`.
+
+```{r}
+data %>% assay(1) %>% head
+```
+
+```{r}
+data %>% rowRanges()
+```
+
+```{r}
+data %>% colData
+```
+
+
+# Filtering out low-quality reads
+Read extraction from the BAM files is controlled with the `param` argument in `windowCounts()`. This takes a `readParam` object that specifies a number of extraction parameters. The idea is to define the `readParam` object once in the entire analysis pipeline, which is then reused for all relevant functions. This ensures that read loading is consistent throughout the analysis.
+
+```{r}
+param
+```
+
+In the example above, reads are filtered out based on the minimum mapping score with the minq argument. Low mapping scores are indicative of incorrectly and/or non-uniquely aligned sequences. Removal of these reads is highly recommended as it will ensure that only the reliable alignments are supplied to `csaw`. The exact value of the threshold depends on the range of scores provided by the aligner. The `subread` aligner (Liao, Smyth, and Shi 2013) was used to align the reads in this dataset, so a value of 20 might be appropriate.
+
+Reads mapping to the same genomic position can be marked as putative PCR duplicates using software like the MarkDuplicates program from the Picard suite. Marked reads in the BAM file can be ignored during counting by setting `dedup=TRUE` in the `readParam` object. This reduces the variability caused by inconsistent amplification between replicates, and avoid spurious duplicate-driven DB between groups. An example of counting with duplicate removal is show below, where fewer reads are used from each library relative to `data\$totals`.
+
+```{r}
+dedup.param <- readParam(minq = 20, dedup = TRUE)
+demo <- windowCounts(bam.files = bam.files, 
+                     width = win.width, 
+                     ext = frag.len)
+demo %>% colData
+```
+
+# Estimating the fragment length
+Cross-correlation plots are generated directly from BAM files using the `correlateReads()` function. This provides a measure of the immunoprecipitation (IP) efficiency of a ChIP-seq experiment (Kharchenko, Tolstorukov, and Park 2008). Efficient IP should yield a smooth peak at a delay distance corresponding to the average fragment length. This reflects the strand-dependent bimodality of reads around narrow regions of enrichment, e.g., TF binding sites.
+
+```{r}
+max.delay <- 500
+dedup.on <- initialize(.Object = param, dedup = TRUE)
+x <- correlateReads(bam.files = bam.files, 
+                    max.dist = max.delay, 
+                    param = param)
+
+plot(0:max.delay, 
+     x, 
+     type = "l", 
+     ylab = "CCF", 
+     xlab = "Delay (bp)")
+```
+
+The location of the peak is used as an estimate of the fragment length for read extension in `windowCounts()`. An estimate of ~110 bp is obtained from the plot above. We can do this more precisely with the `maximizeCcf()` function, which returns a similar value.
+
+```{r}
+maximizeCcf(profile = x)
+```
+
+A sharp spike may also be observed in the plot at a distance corresponding to the read length. This is thought to be an artifact, caused by the preference of aligners towards uniquely mapped reads. Duplicate removal is typically required here (i.e., set dedup=TRUE in readParam()) to reduce the size of this spike. Otherwise, the fragment length peak will not be visible as a separate entity. The size of the smooth peak can also be compared to the height of the spike to assess the signal-to-noise ratio of the data (Landt et al. 2012). Poor IP efficiency will result in a smaller or absent peak as bimodality is less pronounced.
+
+Cross-correlation plots can also be used for fragment length estimation of narrow histone marks such as histone acetylation and H3K4 methylation. However, they are less effective for regions of diffuse enrichment where bimodality is not obvious (e.g., H3K27 trimethylation).
+
+```{r}
+n <- 1000
+
+# using more data sets from 'chipseqDBData'
+acdata <- H3K9acData()
+h3k9ac <- correlateReads(bam.file = acdata$Path[1], 
+                         max.dist = n, 
+                         param = dedup.on)
+
+k27data <- H3K27me3Data()
+h3k27me3 <- correlateReads(k27data$Path[1], 
+                           max.dist = n, 
+                           param = dedup.on)
+
+k4data <- H3K4me3Data()
+h3k4me3 <- correlateReads(k4data$Path[1], 
+                          max.dist = n, 
+                          param = dedup.on)
+```
+
+
+
+
+
+
+
