@@ -24,16 +24,16 @@ library(scDblFinder)
 ```
 
 ```{r}
-files <- dir_ls("/home/yincy/git/data/parttime/nasa/data/", type = "file")
-for(file in files){unzip(zipfile = file, exdir = "/home/yincy/git/data/parttime/nasa/data/")}
+files <- dir_ls("/home/yincy/git/data/partime/nasa/", type = "file", regexp = "*.zip$")
+for(file in files){unzip(zipfile = file, exdir = "/home/yincy/git/data/parttime/nasa/")}
 ```
 
 ```{r}
-samples <- dir_ls("/home/yincy/git/data/parttime/nasa/", type = "directory", recurse = TRUE)
+samples <- dir_ls("/home/yincy/git/data/partime/nasa/", type = "directory", recurse = TRUE)
 samples <- grep("filtered$", samples, value = TRUE)
 samples %>% str
 
-sample_names <- strsplit(samples, "/") %>% sapply("[[", 9)
+sample_names <- strsplit(samples, "/") %>% sapply("[[", 8)
 ```
 
 ```{r}
@@ -84,12 +84,12 @@ qc <- stats$detected > 0
 qc %>% table
 sces <- sces[qc, ]
 sces
-saveRDS(sces, "/home/yincy/git/data/parttime/nasa/nasa.rds")
+saveRDS(sces, "/home/yincy/git/data/partime/nasa/nasa.rds")
 ```
 
 ```{r}
 set.seed(101)
-sces <- readRDS("/home/yincy/git/data/parttime/nasa/nasa.rds")
+# sces <- readRDS("/home/yincy/git/data/parttime/nasa/nasa.rds")
 qclusters <- quickCluster(sces, 
                           method = "igraph", 
                           use.rank = TRUE, 
@@ -234,9 +234,9 @@ saveRDS(GSE122465, "/home/yincy/git/data/partime/nasa/reference/GSE122465.rds")
 ```{r}
 # unzip("/home/yincy/git/data/parttime/nasa/reference/RNAMagnetDataBundle.zip", 
 #       exdir = "/home/yincy/git/data/parttime/nasa/reference/")
-load("/home/yincy/git/data/parttime/nasa/reference/NicheData10x.rda")
+load("/home/yincy/git/data/partime/nasa/reference/NicheData10x.rda")
 NicheData10x <- Seurat::UpdateSeuratObject(NicheData10x)
-NicheData10x[[]]$cell_type <- Idents(NicheData10x)
+NicheData10x[[]]$cell_type <- Seurat::Idents(NicheData10x)
 cell_type_df <- NicheData10x[[]]
 cell_types <- setNames(cell_type_df$cell_type, rownames(cell_type_df))
 
@@ -424,7 +424,6 @@ all_contrast_markers %>% names
 saveRDS(all_contrast_markers, "../../../data/partime/nasa/res/all_contrast_markers.rds")
 ```
 
-
 # visualization
 ```{r}
 #| message: false
@@ -440,7 +439,6 @@ all_contrast_markers <- readRDS("../../../data/partime/nasa/res/all_contrast_mar
 # all of the 6 contrast
 all_contrast_markers %>% names
 ```
-
 
 # binary matrix
 ```{r}
@@ -717,7 +715,6 @@ for(con in names(go_res)){
     }
 }
 ```
-
 
 ## KEGG
 ```{r}
