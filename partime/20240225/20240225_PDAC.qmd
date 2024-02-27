@@ -68,22 +68,25 @@ hvgs %>% str
 
 ```{r}
 set.seed(101)
-ref <- runPCA(ref, subset_row = hvgs)
-ref <- runTSNE(x = ref, dimred = "PCA")
+ref <- correctExperiments(ref, batch = ref$orig.ident, 
+                          PARAM = FastMnnParam(auto.merge = TRUE), 
+                          subset.row = hvgs, 
+                          correct.all = TRUE)
 
-clusters <- clusterRows(x = reducedDim(ref, type = "PCA"), 
+ref <- runTSNE(x = ref, dimred = "corrected")
+
+clusters <- clusterRows(x = reducedDim(ref, type = "corrected"), 
                         BLUSPARAM = NNGraphParam(k=15))
 clusters %>% table
 colData(ref)$clusters <- factor(clusters)
-
 saveRDS(ref, "../../../data/partime/GSE205049/processed_ref.rds")
 ```
 
 ```{r}
 plotReducedDim(ref, 
                dimred = "TSNE", 
-               color_by = "clusters", 
-               text_by = "clusters",
+               color_by = "major", 
+               text_by = "major",
                point_size = 0.5) +
     guides(color = guide_legend(override.aes = list(size = 3)))
 ```
@@ -219,6 +222,7 @@ plotReducedDim(object = sces,
 #| warning: false
 
 library(SingleR)
+library(magrittr)
 
 ref <- readRDS("../../../data/partime/GSE205049/processed_ref.rds")
 ref %>% rowData()
@@ -251,6 +255,19 @@ saveRDS(sces, "../../../data/partime/GSE205049/processed_GSE205049.rds")
 ```
 
 ```{r}
+
+```
+
+# visulization
+```{r}
+genes_to_visualize <- c("CD19", "CD79A", "MS4A1", "PECAM1", "VWF", 
+                        "FGF7", "CD68", "CD163", "CD14", "FGFBP2", 
+                        "RCVRRN", "IGHG1", "MZB1", "SDC1", "CD3D", 
+                        "CD3E", "CD8A", "EPCAM", "CDH1", "CDKN2A")
+```
+
+cell type
+```{r}
 plotReducedDim(sces, 
                dimred = "TSNE", 
                color_by = "cell_type", 
@@ -259,12 +276,35 @@ plotReducedDim(sces,
     guides(color = guide_legend(override.aes = list(size = 3)))
 ```
 
+clusters
+```{r}
+plotReducedDim(sces, 
+               dimred = "TSNE", 
+               color_by = "clusters", 
+               text_by = "clusters", 
+               point_size = 0.5) +
+    guides(color = guide_legend(override.aes = list(size = 3)))
+```
 
+sample
+```{r}
 
+```
 
+gene expression
+```{r}
 
+```
 
+DNA damage
+```{r}
 
+```
+
+cell cycle
+```{r}
+
+```
 
 
 
