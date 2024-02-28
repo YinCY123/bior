@@ -254,16 +254,34 @@ sces$cell_type <- cell_type[sces$clusters]
 saveRDS(sces, "../../../data/partime/GSE205049/processed_GSE205049.rds")
 ```
 
-```{r}
-
-```
-
 # visulization
 ```{r}
+#| message: false
+#| warning: false
+
+library(scater)
+library(scran)
+library(tidyverse)
+
+sces <- readRDS("../../../data/partime/GSE205049/processed_GSE205049.rds")
+
 genes_to_visualize <- c("CD19", "CD79A", "MS4A1", "PECAM1", "VWF", 
                         "FGF7", "CD68", "CD163", "CD14", "FGFBP2", 
                         "RCVRRN", "IGHG1", "MZB1", "SDC1", "CD3D", 
                         "CD3E", "CD8A", "EPCAM", "CDH1", "CDKN2A")
+```
+
+sample
+```{r}
+plotReducedDim(sces, 
+               dimred = "TSNE", 
+               color_by = "Sample", 
+               text_by = "cell_type", 
+               point_size = 0.5) +
+    theme_classic() +
+    guides(color = guide_legend(override.aes = list(size = 3)))
+
+ggsave("../../../data/partime/GSE205049/res/sample.tiff", width = 9)
 ```
 
 cell type
@@ -273,7 +291,10 @@ plotReducedDim(sces,
                color_by = "cell_type", 
                text_by = "cell_type", 
                point_size = 0.5) +
-    guides(color = guide_legend(override.aes = list(size = 3)))
+    theme_classic() +
+    guides(color = guide_legend(override.aes = list(size = 3))) +
+    scale_color_discrete(name = "cell types")
+ggsave("../../../data/partime/GSE205049/res/cell_types.tiff", width = 9, height = 7)
 ```
 
 clusters
@@ -283,22 +304,29 @@ plotReducedDim(sces,
                color_by = "clusters", 
                text_by = "clusters", 
                point_size = 0.5) +
+    theme_classic() +
     guides(color = guide_legend(override.aes = list(size = 3)))
-```
 
-sample
-```{r}
-
-```
-
-gene expression
-```{r}
-
+ggsave("../../../data/partime/GSE205049/res/clusters.tiff", width = 9, height = 7)
 ```
 
 DNA damage
 ```{r}
+source("../../functions/plotSum.R")
+DDR_genes <- openxlsx::read.xlsx("../../../data/partime/GSE205049/DDR.xlsx") %>% dplyr::filter(Relevance.score > 15) %>% dplyr::pull(Gene.Symbol) %>% unique
+DDR_genes %>% str
 
+plotSums(sces = sces, features = DDR_genes, feature_type = "SYMBOL")
+
+ggsave("../../../data/partime/GSE205049/res/DDR.tiff", width = 9, height = 7)
+```
+
+gene expression
+```{r}
+library(scater)
+library(scran)
+
+df <- makePerCellDF()
 ```
 
 cell cycle
