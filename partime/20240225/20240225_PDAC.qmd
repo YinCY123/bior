@@ -254,10 +254,6 @@ sces$cell_type <- cell_type[sces$clusters]
 saveRDS(sces, "../../../data/partime/GSE205049/processed_GSE205049.rds")
 ```
 
-```{r}
-
-```
-
 # visulization
 ```{r}
 genes_to_visualize <- c("CD19", "CD79A", "MS4A1", "PECAM1", "VWF", 
@@ -305,17 +301,6 @@ cell cycle
 ```{r}
 
 ```
-
-
-
-
-
-
-
-
-
-
-
 
 
 
