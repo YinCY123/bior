@@ -35,15 +35,14 @@ plotSums <- function(sces, features, feature_type = "ensembl", species = "human"
     # visualization
     if(dimred == "TSNE"){
         df %>% ggplot(aes(TSNE.1, TSNE.2)) +
-            geom_point(aes(color = sum), size = 0.5) +
-            geom_density_2d(color = "grey", linewidth = 0.2) +
+            geom_point(aes(color = sum), size = 0.2) +
+            # geom_density_2d(color = "grey", linewidth = 0.2) +
             geom_text(data = cell_locations, aes(x, y, label = cell_type)) +
-            scale_color_gradient2(name = "energy\nstress", 
-                                  low = "blue", mid = "white", high = "red", midpoint = median(df$sum))
+            viridis::scale_color_viridis(name = "DDR score", option = "C", breaks = c(200, 600), labels = c("low", "high"))
     }else{
         df %>% ggplot(aes(UMAP.1, UMAP.2)) +
             geom_point(aes(color = ifelse(stat == "sum", sum, quantile)), size = 0.5) +
-            geom_density_2d(color = "grey", linewidth = 0.2) +
+            # geom_density_2d(color = "grey", linewidth = 0.2) +
             geom_text(data = cell_locations, aes(x, y, label = cell_type)) +
             scale_color_gradient2(name = "energy\nstress", 
                                   low = "blue", mid = "white", high = "red", midpoint = median(df$sum))
