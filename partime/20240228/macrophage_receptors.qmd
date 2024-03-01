@@ -1,0 +1,65 @@
+---
+title: "macrophage_receptors"
+author: "YinCY"
+format: html
+---
+
+```{r}
+library(magrittr)
+library(dplyr)
+
+
+reads_table <- read.csv("/mnt/c/Users/yincy/Downloads/GSE122597_Gene_count_table_GENCODE_vM25.csv/GSE122597_Gene_count_table_GENCODE_vM25.csv", 
+                        sep = ",")
+reads_table %>% colnames()
+
+
+macrophages <- reads_table %>% dplyr::select(starts_with("MF"))
+rownames(macrophages) <- reads_table$GeneSymbol
+macrophages
+
+macrophages_cpm <- edgeR::cpm(macrophages, 
+                              lib.size = colSums(macrophages))
+macrophages_cpm %>% dim
+
+macrophages %>% colSums() %>% median()
+```
+
+```{r}
+ids <- apply(macrophages_cpm, 1, function(x){
+    mean(x > 0) > 0.1
+})
+ids %>% table
+macrophage_expressed_genes <- rownames(macrophages_cpm)[ids]
+macrophage_expressed_genes %>% str
+```
+
+```{r}
+receptors <- readRDS("../../../data/partime/receptors.rds")
+
+library(babelgene)
+receptors <- orthologs(genes = receptors, species = "mouse", human = TRUE)
+receptors
+```
+
+```{r}
+macrophage_receptors <- intersect(receptors$symbol, macrophage_expressed_genes)
+macrophage_receptors %>% str
+
+write.table(macrophage_receptors, "macrophage_receptors.txt", row.names = F, quote = F, col.names = F)
+```
+
+```{r}
+protein_input
+
+grep("^TLR", protein_input$protein_name, value = TRUE)
+```
+
+
+```{r}
+load("../../../github/CellChat/data/PPI.mouse.rda")
+
+```
+
+
+
