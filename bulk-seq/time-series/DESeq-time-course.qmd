@@ -1,0 +1,111 @@
+---
+title: "DESeq time course"
+author: "YinCY"
+format: html
+---
+
+# Time Course Experiments
+DESeq2 can be used to analyze time course experiments, for example to find those genes that react in a condition-specific manner over time, compared to a set of baseline samples. Here we demonstrate a basic time course analysis with the fission data package, which contains gene counts for an RNA-seq time course of `fission` yeast (Leong et al. 2014). The yeast were exposed to oxidative stress, and half of the samples contained a deletion of the gene atf21. We use a design formula that models the strain difference at time 0, the difference over time, and any strain-specific differences over time (the interaction term `strain:minute`).
+
+```{r}
+#| message: false
+#| warning: false
+
+library(DESeq2)
+library(fission)
+library(ggplot2)
+library(magrittr)
+data("fission")
+
+fission
+```
+
+
+```{r}
+ddsTC <- DESeqDataSet(se = fission, 
+                      design = ~ strain + minute + strain:minute)
+ddsTC
+```
+
+The following chunk of code performs a likelihood ratio test, where we remove the strain-specific differences over time. Genes with small p values from this test are those which at one or more time points after time 0 showed a strain-specific effect. **Note therefore that this will not give small p values to genes that moved up or down over time in the same way in both strains**.
+
+```{r}
+ddsTC <- DESeq(object = ddsTC, 
+               test = "LRT", 
+               reduced = ~ strain + minute)
+resTC <- results(ddsTC)
+resTC$symbol <- mcols(ddsTC)$symbol
+```
+
+This is just one of the tests that can be aplied to time series data. Another option would be to model the counts as a smooth function of time, and to include an interaction term of the condition with the smooth function. It is possible to build such a model using spline basic functions within R, and another, more mordern approach is using Gaussian processes.
+
+We can plot the counts for the groups over time using ggplot2, for the gene with the smallest adjusted p value, testing for condition-dependent time profile and accounting for differences at time 0 (figure below). Keep in mind that the interaction terms are the difference between the two groups at a given time after accounting for the difference at time 0.
+
+```{r}
+fiss <- plotCounts(dds = ddsTC, 
+                   gene = which.min(resTC$padj), 
+                   intgroup = c("minute", "strain"), 
+                   returnData = TRUE)
+fiss$minute <- as.numeric(as.character(fiss$minute))
+
+ggplot(data = fiss, aes(minute, count, color = strain)) +
+    geom_point() +
+    stat_summary(fun.y = mean, geom = "line") +
+    scale_y_log10()
+```
+
+```{r}
+resultsNames(ddsTC)
+```
+
+Wald tests for the log2 fold changes at individual time points can be investigated using the `test` argument to results:
+```{r}
+res30 <- results(ddsTC, name = "strainmut.minute30", test = "Wald")
+res30
+```
+
+We can furthermore cluster significant genes by their profiles. We extract a matrix of the log2 fold changes using the coef function. Note that these are the maximum likelihood estimates (MLE). For shrunken LFC, one must obtain them one coefficient at a time using `lfcShrink`.
+
+```{r}
+betas <- coef(ddsTC)
+betas %>% colnames()
+```
+
+```{r}
+topGenes <- resTC$padj %>% order %>% head(20)
+mat <- betas[topGenes, -c(1, 2)]
+
+thr <- 3
+mat[mat < -thr] <- -thr
+mat[mat > thr] <- thr
+pheatmap::pheatmap(mat, 
+                   breaks = seq(from = -thr, to = thr, length = 101), 
+                   cluster_cols = FALSE)
+
+?DESeq
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
