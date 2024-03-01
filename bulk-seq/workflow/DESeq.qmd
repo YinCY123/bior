@@ -37,25 +37,25 @@ As input, the `DESeq2` package expects count data as obtained, e.g., from RNA-se
 The values in the matrix should be un-normalized counts or estimated counts of sequencing reads (for single-end RNA-seq) or fragments (for paired-end RNA-seq). It is important to provide count matrices as input for `DESeq2`’s statistical model (Love, Huber, and Anders 2014) to hold, as only the count values allow assessing the measurement precision correctly. The `DESeq2` model internally corrects for library size, so transformed or normalized values such as counts scaled by library size should not be used as input.
 
 ## The DESeqDataSet
-The object class used by the `DESeq2` package to store the read counts and the intermediate estimated quantities during statistical analysis is the DESeqDataSet, which will usually be represented in the code here as an object dds.
+The object class used by the `DESeq2` package to store the read counts and the intermediate estimated quantities during statistical analysis is the `DESeqDataSet`, which will usually be represented in the code here as an object dds.
 
-A technical detail is that the `DESeqDataSet` class extends the `RangedSummarizedExperiment` class of the `SummarizedExperiment` package. The “Ranged” part refers to the fact that the rows of the assay data (here, the counts) can be associated with genomic ranges (the exons of genes). This association facilitates downstream exploration of results, making use of other Bioconductor packages’ range-based functionality (e.g. find the closest ChIP-seq peaks to the differentially expressed genes).
+A technical detail is that the `DESeqDataSet` class extends the `RangedSummarizedExperiment` class of the `SummarizedExperiment` package. The “Ranged” part refers to the fact that the rows of the assay data (here, the counts) can be associated with genomic ranges (the exons of genes). This association facilitates downstream exploration of results, making use of other Bioconductor packages’ range-based functionality (e.g. find the closest `ChIP-seq` peaks to the differentially expressed genes).
 
 A `DESeqDataSet` object must have an associated design formula. The design formula expresses the variables which will be used in modeling. The formula should be a tilde (~) followed by the variables with plus signs between them (it will be coerced into an formula if it is not already). The design can be changed later, however then all differential analysis steps should be repeated, as the design formula is used to estimate the dispersions and to estimate the log2 fold changes of the model.
 
-Note: In order to benefit from the default settings of the package, you should put the variable of interest at the end of the formula and make sure the control level is the first level.
+**Note: In order to benefit from the default settings of the package, you should put the variable of interest at the end of the formula and make sure the control level is the first level**.
 
-We will now show 4 ways of constructing a DESeqDataSet, depending on what pipeline was used upstream of DESeq2 to generated counts or estimated counts:
+We will now show 4 ways of constructing a `DESeqDataSet`, depending on what pipeline was used upstream of `DESeq2` to generated counts or estimated counts:
 
-1. from transcript abundance files and tximport
-2. from a count matrix
-3. from htseq-count files
-4. from a `SummarizedExperiment` object
+1. from transcript abundance files and tximport  
+2. from a count matrix  
+3. from htseq-count files  
+4. from a `SummarizedExperiment` object  
 
 ### transcript abundance files and tximport / tximeta
 
 ### Count matrix input
-To demonstate the use of `DESeqDataSetFromMatrix`, we will read in count data from the `pasilla` package. We read in a count matrix, which we will name `cts`, and the sample information table, which we will name `coldata`.
+To demonstrate the use of `DESeqDataSetFromMatrix`, we will read in count data from the `pasilla` package. We read in a count matrix, which we will name `cts`, and the sample information table, which we will name `coldata`.
 
 ```{r}
 #| message: false
@@ -81,7 +81,7 @@ coldata$condition <- factor(coldata$condition)
 coldata$type <- factor(coldata$type)
 ```
 
-It is absolutely critical that the columns of the count matrix and the rows of the column data (information about samples) are in the same order. DESeq2 will not make guesses as to which column of the count matrix belongs to which row of the column data, these must be provided to DESeq2 already in consistent order.
+**It is absolutely critical that the columns of the count matrix and the rows of the column data (information about samples) are in the same order**. `DESeq2` will not make guesses as to which column of the count matrix belongs to which row of the column data, these must be provided to `DESeq2` already in consistent order.
 
 ```{r}
 rownames(coldata) <- gsub("fb$", "", rownames(coldata))
@@ -114,6 +114,7 @@ mcols(dds) <- DataFrame(mcols(dds), featuredata)
 
 data("airway", package = "airway")
 airway
+airway %>% colData
 ```
 
 ```{r}
@@ -122,7 +123,7 @@ dds <- DESeqDataSet(se = airway,
 dds
 ```
 
-# starting from count matrices
+## starting from count matrices
 ```{r}
 countdata <- round(assay(airway, 1))
 countdata %>% head
@@ -160,9 +161,9 @@ dds %>% nrow
 ## The variance stabilizing transformation and the rlog
 **Which transformation to choose?** The VST is much faster to compute and is less sensitive to high count outliers than the rlog. The rlog tends to work well on small datasets (n < 30), potentially outperforming the VST when there is a wide range of sequencing depth across samples (an order of magnitude difference). We therefore recommend the VST for medium-to-large datasets (n > 30).
 
-Note that the two transformations offered by DESeq2 are provided for applications other than differential testing. For differential testing we recommend the DESeq function applied to raw counts, as described later in this workflow, which also takes into account the dependence of the variance of counts on the mean value during the dispersion estimation step.
+Note that the two transformations offered by `DESeq2` are provided for applications other than differential testing. For differential testing we recommend the `DESeq` function applied to raw counts, as described later in this workflow, which also takes into account the dependence of the variance of counts on the mean value during the dispersion estimation step.
 
-Both vst and rlog return a DESeqTransform object which is based on the SummarizedExperiment class. The transformed values are no longer counts, and are stored in the assay slot. The colData that was attached to dds is still accessible:
+Both `vst` and `rlog` return a `DESeqTransform` object which is based on the `SummarizedExperiment` class. The transformed values are no longer counts, and are stored in the assay slot. The `colData` that was attached to dds is still accessible:
 
 ```{r}
 vsd <- vst(object = dds, blind = FALSE)
@@ -186,7 +187,7 @@ rld %>% colData
 dds %>% colData
 ```
 
-In the above function calls, we specified blind = FALSE, which means that differences between cell lines and treatment (the variables in the design) will not contribute to the expected variance-mean trend of the experiment. The experimental design is not used directly in the transformation, only in estimating the global amount of variability in the counts. For a fully unsupervised transformation, one can set blind = TRUE (which is the default).
+In the above function calls, we specified `blind = FALSE`, which means that differences between cell lines and treatment (the variables in the design) will not contribute to the expected variance-mean trend of the experiment. The experimental design is not used directly in the transformation, only in estimating the global amount of variability in the counts. For a fully unsupervised transformation, one can set `blind = TRUE` (which is the default).
 
 To show the effect of the transformation, in the figure below we plot the first sample against the second, first simply using the log2 function (after adding 1)
 
@@ -221,7 +222,7 @@ We can see how genes with low counts (bottom left-hand corner) seem to be excess
 ## Sample distances
 A useful first step in an RNA-seq analysis is often to assess overall similarity between samples: Which samples are similar to each other, which are different? Does this fit to the expectation from the experiment’s design?
 
-We use the R function dist to calculate the Euclidean distance between samples. To ensure we have a roughly equal contribution from all genes, we use it on the VST data. We need to transpose the matrix of values using t, because the dist function expects the different samples to be rows of its argument, and different dimensions (here, genes) to be columns.
+We use the R function `dist` to calculate the `Euclidean distance` between samples. To ensure we have a roughly equal contribution from all genes, we use it on the VST data. We need to transpose the matrix of values using t, because the dist function expects the different samples to be rows of its argument, and different dimensions (here, genes) to be columns.
 
 ```{r}
 sampleDists <- dist(t(assay(vsd)))
@@ -258,15 +259,19 @@ ggplot(pcadata, aes(PC1, PC2, color = dex)) +
 
 # Differential expression analysis
 ## Running the differntial expression pipeline
-As we have already specified an experimental design when we created the DESeqDataSet, we can run the differential expression pipeline on the raw counts with a single call to the function DESeq:
+As we have already specified an experimental design when we created the `DESeqDataSet`, we can run the differential expression pipeline on the raw counts with a single call to the function `DESeq`:
 
 ```{r}
 dds <- DESeq(dds)
+dds %>% rowData
+dds %>% colData
+assayNames(dds)
+dds
 ```
 
-This function will print out a message for the various steps it performs. These are described in more detail in the manual page for DESeq, which can be accessed by typing ?DESeq. Briefly these are: the estimation of size factors (controlling for differences in the sequencing depth of the samples), the estimation of dispersion values for each gene, and fitting a generalized linear model.
+This function will print out a message for the various steps it performs. These are described in more detail in the manual page for `DESeq`, which can be accessed by typing `?DESeq`. Briefly these are: the estimation of size factors (controlling for differences in the sequencing depth of the samples), the estimation of dispersion values for each gene, and fitting a generalized linear model.
 
-A `DESeqDataSet` is returned that contains all the fitted parameters within it, and the following section describes how to extract out  results tables of interest from this object.
+A `DESeqDataSet` is returned that contains all the fitted parameters within it, and the following section describes how to extract out results tables of interest from this object.
 
 ## Building the results table
 Calling results without any arguments will extract the estimated log2 fold changes and p values for the last variable in the design formula. If there are more than 2 levels for this variable, results will extract the results table for a comparison of the last level over the first level. The comparison is printed at the top of the output: `dex trt vs untrt`.
@@ -290,6 +295,63 @@ mcols(res) %>% as.data.frame()
 ```{r}
 summary(res)
 ```
+
+
+# Variations to the standard workflow
+## Wald test individual steps
+The function `DESeq` runs the following functions in order.
+```{r}
+dds <- estimateSizeFactors(dds)
+dds <- estimateDispersions(dds)
+dds <- nbinomWaldTest(dds)
+dds
+```
+
+
+## Control features for estimating size factors
+In some experiments, it may not be appropriate to assume that a minority of features (genes) are affected greatly by the condition, such that the standard median-ratio method for estimating the size factors will not provide correct inference (the log fold changes for features that were truly un-changing will not centered on zero). This is a difficult inference problem for any method, but there is an important feature that can be used: the `controlGenes` argument of `estimateSizeFactors`. If there is any prior information about features (genes) that should not be changing with respect to the condition, providing this set of features to `controlGenes` will ensure that the log fold changes for these features will be centered around 0. The paradigm then becomes:
+
+```{r}
+#| eval: false
+
+dds <- estimateSizeFactors(object = dds, controlGenes = ctrlGenes)
+```
+
+## Contrast
+A contrast is a linear combination of estimated log2 fold changes, which can be used to test if differences between groups are equal to zero. The simplest use case for contrasts is an experimental design containing a factor with three levels, say A, B and C. Contrasts enable the user to generate results for all 3 possible differences: log2 fold change of B vs A, of C vs A, and of C vs B. The contrast argument of results function is used to extract test results of log2 fold changes of interest, for example:
+
+```{r}
+results(dds, contrast = c("condition", "C", "B"))
+```
+
+Log2 fold changes can also be added and subtracted by providing a `list` to the `contrast` argument which has two elements: the names of the log2 fold changes to add, and the names of the log2 fold changes to subtract. The names used in the list should come from `resultsNames(dds)`. Alternatively, a numeric vector of the length of `resultsNames(dds)` can be provided, for manually specifying the linear combination of terms. A tutorial describing the use of numeric contrasts for `DESeq2` explains a general approach to comparing across groups of samples.
+
+## Interactions
+`~genotype + condition + genotype:condition`
+
+## Time-series experiments
+
+
+## Likelihood ratio test
+
+
+## Extended section on shrinkage estimators
+
+
+## Recommendations for single-cell analysis
+
+
+## Approach to count outliers
+
+
+## Dispersion plot and fitting alternatives
+
+
+### Local or mean dispersion fit
+
+### Supply a custom dispersion fit
+
+
 
 # Time course experiemnts
 `DESeq2` can be used to analyze time course experiments, for example to find those genes that react in a condition-specific manner over time, compared to a set of baseline samples. Here we demonstrate a basic time course analysis with the fission data package, which contains gene counts for an RNA-seq time course of fission yeast (Leong et al. 2014). The yeast were exposed to oxidative stress, and half of the samples contained a deletion of the gene atf21. We use a design formula that models the strain difference at time 0, the difference over time, and any strain-specific differences over time (the interaction term strain:minute).
