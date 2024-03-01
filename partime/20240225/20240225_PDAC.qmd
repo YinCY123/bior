@@ -4,23 +4,6 @@ author: "YinCY"
 format: html
 ---
 
-```{r}
-#| message: false
-#| warning: false
-
-library(tidyverse)
-library(DropletUtils)
-library(scran)
-library(scater)
-library(bluster)
-library(BiocParallel)
-library(R.utils)
-library(fs)
-library(stringr)
-library(stringr.plus)
-library(EnsDb.Hsapiens.v86)
-library(batchelor)
-```
 
 # ref
 ```{r}
@@ -256,8 +239,6 @@ saveRDS(sces, "../../../data/partime/GSE205049/processed_GSE205049.rds")
 
 # visulization
 ```{r}
-<<<<<<< HEAD
-=======
 #| message: false
 #| warning: false
 
@@ -267,7 +248,6 @@ library(tidyverse)
 
 sces <- readRDS("../../../data/partime/GSE205049/processed_GSE205049.rds")
 
->>>>>>> 6636dc89b377782c31ff261f39a85e995a0e2a17
 genes_to_visualize <- c("CD19", "CD79A", "MS4A1", "PECAM1", "VWF", 
                         "FGF7", "CD68", "CD163", "CD14", "FGFBP2", 
                         "RCVRRN", "IGHG1", "MZB1", "SDC1", "CD3D", 
@@ -276,15 +256,28 @@ genes_to_visualize <- c("CD19", "CD79A", "MS4A1", "PECAM1", "VWF",
 
 sample
 ```{r}
-plotReducedDim(sces, 
+library(patchwork)
+
+samples <- sces$Sample %>% unique
+
+plotReducedDim(sces[, grepl("AdjNorm", sces$Sample)], 
                dimred = "TSNE", 
                color_by = "Sample", 
                text_by = "cell_type", 
                point_size = 0.5) +
     theme_classic() +
-    guides(color = guide_legend(override.aes = list(size = 3)))
+    guides(color = guide_legend(override.aes = list(size = 3))) +
 
-ggsave("../../../data/partime/GSE205049/res/sample.tiff", width = 9)
+plotReducedDim(sces[, grepl("PDAC", sces$Sample)], 
+               dimred = "TSNE", 
+               color_by = "Sample", 
+               text_by = "cell_type", 
+               point_size = 0.5) +
+    theme_classic() +
+    guides(color = guide_legend(override.aes = list(size = 3))) 
+
+
+ggsave("../../../data/partime/GSE205049/res/sample.tiff", width = 18)
 ```
 
 cell type
@@ -328,14 +321,57 @@ gene expression
 ```{r}
 library(scater)
 library(scran)
+source("../../functions/idconv.R")
 
-df <- makePerCellDF()
+df <- makePerCellDF(x = sces, 
+                    features = idconv(genes_to_visualize, from_type = "SYMBOL", to_type = "GENEID", db = "human"), 
+                    use.dimred = FALSE)
+df <- df %>% tidyr::pivot_longer(cols = starts_with("ENSG"), names_to = "ensembl", values_to = "logcounts")
+df <- df %>% dplyr::group_by(clusters, ensembl) %>% 
+    mutate(pct = round(mean(logcounts > 0) * 100, 3), 
+           mean_exp = round(mean(logcounts), 3))
+df$symbol <- mapIds(EnsDb.Hsapiens.v86, keys = df$ensembl, keytype = "GENEID", column = "SYMBOL")
+
+df %>% 
+    ggplot(aes(symbol, clusters)) +
+    geom_point(aes(size = mean_exp, color = pct)) +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle = -50, hjust = 0)) +
+    scale_y_discrete(name = NULL) +
+    scale_x_discrete(name = NULL) +
+    viridis::scale_color_viridis(name = "percent\nexpression", discrete = F) +
+    scale_size_area(name = "mean\nexpression")
+
+ggsave("../../../data/partime/GSE205049/res/gene_expression.tiff", width = 9)
 ```
 
 cell cycle
 ```{r}
+hsa_pairs <- readRDS(system.file("exdata", "human_cycle_markers.rds", package = "scran"))
 
+
+assignment <- scyclone(x = sces, 
+        pairs = hsa_pairs, 
+        gene.names = rownames(sces))
+assignments$scores %>% dim
+assignments$phases %>% table
+
+sces$phase <- assignments$phases
 ```
+
+```{r}
+sces <- sces[, !is.na(sces$phase)]
+
+plotReducedDim(object = sces, 
+               dimred = "TSNE", 
+               color_by = "phase", 
+               text_by = "cell_type", 
+               point_size = 0.5) +
+    guides(color = guide_legend(override.aes = list(size = 3)))
+
+ggsave("../../../data/partime/GSE205049/res/Phase.tiff", width = 9)
+```
+
 
 
 
