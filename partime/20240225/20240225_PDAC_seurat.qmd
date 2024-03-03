@@ -63,7 +63,7 @@ saveRDS(pdac_seurat, "../../../data/partime/20240225_PDAC/pdac_seurat.rds")
 sample
 ```{r}
 DimPlot(object = pdac_seurat, 
-        reduction = "tsne.harmony", 
+        reduction = "tsne", 
         group.by = "samples") +
     ggtitle(label = NULL)
 ggsave("../../../data/partime/20240225_PDAC/sample.tiff", width = 9)
@@ -72,7 +72,7 @@ ggsave("../../../data/partime/20240225_PDAC/sample.tiff", width = 9)
 cell type
 ```{r}
 DimPlot(object = pdac_seurat, 
-        reduction = "tsne.harmony", 
+        reduction = "tsne", 
         group.by = "major") +
     ggtitle(label = NULL)
 
@@ -82,8 +82,8 @@ ggsave("../../../data/partime/20240225_PDAC/cell_type.tiff", width = 9)
 clusters
 ```{r}
 DimPlot(object = pdac_seurat, 
-        reduction = "tsne.harmony", 
-        group.by = "harmony_clusters") +
+        reduction = "tsne", 
+        group.by = "clusters") +
     ggtitle(label = NULL)
 
 ggsave("../../../data/partime/20240225_PDAC/clusters.tiff", width = 9)
@@ -94,18 +94,16 @@ DDR
 genes <- read.csv("../../../data/partime/20240225_PDAC/GSE205049/DDR_gees.csv")
 genes <- genes %>% dplyr::filter(Relevance.score > 1) %>% dplyr::pull(Gene.Symbol) %>% unique
 genes <- genes[genes %in% rownames(pdac_seurat)]
-pdac_seurat[["DDR"]] <- PercentageFeatureSet(pdac_seurat, features = genes) %>% exp()
+pdac_seurat[["DDR"]] <- PercentageFeatureSet(pdac_seurat, features = genes)
 pdac_seurat[[]]
 cols <- viridis::cividis(length(pdac_seurat$DDR))
 cols %>% str
 DimPlot(pdac_seurat, 
-        reduction = "tsne.harmony", 
-        cols = "YlOrRd") +
+        reduction = "tsne", 
+        cols = "Greens") +
     theme(legend.position = "none") 
 
-AggregateExpression(pdac_seurat[[]], 
-                    features = genes, 
-                    group.by = rownames(pdac_seurat[[]]))
+ggsave("../../../data/partime/20240225_PDAC/DDR.tiff", width = 9)
 ```
 
 Phase
