@@ -1,0 +1,121 @@
+---
+title: "20240225_PDAC_seurat"
+author: "YinCY"
+format: html
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+library(Seurat)
+library(fs)
+library(magrittr)
+library(stringr.plus)
+library(data.table)
+library(ggplot2)
+```
+
+# preprocessing
+```{r}
+annotation <- read.table("../../../data/partime/20240225_PDAC/GSE205049/GSE205049_scRNA-seq-annotations.csv.gz", 
+                         sep = ",",
+                         header = TRUE, 
+                         row.names = 1, 
+                         check.names = FALSE)
+ntx <- fread("../../../data/partime/20240225_PDAC/GSE205049/GSE205049_scRNA-seq-integrated_GEM.csv.gz", 
+             sep = ",", 
+             header = TRUE, 
+             check.names = FALSE) %>% 
+    as.data.frame() %>% 
+    tibble::column_to_rownames("V1")
+ntx <- as(as.matrix(ntx), "CsparseMatrix")
+
+pdac_seurat <- CreateSeuratObject(counts = ntx, 
+                                  project = "PDAC")
+pdac_seurat[["mito_percent"]] <- PercentageFeatureSet(pdac_seurat, pattern = "^MT-")
+pdac_seurat <- AddMetaData(pdac_seurat, annotation)
+pdac_seurat[["samples"]] <- paste(pdac_seurat$orig.ident, pdac_seurat$DiseaseState, sep = "_")
+
+pdac_seurat[["RNA"]] <- split(pdac_seurat[["RNA"]], f = pdac_seurat$samples)
+
+pdac_seurat <- pdac_seurat %>% 
+    NormalizeData() %>% 
+    FindVariableFeatures() %>% 
+    ScaleData() %>% 
+    RunPCA()
+
+# pdac_seurat <- IntegrateLayers(pdac_seurat, 
+#                                method = HarmonyIntegration, 
+#                                new.reduction = "harmony", 
+#                                orig.reduction = "pca", 
+#                                verbose = TRUE)
+
+pdac_seurat <- pdac_seurat %>% 
+    FindNeighbors(reduction = "pca", dims = 1:50) %>% 
+    FindClusters(resolution = 2, cluster.name = "clusters") %>% 
+    RunTSNE(reduction = "pca", reduction.name = "tsne")
+
+saveRDS(pdac_seurat, "../../../data/partime/20240225_PDAC/pdac_seurat.rds")
+```
+
+# Visualization
+sample
+```{r}
+DimPlot(object = pdac_seurat, 
+        reduction = "tsne.harmony", 
+        group.by = "samples") +
+    ggtitle(label = NULL)
+ggsave("../../../data/partime/20240225_PDAC/sample.tiff", width = 9)
+```
+
+cell type
+```{r}
+DimPlot(object = pdac_seurat, 
+        reduction = "tsne.harmony", 
+        group.by = "major") +
+    ggtitle(label = NULL)
+
+ggsave("../../../data/partime/20240225_PDAC/cell_type.tiff", width = 9)
+```
+
+clusters
+```{r}
+DimPlot(object = pdac_seurat, 
+        reduction = "tsne.harmony", 
+        group.by = "harmony_clusters") +
+    ggtitle(label = NULL)
+
+ggsave("../../../data/partime/20240225_PDAC/clusters.tiff", width = 9)
+```
+
+DDR
+```{r}
+genes <- read.csv("../../../data/partime/20240225_PDAC/GSE205049/DDR_gees.csv")
+genes <- genes %>% dplyr::filter(Relevance.score > 1) %>% dplyr::pull(Gene.Symbol) %>% unique
+genes <- genes[genes %in% rownames(pdac_seurat)]
+pdac_seurat[["DDR"]] <- PercentageFeatureSet(pdac_seurat, features = genes) %>% exp()
+pdac_seurat[[]]
+cols <- viridis::cividis(length(pdac_seurat$DDR))
+cols %>% str
+DimPlot(pdac_seurat, 
+        reduction = "tsne.harmony", 
+        cols = "YlOrRd") +
+    theme(legend.position = "none") 
+
+AggregateExpression(pdac_seurat[[]], 
+                    features = genes, 
+                    group.by = rownames(pdac_seurat[[]]))
+```
+
+Phase
+```{r}
+g2m <- cc.genes$g2m.genes
+s <- cc.genes$s.genes
+
+
+pdac_seurat <- CellCycleScoring(object = pdac_seurat,
+                                g2m.features = g2m, 
+                                s.features = s)
+```
+
