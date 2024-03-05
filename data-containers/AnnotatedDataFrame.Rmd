@@ -9,16 +9,16 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-An AnnotatedDataFrame consists of two parts. There is a collection of samples and the values of variables measured on those samples. There is also a description of each variable measured. The components of an `AnnotatedDataFrame` can be accessed with `pData` and `varMetadata`.  
+An `AnnotatedDataFrame` consists of two parts. There is a collection of samples and the values of variables measured on those samples. There is also a description of each variable measured. The components of an `AnnotatedDataFrame` can be accessed with `pData` and `varMetadata`.  
 
 ```
 AnnotatedDataFrame(data, varMetadata, dimLabels = c("rowNames", "columnNames"), ...)
 ```
 
-- data: A `data.frame` containing samples (rows) and measured variables (columns).  
-- dimLabels: A character vector of length 2 that provides labels for the rows and columns in the show method.  
-- varMetadata: A `data.frame` with number of rows equal number of columns in data, and at least one column, named `labelDescription`, containing a textual description of each variable.  
-- .__classVersion__: A Version object describing the R and `Biobase` version numbers used to created the instance. Intended for developer use.  
+- `data`: A `data.frame` containing samples (rows) and measured variables (columns).  
+- `dimLabels`: A character vector of length 2 that provides labels for the rows and columns in the show method.  
+- `varMetadata`: A `data.frame` with number of rows equal number of columns in data, and at least one column, named `labelDescription`, containing a textual description of each variable.  
+- `.__classVersion__`: A Version object describing the R and `Biobase` version numbers used to created the instance. Intended for developer use.  
 
 
 Class-specific methods.  
