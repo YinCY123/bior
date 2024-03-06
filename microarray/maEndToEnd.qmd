@@ -17,13 +17,16 @@ The data set used is from a paper studying the differences in gene expression in
 
 library(Biobase)
 library(oligoClasses)
+
 library(ArrayExpress)
 library(pd.hugene.1.0.st.v1)
 library(hugene10sttranscriptcluster.db)
 
+# quality control and pre-processing
 library(oligo)
 library(arrayQualityMetrics)
 
+# analysis and statistics
 library(limma)
 library(topGO)
 
@@ -37,7 +40,7 @@ library(stringr)
 
 # Import data
 ```{r}
-sdrf <- read.table("/home/yincy/git/data/zhuyi/dermatomyositis/E-MTAB-2967/E-MTAB-2967.sdrf.txt", 
+sdrf <- read.table("../../data/zhuyi/dermatomyositis/data/E-MTAB-2967/E-MTAB-2967.sdrf.txt", 
                    sep = "\t", 
                    header = TRUE, 
                    quote = "\"") %>% 
@@ -47,22 +50,22 @@ sdrf
 ```
 
 ```{r}
-files <- list.celfiles("/home/yincy/git/data/zhuyi/dermatomyositis/E-MTAB-2967/data", 
-                       full.names = TRUE)
+files <- dir_ls("../../data/zhuyi/dermatomyositis/data/E-MTAB-2967/files/", type = "file")
 files %>% str
 
 raw_data <- read.celfiles(filenames = files, 
                           verbose = TRUE)
 stopifnot(validObject(raw_data))
+raw_data %>% rownames()
 
-es <- ExpressionSet(assayData = exprs(raw_data), 
+es <- ExpressionSet(assayData = exprs(raw_data)[, rownames(sdrf)], 
                     phenoData = AnnotatedDataFrame(sdrf))
 
 validObject(es)
 ```
 
 ```{r}
-pData(es) %>% head
+phenoData(es) %>% pData()
 ```
 
 ```{r}

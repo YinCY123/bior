@@ -5,41 +5,392 @@ format: html
 editor: source
 date: 2024-02-19
 ---
-
-# data
+# DM v.s. healthy
+## data
 - GSE46239 (52 samples): Gene expression profiling of healthy donor and dermatomyositis patient skin biopsy specimens.
 - GSE39582 (585 samples): The aim of this study was to build up a robust molecular classification of mRNA expression profiles (Affymetrix U133Plus2) of a large series of 443 CC and 19 non-tumoral colorectal mucosas, and to validate it on an independent series of 123 CC and 906 public dataset.
 - GSE1551 (23 samples): muscle biopsies of normal and dermatomyositis patients
 
-
-# download data
 ```{r}
+#|  message: false
+#|  warning: false
+
+library(fs)
+library(oligo)
+library(Biobase)
+library(limma)
 library(GEOquery)
-getGEOSuppFiles(GEO = "GSE39582", baseDir = "../../../data/zhuyi/dermatomyositis/data/")
+library(magrittr)
+library(stringr.plus)
+library(ggplot2)
+library(AnnotationDbi)
+library(stringr)
+library(vsn)
+library(Rtsne)
+library(ggrepel)
+library(RColorBrewer)
+```
+
+# DM
+```{r}
+es <- getGEO(GEO = "GSE1551")[[1]]
+pData(es)$group <- ifelse(grepl("DM", pData(es)$description), "DM", "Normal") %>% factor(levels = c("Normal", "DM"))
+pData(es)$group %>% table
+```
+
+```{r}
+es <- justvsn(es)
+rms <- es %>% exprs %>% apply(1, median)
+rms %>% hist(breaks = 200)
+abline(v = 7.5, lty = 2, col = "red", lwd = 2)
+threshold <- 7.5
+cutoff <- pData(es)$group %>% table %>% min
+ids <- es %>% exprs %>% apply(1, function(x){
+    sum(x >= threshold) >= cutoff
+})
+ids %>% table
+es <- subset(es, ids)
+
+# remove multiple mapping and non-mapping probes
+ids <- str_detect(fData(es)$`Gene Symbol`, pattern = "///") | (nchar(fData(es)$`Gene Symbol`) <= 0)
+ids %>% table
+fData(es)$`Gene Symbol`[ids]
+
+es <- es[!ids, ]
+```
+
+```{r}
+design <- model.matrix(~ 0 + pData(es)$group)
+colnames(design) <- c("Normal", "DM")
+
+fit <- lmFit(object = es, design = design)
+contrast <- makeContrasts(DM-Normal, levels = design)
+fit <- contrasts.fit(fit = fit, contrasts = contrast) %>% eBayes()
+tables_DM <- topTable(fit, number = Inf)
+
+saveRDS(tables_DM, "../../../data/zhuyi/dermatomyositis/differential_expressed_genes_DM.rds")
+saveRDS(es, "../../../data/zhuyi/dermatomyositis/DM_es.rds")
+```
+
+```{r}
+degs <- tables_DM %>% dplyr::filter(P.Value < 0.05, abs(logFC) >= 1) %>% rownames()
+
+df <- data.frame(group = pData(es)$group, 
+                 row.names = rownames(pData(es)))
+df_cols <- list(group = c(DM = "tomato", Normal = "steelblue"))
+
+pdf("../../../data/zhuyi/dermatomyositis/res/DM_differential_expressed_genes.pdf")
+pheatmap::pheatmap(exprs(es)[degs, ], 
+                   cluster_cols = F, 
+                   cluster_rows = T, 
+                   show_rownames = F, 
+                   show_colnames = F, 
+                   annotation_col = df, 
+                   annotation_colors = df_cols, 
+                   color = viridis::viridis(255, option = "B"), 
+                   legend_breaks = c(8, 15), 
+                   legend_labels = c("low", "high"))
+dev.off()
 ```
 
 
+```{r}
+degs <- tables_DM %>% dplyr::filter(P.Value < 0.05) %>% rownames()
+dists <- es %>% exprs %>% .[degs, ] %>% t %>% dist %>% as.matrix()
+es %>% phenoData() %>% pData
+df <- data.frame(group = pData(es)$group, 
+                 row.names = pData(es) %>% row.names)
+df_cols <- list(group = c("DM" = "tomato", "Normal" = "blue"))
+
+pdf("../../../data/zhuyi/dermatomyositis/res/DM_sample_heatmap.pdf", width = 9)
+pheatmap::pheatmap(dists, 
+                   annotation_col = df, 
+                   clustering_method = "ward.D2",
+                   color = viridis::inferno(100), 
+                   legend_breaks = c(10, 75),
+                   legend_labels = c("low", "high"),
+                   legend = TRUE, 
+                   show_rownames = F, 
+                   show_colnames = F)
+dev.off()
+```
+
+```{r}
+es <- readRDS("../../../data/zhuyi/dermatomyositis/DM_es.rds")
+tables_DM <- readRDS("../../../data/zhuyi/dermatomyositis/differential_expressed_genes_DM.rds")
+set.seed(101)
+pcas <- es %>% exprs %>% .[degs, ] %>%  t %>% prcomp()
+var_percent <- pcas$sdev ^ 2 /(sum(pcas$sdev ^ 2)) * 100 %>% round(digits = 3)
+
+df <- data.frame(pc1 = pcas$x[, 1], 
+                 pc2 = pcas$x[, 2], 
+                 group = pData(es)$group)
+
+df %>% ggplot(aes(pc1, pc2)) +
+    geom_hex(aes(fill = group), color = "grey20") +
+    scale_color_discrete(name = "group") +
+    scale_shape_discrete(name = "group") +
+    scale_x_continuous(name = paste("PC1: ", round(var_percent[1], 2), "%")) +
+    scale_y_continuous(name = paste("PC2: ", round(var_percent[2], 2), "%")) +
+    theme_classic()
+
+ggsave("../../../data/zhuyi/dermatomyositis/res/DM_sample_PCA.tiff", 
+       width = 9, bg = "white")
+```
+
+```{r}
+set.seed(101)
+res_tsns <- Rtsne(pcas$x, perplexity = 7, normalize = F)
+df <- data.frame(res_tsns$Y, 
+                 group = pData(es)$group, 
+                 row.names = rownames(pcas$x))
+
+df %>% 
+    ggplot(aes(X1, X2)) +
+    geom_hex(aes(fill = group), color = "grey30") +
+    scale_x_continuous(name = "TSNE1") +
+    scale_y_continuous(name = "TSNE2") +
+    theme_classic()
+
+ggsave("../../../data/zhuyi/dermatomyositis/res/DM_sample_TSNE.tiff", 
+       width = 9, bg = "white")
+```
 
 
+```{r}
+tables_DM <- tables_DM %>% dplyr::mutate(log10pval = -log10(P.Value), 
+                                         size = ifelse(abs(logFC) >= 1 & P.Value < 0.05, "large", "small") %>% factor, 
+                                         color = ifelse(logFC >= 1 & P.Value < 0.05, "up", 
+                                                        ifelse(logFC <= -1 & P.Value < 0.05, "down", "nc")), 
+                                         color = factor(color, levels = c("up", "down", "nc")))
+df <- rbind(
+    tables_DM %>% dplyr::filter(logFC >= 1, P.Value < 0.05) %>% head(10), 
+    tables_DM %>% dplyr::filter(logFC <= -1, P.Value < 0.05) %>% head(10)
+)
 
 
+tables_DM %>% 
+    ggplot(aes(logFC, log10pval)) +
+    geom_point(aes(color = color, size = size)) +
+    geom_label_repel(data = df, aes(logFC, log10pval, label = Gene.Symbol), size= 2, nudge_y = 0.25) +
+    geom_vline(xintercept = c(-1, 1) * 0.95, linetype = 2, linewidth = 0.5, color = "grey30") +
+    geom_hline(yintercept = -log10(0.05) * 0.95, linetype = 2, linewidth = 0.5, color = "grey30") +
+    scale_color_manual(name = NULL, values = c("up" = "tomato", "down" = "steelblue", "nc" = "grey")) +
+    scale_size_manual(values = c("large" = 3, "small" = 0.5)) +
+    theme_classic() +
+    scale_x_continuous(name = "log2FC", limits = c(-4, 5)) +
+    scale_y_continuous(name = "-log10 P Value") +
+    guides(color = guide_legend(override.aes = list(size = 4)))
 
+ggsave("../../../data/zhuyi/dermatomyositis/res/DM_volcano_plots.tiff", 
+       width = 9, height = 7)
+```
 
+# CRC
+```{r}
+es <- getGEO(GEO = "GSE39582")[[1]]
+pData(es)$group <- ifelse(grepl("Adenocarcinoma", pData(es)$source_name_ch1), "CRC", "Normal") %>% factor(levels = c("Normal", "CRC"))
+es %>% pData %>% .$group %>% table
+design <- model.matrix(~ 0 + pData(es)$group)
+colnames(design) <- c("Normal", "CRC")
+design %>% head
+```
 
+```{r}
+es <- justvsn(es)
+rms <- es %>% exprs() %>% apply(1, median)
+hist(rms, breaks = 200)
+cutoff <- 1.75
+threshold <- es %>% pData() %>% .$group %>% table %>% min
 
+ids <- es %>% exprs %>% apply(1, function(x){
+    sum(x > cutoff) >= threshold
+})
+ids %>% table
+es <- subset(es, ids)
 
+# remove multiple mapping and non-mapping probes
+ids <- str_detect(fData(es)$`Gene Symbol`, pattern = "///") | (nchar(fData(es)$`Gene Symbol`) <= 0)
+fData(es)$`Gene Symbol`[ids] %>% str
+ids %>% table
+es <- es[!ids, ]
 
+fit <- lmFit(object = es, design = design)
+contrast <- makeContrasts(CRC-Normal, levels = design)
+fit <- contrasts.fit(fit = fit, contrasts = contrast) %>% eBayes()
+tables_CRC <- topTable(fit = fit, number = Inf)
 
+saveRDS(es, "../../../data/zhuyi/dermatomyositis/CRC_es.rds")
+saveRDS(tables_CRC, "../../../data/zhuyi/dermatomyositis/differential_expressed_genes_CRC.rds")
+```
 
+```{r}
+degs <- tables_CRC %>% dplyr::filter(abs(logFC) >= 1, P.Value <= 0.05) %>% rownames() %>% unique
 
+df <- data.frame(group = pData(es)$group, 
+                 row.names = rownames(pData(es)))
+df_cols <- list(group = c(CRC = "tomato", Normal = "steelblue"))
 
+pdf("../../../data/zhuyi/dermatomyositis/res/CRC_differential_expressed_genes.pdf")
+pheatmap::pheatmap(exprs(es)[degs, ], 
+                   cluster_rows = T, 
+                   cluster_cols = F, 
+                   annotation_col = df, 
+                   annotation_colors = df_cols, 
+                   show_rownames = F, 
+                   show_colnames = F, 
+                   color = viridis::viridis(255, option = "B"), 
+                   legend_breaks = c(1, 3.3), 
+                   legend_labels = c("low", "high"))
+dev.off()
+```
 
+```{r}
+df <- data.frame(group = pData(es)$group, 
+                 row.names = rownames(pData(es)))
+dists <- dist(es %>% exprs %>% .[degs, ] %>% t %>% dist) %>% as.matrix()
 
+pdf("../../../data/zhuyi/dermatomyositis/res/CRC_sample_heatmap.pdf", width = 9)
+pheatmap::pheatmap(dists, 
+                   cluster_rows = T, 
+                   annotation_col = df, 
+                   show_rownames = F, 
+                   show_colnames = F, 
+                   clustering_method = "ward.D2", 
+                   legend_breaks = c(20, 130),
+                   legend_labels = c("low", "high"),
+                   color = viridis::viridis(255, alpha = 1, option = "B"))
+dev.off()
+```
 
+```{r}
+set.seed(101)
+pcas <- es %>% exprs %>% .[degs, ] %>% t() %>% prcomp()
+vars <- pcas$sdev^2/sum(pcas$sdev^2) * 100 
 
+df <- data.frame(pc1 = pcas$x[, 1], 
+                 pc2 = pcas$x[, 2], 
+                 group = pData(es)$group)
 
+df %>% 
+    ggplot(aes(pc1, pc2)) +
+    geom_hex(aes(fill = group), color = "grey20", position = "jitter") +
+    scale_x_continuous(name = paste("PC1: ", round(vars[1], 1), "%", sep = "")) +
+    scale_y_continuous(name = paste("PC2: ", round(vars[2], 1), "%", sep = "")) +
+    theme_classic()
 
+ggsave("../../../data/zhuyi/dermatomyositis/res/CRC_sample_PCA.tiff", 
+       width = 9, height = 7)
+```
 
+```{r}
+set.seed(101)
+res_tsne <- Rtsne::Rtsne(X = pcas$x, 
+                         perplexity = 100, 
+                         normalize=F)
+df <- data.frame(res_tsne$Y, 
+                 group = pData(es)$group,
+                 row.names = rownames(pcas$x))
+df %>% 
+    ggplot(aes(X1, X2)) + 
+    geom_hex(aes(fill = group), color = "grey20", position = "jitter") +
+    scale_x_continuous(name = "TSNE1") +
+    scale_y_continuous(name = "TSNE2") +
+    theme_classic()
+
+ggsave("../../../data/zhuyi/dermatomyositis/res/CRC_sample_TSNE.tiff", 
+       width = 9, height = 7)
+```
+
+```{r}
+tables_CRC <- tables_CRC %>% 
+    dplyr::mutate(log10pval = -log10(p_value), 
+                  size = ifelse(abs(log_fc) >= 1 & p_value < 0.05, "large", "small"), 
+                  color = ifelse(log_fc >= 1 & p_value < 0.05, "up", 
+                                 ifelse(log_fc <= -1 & p_value < 0.05, "down", "nc")), 
+                  color = factor(color, levels = c("up", "down", "nc")))
+
+df <- rbind(
+    tables_CRC %>% dplyr::filter(nchar(gene_symbol) > 0, log_fc >= 1, p_value < 0.05) %>% head(10), 
+    tables_CRC %>% dplyr::filter(nchar(gene_symbol) > 0, log_fc <= -1, p_value < 0.05) %>% head(10)
+)
+
+tables_CRC %>% 
+    ggplot(aes(log_fc, log10pval)) +
+    geom_point(aes(color = color, size = size)) +
+    geom_label_repel(data = df, aes(log_fc, log10pval, label = gene_symbol), nudge_y = 3, size = 2) +
+    scale_x_continuous(name = "log2FC", limits = c(-2.5, 2.5)) +
+    scale_y_continuous(name = "-log10 P Value", limits = c(0, 130)) +
+    geom_vline(xintercept = c(-1, 1), linetype = 2, linewidth = 0.5, color = "grey30") +
+    geom_hline(yintercept = -log10(0.05), linetype = 2, linewidth = 0.5, color = "grey30") +
+    scale_size_manual(values = c("large" = 2.5, "small" = 1)) +
+    scale_color_manual(name = NULL, values = c("up" = "tomato", "down" = "steelblue", "nc" = "grey")) +
+    guides(color = guide_legend(override.aes = list(size = 3))) +
+    theme_classic()
+
+ggsave("../../../data/zhuyi/dermatomyositis/res/CRC_volcano_plots.tiff", 
+       width = 9, height = 7)
+```
+
+# overlapping genes
+```{r}
+#| message: false
+#| warning: false
+
+library(ggvenn)
+library(magrittr)
+library(tidyverse)
+library(stringr.plus)
+```
+
+```{r}
+tables_DM <- readRDS("../../../data/zhuyi/dermatomyositis/differential_expressed_genes_DM.rds") %>% janitor::clean_names()
+tables_CRC <- readRDS("../../../data/zhuyi/dermatomyositis/differential_expressed_genes_CRC.rds") %>% janitor::clean_names()
+```
+
+```{r}
+p <- 0.01
+l <- 0.6
+DM_up <- tables_DM %>% filter(p_value < p, log_fc > l) %>% pull(gene_symbol) %>% unique
+DM_up <- DM_up[nchar(DM_up) > 0]
+
+DM_down <- tables_DM %>% filter(p_value < p, log_fc < -l) %>% pull(gene_symbol) %>% unique
+DM_down <- DM_down[nchar(DM_down) > 0]
+
+CRC_up <- tables_CRC %>% filter(p_value < p, log_fc > l) %>% pull(gene_symbol) %>% unique
+CRC_up <- CRC_up[nchar(CRC_up) > 0]
+
+CRC_down <- tables_CRC %>% filter(p_value < p, log_fc < -l) %>% pull(gene_symbol) %>% unique
+CRC_down <- CRC_down[nchar(CRC_down) > 0]
+```
+
+```{r}
+ggvenn(data = list(`DM up` = c(DM_up), `CRC up` = c(CRC_up)), 
+       stroke_color = "grey", 
+       stroke_size = 1, 
+       stroke_linetype = 2,
+       digits = 2, 
+       show_elements = FALSE, 
+       fill_color = c("tomato", "steelblue"), 
+       auto_scale = F) 
+
+ggsave("../../../data/zhuyi/dermatomyositis/res/venn_up.tiff", 
+       width = 9, bg = "white")
+```
+
+```{r}
+ggvenn(data = list(`DM down` = c(DM_down), `CRC down` = c(CRC_down)), 
+       stroke_color = "grey", 
+       stroke_size = 1, 
+       stroke_linetype = 2,
+       digits = 2, 
+       show_elements = FALSE, 
+       fill_color = c("tomato", "steelblue"), 
+       auto_scale = F)
+
+ggsave("../../../data/zhuyi/dermatomyositis/res/venn_down.tiff", 
+       width = 9, bg = "white")
+```
 
 
 
