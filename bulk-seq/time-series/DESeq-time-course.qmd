@@ -37,7 +37,7 @@ resTC <- results(ddsTC)
 resTC$symbol <- mcols(ddsTC)$symbol
 ```
 
-This is just one of the tests that can be aplied to time series data. Another option would be to model the counts as a smooth function of time, and to include an interaction term of the condition with the smooth function. It is possible to build such a model using spline basic functions within R, and another, more mordern approach is using Gaussian processes.
+This is just one of the tests that can be applied to time series data. Another option would be to model the counts as a smooth function of time, and to include an interaction term of the condition with the smooth function. It is possible to build such a model using spline basic functions within R, and another, more mordern approach is using Gaussian processes.
 
 We can plot the counts for the groups over time using ggplot2, for the gene with the smallest adjusted p value, testing for condition-dependent time profile and accounting for differences at time 0 (figure below). Keep in mind that the interaction terms are the difference between the two groups at a given time after accounting for the difference at time 0.
 

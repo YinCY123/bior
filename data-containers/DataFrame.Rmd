@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # Description  
 `DatFrame` class is define in the `S4Vectors` package.  
 
-The `DataFrame` class extends the `DataTable` virtual class and supports the storage of any type of object (with `length` and `[` methods) as columns.  
+The `DataFrame` class extends the `DataTable` virtual class and **supports the storage of any type of object (with `length` and `[` methods) as columns**.  
 
 On the whole, the `DataFrame` behaves very similarly to `data.frame`, in terms of construction, subsetting, splitting, combining, etc. The most notable exception is that the row names are optional. This means calling `rownames(x)` will return `NULL` if there are no row names. Of course, it could return `seq_len(nrow(x))`, but returning `NULL` informs, for example, combination functions that no row names are desired (they are often a luxury when dealing with large data).  
 
