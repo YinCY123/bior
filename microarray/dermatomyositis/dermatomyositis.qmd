@@ -392,8 +392,267 @@ ggsave("../../../data/zhuyi/dermatomyositis/res/venn_down.tiff",
        width = 9, bg = "white")
 ```
 
+## glm
+```{r}
+#| message: false
+#| warning: false
+
+library(glmnet)
+library(Biobase)
+library(magrittr)
+```
+
+```{r}
+es_DM <- readRDS("../../../data/zhuyi/dermatomyositis/DM_es.rds")
+es_CRC <- readRDS("../../../data/zhuyi/dermatomyositis/CRC_es.rds")
+
+tables_DM <- readRDS("../../../data/zhuyi/dermatomyositis/differential_expressed_genes_DM.rds")
+tables_CRC <- readRDS("../../../data/zhuyi/dermatomyositis/differential_expressed_genes_CRC.rds")
+
+degs_DM <- tables_DM %>% 
+    dplyr::filter(P.Value < 0.05) %>%
+    dplyr::pull(ID) %>% unique
+
+degs_CRC <- tables_CRC %>% 
+    dplyr::filter(P.Value < 0.05) %>%
+    dplyr::pull(ID) %>% unique
+
+degs_DM %>% str
+degs_CRC %>% str
+common_degs <- intersect(tables_DM$Gene.Symbol[tables_DM$ID %in% degs_DM], 
+                         tables_CRC$Gene.Symbol[tables_CRC$ID %in% degs_CRC])
+
+common_degs_id_DM <- tables_DM %>% dplyr::filter(Gene.Symbol %in% common_degs) %>% dplyr::pull(ID) %>% unique
+```
+
+```{r}
+set.seed(101)
+meta_DM <- phenoData(es_DM) %>% pData
+mtx_DM <- es_DM %>% exprs() %>% .[common_degs_id_DM, ]
+all(colnames(mtx_DM) == rownames(meta_DM))
+
+model_lasso <- glmnet(x = t(mtx_DM), y = as.numeric(meta_DM$group), 
+                      nlambda = 100, alpha = 1, standardize = FALSE)
+cv_model_lasso <- cv.glmnet(t(mtx_DM), as.numeric(meta_DM$group), nlambda = 150, alpha = 1)
+
+pdf("../../../data/zhuyi/dermatomyositis/res/lasso_regression.pdf", width = 10)
+plot(log(cv_model_lasso$lambda), cv_model_lasso$cvm, 
+     pch = 19, ylim = c(0, 0.3), col = "tomato", cex = 0.7,
+     xlab = expression(Log(lambda)), 
+     ylab = "Mean-Squared Error")
+arrows(log(cv_model_lasso$lambda), 
+         cv_model_lasso$cvup, 
+         log(cv_model_lasso$lambda), 
+         cv_model_lasso$cvlo, 
+       angle = 90, 
+       length = 0.05, 
+       code = 3, 
+       col = "grey")
+abline(v = log(c(cv_model_lasso$lambda.min, cv_model_lasso$lambda.1se)), lty = 2, lwd = 0.5, col = "black")
+dev.off()
+
+cv_model_lasso_lambda_min <- glmnet(x = t(mtx_DM), y = as.numeric(meta_DM$group), alpha = 1, lambda = cv_model_lasso$lambda.min)
+
+selected_gene_id_DM <- rownames(cv_model_lasso_lambda_min$beta)[as.numeric(cv_model_lasso_lambda_min$beta) != 0]
+
+selected_gene_symbol_DM <- tables_DM %>% dplyr::filter(ID %in% selected_gene_id_DM) %>% dplyr::pull(Gene.Symbol) %>% unique
+selected_gene_symbol_DM
+```
+
+## SVM
+```{r}
+library(e1071)
+source("../../../github/SVM-RFE/msvmRFE.R")
+
+mtx_DM <- mtx_DM %>% t %>% as.data.frame()
+group <- setNames(meta_DM$group, meta_DM$geo_accession)
+mtx_DM$group <- group[rownames(mtx_DM)] %>% unname() %>% as.numeric()
+mtx_DM <- mtx_DM %>% dplyr::relocate(group)
+```
+
+```{r}
+set.seed(101)
+model <- svmRFE(mtx_DM, k = 10, halve.above = 100)
+
+nfold <- 10
+nrows <- nrow(mtx_DM)
+folds <- rep(1:nfold, len = nrows)[sample(nrows)]
+folds <- lapply(1:nfold, function(x) which(folds == x))
+
+results <- lapply(folds, svmRFE.wrap, mtx_DM, k = 10, halve.above = 100)
+top_features <- WriteFeatures(results, mtx_DM, save = F)
+
+plot(top_features$AvgRank[1:200], type = "h")
+points(top_features$AvgRank[1:200], pch = 19)
+abline(v = 75, lty = 2, lwd = 1)
+```
+
+```{r}
+set.seed(101)
+featsweep <- lapply(1:50, FeatSweep.wrap, results, mtx_DM)
+featsweep %>% class
+featsweep %>% length
+no.info <- min(prop.table(table(mtx_DM[, 1])))
+errors <- sapply(featsweep, function(x){ifelse(is.null(x), NA, x$error)})
+
+pdf("../../../data/zhuyi/dermatomyositis/res/02_feature_gene_screen/svm_feature_selection.pdf", width = 10)
+plot(errors, 
+     type = "b", 
+     xlab = "Number of Features", 
+     ylab = "10 Fold Cross Validation Error", 
+     pch = 19)
+
+df <- data.frame(x = which.min(errors),
+                 y = min(errors))
+points(df$x, df$y, col = "red", pch = 19)
+text(x = which.min(errors), 
+     y = min(errors) * 0.97, 
+     label = paste("N = ", which.min(errors), sep = ""), 
+     xpd = TRUE)
+dev.off()
+```
+
+```{r}
+svm_selected_features_SVMRFE <- top_features %>% head(which.min(errors)) %>% dplyr::pull(FeatureName)
+selected_genes_symbol_SVMRFE <- tables_DM %>% dplyr::filter(ID %in% svm_selected_features_SVMRFE) %>% dplyr::pull(Gene.Symbol) 
+selected_gene_symbol <- intersect(selected_genes_symbol_SVMRFE, selected_gene_symbol_DM)
+selected_gene_symbol
+```
+
+```{r}
+library(ggvenn)
+
+ggvenn(data = list(LASSO = selected_gene_symbol_DM, SVM_RFE = selected_genes_symbol_SVMRFE), 
+       fill_color = c("tomato", "steelblue"), 
+       stroke_color = "grey", 
+       stroke_linetype = 1, 
+       digits = 2)
+
+ggsave("../../../data/zhuyi/dermatomyositis/res/02_feature_gene_screen/feature_selected_LASSO_SVN_RFE.tiff", 
+       bg = "white", width = 9)
+```
+
+```{r}
+source("../../functions/makeESdf.R")
+selected_gene_id <- fData(es_DM) %>% dplyr::filter(`Gene Symbol` %in% selected_gene_symbol) %>% dplyr::pull(ID) %>% unique
+
+df <- makeESdf(es_DM, features = selected_gene_id, join_by = "ID")
+df <- df %>% tidyr::pivot_longer(cols = starts_with("GSM"), names_to = "sample", values_to = "value")
+ids <- setNames(pData(es_DM)$group %>% as.character, pData(es_DM)$geo_accession)
+df$group <- ids[df$sample] %>% factor(levels = c("DM", "Normal"))
+
+ggboxplot(data = df, 
+          x = 'group', 
+          y = "value", 
+          facet.by = "Gene Symbol", 
+          add = "jitter", 
+          scales = "free_y", 
+          strip.position = "right", 
+          panel.labs.font = list(color = "gold"), 
+          panel.labs.background = list(fill = "grey70", color = "grey70"), 
+          nrow = 1) +
+    stat_compare_means(comparisons = list(c("DM", "Normal"))) +
+    scale_y_continuous(name = NULL, expand = c(0.1,0.1)) +
+    scale_x_discrete(name = NULL)
+
+ggsave("../../../data/zhuyi/dermatomyositis/res/03_feature_gene_expression/gene_expressions_DM.tiff", 
+       height = 4, width = 16)
+```
+
+```{r}
+library(ggbeeswarm)
+library(ggpubr)
+
+selected_gene_id <- fData(es_CRC) %>% dplyr::filter(`Gene Symbol` %in% selected_gene_symbol) %>% dplyr::pull(ID) %>% unique
+
+df <- makeESdf(es = es_CRC, features = selected_gene_id, join_by = "ID")
+df <- df %>% tidyr::pivot_longer(cols = starts_with("GSM") , names_to = "sample", values_to = "value")
+ids <- setNames(pData(es_CRC)$group, pData(es_CRC)$geo_accession)
+df$group <- ids[df$sample] %>% factor(levels = c("CRC", "Normal"))
+
+ggboxplot(data = df, 
+          x = 'group', 
+          y = "value", 
+          facet.by = "Gene Symbol", 
+          add = "jitter", 
+          scales = "free_y", 
+          strip.position = "right", 
+          panel.labs.font = list(color = "gold"), 
+          panel.labs.background = list(fill = "grey70", color = "grey70"), 
+          nrow = 1) +
+    stat_compare_means(comparisons = list(c("CRC", "Normal"))) +
+    scale_y_continuous(name = NULL, expand = c(0.1,0.1)) +
+    scale_x_discrete(name = NULL)
+
+ggsave("../../../data/zhuyi/dermatomyositis/res/03_feature_gene_expression/gene_expressions_CRC.tiff", 
+       height = 4, width = 16)
+```
+
+## ROC
+```{r}
+library(pROC)
+selected_gene_id <- fData(es_CRC) %>% dplyr::filter(`Gene Symbol` %in% selected_gene_symbol) %>% dplyr::pull(ID) %>% unique
+ids <- setNames(fData(es_CRC)$`Gene Symbol`, fData(es_CRC)$ID)[selected_gene_id]
+df <- es_CRC %>% exprs %>% .[selected_gene_id, ] %>% t %>% as.data.frame()
+colnames(df) <- ids[colnames(df)] %>% unname
+
+ids <- setNames(pData(es_CRC)$group, pData(es_CRC)$geo_accession)
+df$group <- ids[rownames(df)] %>% unname
+df <- df %>% dplyr::relocate(group)
+
+genes <- colnames(df)[-1]
+
+for(gene in genes){
+    res_roc <- roc(df[, 'group', drop = TRUE] ~ df[, gene, drop = TRUE])
+    
+    pdf(paste("../../../data/zhuyi/dermatomyositis/res/04_diagnostic efficacy/", "ROC_", gene, ".pdf", sep = ""))
+    
+     plot(res_roc, 
+          print.auc = TRUE, 
+          legacy.axes = TRUE, 
+          print.thres = TRUE, 
+          col = "red", 
+          print.thres.pch = 19, 
+          print.thres.cex = 2, 
+          grid = TRUE, 
+          main = paste(gene))
+    
+    dev.off()
+}
+```
 
 
+
+```{r}
+library(ggforce)
+controls <- data.frame(
+  x = runif(6),
+  y = runif(6)
+)
+
+ggplot(controls, aes(x, y)) +
+  geom_polygon(fill = NA, colour = 'grey') +
+  geom_point(colour = 'red') +
+  geom_bspline_closed(alpha = 0.5)
+
+```
+
+## TCGA CRC data
+```{r}
+library(TCGAbiolinks)
+
+query <- GDCquery(project = "TCGA-COAD", 
+                  data.category = "Transcriptome Profiling", 
+                  experimental.strategy = "RNA-Seq", 
+                  sample.type = c("TR", "NT", "CELLC"))
+```
+
+```{r}
+projects %>% dplyr::filter(grepl("colon", name, ignore.case = T))
+projects[2, "disease_type"]
+
+projects$disease_type %>% sapply(function(x){str_detect(x, "colon")})
+```
 
 
 
