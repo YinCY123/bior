@@ -621,8 +621,6 @@ for(gene in genes){
 }
 ```
 
-
-
 ```{r}
 library(ggforce)
 controls <- data.frame(
@@ -634,24 +632,105 @@ ggplot(controls, aes(x, y)) +
   geom_polygon(fill = NA, colour = 'grey') +
   geom_point(colour = 'red') +
   geom_bspline_closed(alpha = 0.5)
-
 ```
 
 ## TCGA CRC data
 ```{r}
-library(TCGAbiolinks)
+library(FirebrowseR)
+library(magrittr)
+library(EnsDb.Hsapiens.v86)
 
-query <- GDCquery(project = "TCGA-COAD", 
-                  data.category = "Transcriptome Profiling", 
-                  experimental.strategy = "RNA-Seq", 
-                  sample.type = c("TR", "NT", "CELLC"))
+cohorts <- c("ACC", 'BLCA', "BRCA", "CESC", 'CHOL',
+            "COAD", "COADREAD", "DLBC", "ESCA", "FPPP",
+            "GBM", "GBMLGG", "HNSC", "KICH", "KIPAN", 
+            "KIRC", "KIRP", "LAML", "LGG", "LIHC", 
+            "LUAD", "LUSC", "MESO", "OV", "PAAD", 
+            "PCPG", "PRAD","READ", "SARC", "SKCM",
+            "STAD", "STES", "TGCT", "THCA", "THYM", 
+            "UCEC", "UCS", "UVM")
+
+genes <- data.frame(ensembl = keys(EnsDb.Hsapiens.v86), 
+                    symbol = mapIds(EnsDb.Hsapiens.v86, keys = keys(EnsDb.Hsapiens.v86), keytype = "GENEID", column = "SYMBOL"))
+
+genes %>% head
+all_cohorts_list <- vector(mode = "list")
+gene_list <- split(genes$symbol, f = cut(seq_along(genes$symbol), breaks = ceiling(length(genes$symbol)/200)))
 ```
 
 ```{r}
-projects %>% dplyr::filter(grepl("colon", name, ignore.case = T))
-projects[2, "disease_type"]
+for(cohort in cohorts){
+    if(cohort %in% names(all_cohorts_list)){
+        print(paste0(cohort, " has been downloaded..."))
+    }
+    
+    flag = TRUE
+    page = 1
+    page_size = 1000
+    current <- vector(mode = "list")
+    
+    
+    
+    while(flag){
+        for(i in seq_along(gene_list)){
+            current[[page]][[i]] <- try(Samples.mRNASeq(format = "tsv", 
+                                                        gene = gene_list[[i]], 
+                                                        cohort = cohort))
+            
+            if(class(current[[page]][[i]]) == "try-error"){
+                print(paste0(cohort, " downloading failed..."))
+                break
+            }
+            
+            Sys.sleep(sample(5, 1))
+        }
+        current[[page]] <- do.call(rbind, current[[page]])
+        
+        if(nrow(current[[page]]) < page_size){
+            flag = FALSE
+        }
+        page = page + 1
+    }
 
-projects$disease_type %>% sapply(function(x){str_detect(x, "colon")})
+    project <- do.call(rbind, current)
+    all_cohorts_list[[cohort]] <- project
+}
+```
+
+```{r}
+    for(cohort in cohorts){
+        if(cohort %in% names(all_genes_expression_list)){
+            print(paste0(cohort, " has been downloaded..."))
+            next
+        }
+        
+        flag = TRUE
+        page = 1
+        page_size = 2000
+        current <- vector(mode = "list")
+        
+        while(flag){
+            current[[page]] <- try(Samples.mRNASeq(format = "csv",
+                                           page = page, 
+                                           page_size = page_size,
+                                           gene = gene_list[[i]], 
+                                           cohort = cohort), 
+                                   silent = T)
+            if(class(current[[page]]) == "try-error"){
+                print(paste0(cohort, " downloading failed..."))
+                break
+            }
+            
+            current[[page]] <- as.matrix(current[[page]])
+            
+            if(nrow(current[[page]]) < page_size){
+                flag = FALSE
+            }
+            page = page + 1
+        }
+        
+        project <- do.call(rbind, current)
+        all_genes_expression_list[[cohort]] <- as.data.frame(project)
+    }
 ```
 
 
