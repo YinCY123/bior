@@ -494,8 +494,10 @@ featsweep %>% class
 featsweep %>% length
 no.info <- min(prop.table(table(mtx_DM[, 1])))
 errors <- sapply(featsweep, function(x){ifelse(is.null(x), NA, x$error)})
+saveRDS(featsweep, "../../../data/zhuyi/dermatomyositis/featsweep.rds")
 
-pdf("../../../data/zhuyi/dermatomyositis/res/02_feature_gene_screen/svm_feature_selection.pdf", width = 10)
+pdf("../../../data/zhuyi/dermatomyositis/res/02_feature_gene_screen/svm_feature_selection.pdf", 
+    width = 10)
 plot(errors, 
      type = "b", 
      xlab = "Number of Features", 
@@ -506,7 +508,7 @@ df <- data.frame(x = which.min(errors),
                  y = min(errors))
 points(df$x, df$y, col = "red", pch = 19)
 text(x = which.min(errors), 
-     y = min(errors) * 0.97, 
+     y = min(errors) * 0.98, 
      label = paste("N = ", which.min(errors), sep = ""), 
      xpd = TRUE)
 dev.off()
@@ -533,6 +535,8 @@ ggsave("../../../data/zhuyi/dermatomyositis/res/02_feature_gene_screen/feature_s
 ```
 
 ```{r}
+library(ggplot2)
+library(ggpubr)
 source("../../functions/makeESdf.R")
 selected_gene_id <- fData(es_DM) %>% dplyr::filter(`Gene Symbol` %in% selected_gene_symbol) %>% dplyr::pull(ID) %>% unique
 
@@ -560,7 +564,6 @@ ggsave("../../../data/zhuyi/dermatomyositis/res/03_feature_gene_expression/gene_
 ```
 
 ```{r}
-library(ggbeeswarm)
 library(ggpubr)
 
 selected_gene_id <- fData(es_CRC) %>% dplyr::filter(`Gene Symbol` %in% selected_gene_symbol) %>% dplyr::pull(ID) %>% unique
@@ -621,19 +624,6 @@ for(gene in genes){
 }
 ```
 
-```{r}
-library(ggforce)
-controls <- data.frame(
-  x = runif(6),
-  y = runif(6)
-)
-
-ggplot(controls, aes(x, y)) +
-  geom_polygon(fill = NA, colour = 'grey') +
-  geom_point(colour = 'red') +
-  geom_bspline_closed(alpha = 0.5)
-```
-
 ## TCGA CRC data
 ```{r}
 library(FirebrowseR)
@@ -649,32 +639,34 @@ cohorts <- c("ACC", 'BLCA', "BRCA", "CESC", 'CHOL',
             "STAD", "STES", "TGCT", "THCA", "THYM", 
             "UCEC", "UCS", "UVM")
 
+EnsDb.Hsapiens.v86 %>% columns()
 genes <- data.frame(ensembl = keys(EnsDb.Hsapiens.v86), 
-                    symbol = mapIds(EnsDb.Hsapiens.v86, keys = keys(EnsDb.Hsapiens.v86), keytype = "GENEID", column = "SYMBOL"))
+                    symbol = mapIds(EnsDb.Hsapiens.v86, keys = keys(EnsDb.Hsapiens.v86), keytype = "GENEID", column = "SYMBOL"), 
+                    type = mapIds(EnsDb.Hsapiens.v86, keys = keys(EnsDb.Hsapiens.v86), keytype = "GENEID", column = "GENEBIOTYPE"))
 
-genes %>% head
-all_cohorts_list <- vector(mode = "list")
-gene_list <- split(genes$symbol, f = cut(seq_along(genes$symbol), breaks = ceiling(length(genes$symbol)/200)))
+genes$type %>% table
+# genes <- genes %>% dplyr::filter(type == "protein_coding")
+gene_list <- split(genes$symbol, f = cut(seq_along(genes$symbol), breaks = ceiling(length(genes$symbol)/100)))
 ```
 
 ```{r}
+all_cohorts_list <- vector(mode = "list", length = length(cohorts))
+names(all_cohorts_list) <- cohorts
+
 for(cohort in cohorts){
-    if(cohort %in% names(all_cohorts_list)){
-        print(paste0(cohort, " has been downloaded..."))
-    }
-    
     flag = TRUE
     page = 1
-    page_size = 1000
+    page_size = 2000
+    
     current <- vector(mode = "list")
-    
-    
-    
     while(flag){
-        for(i in seq_along(gene_list)){
+        for(i in seq_along(genes$symbol)){
             current[[page]][[i]] <- try(Samples.mRNASeq(format = "tsv", 
-                                                        gene = gene_list[[i]], 
-                                                        cohort = cohort))
+                                                        gene = genes$symbol, 
+                                                        cohort = cohort, 
+                                                        page_size = page_size, 
+                                                        page = page))
+            print(str(current[[page]][[i]]))
             
             if(class(current[[page]][[i]]) == "try-error"){
                 print(paste0(cohort, " downloading failed..."))
@@ -687,54 +679,189 @@ for(cohort in cohorts){
         
         if(nrow(current[[page]]) < page_size){
             flag = FALSE
+        }else{
+            print(paste("downloaded the ", i, " page of ", cohort, "..."))
+            page = page + 1
         }
-        page = page + 1
     }
 
     project <- do.call(rbind, current)
     all_cohorts_list[[cohort]] <- project
+    
+    Sys.sleep(sample(10, 1))
 }
 ```
 
+# TCGA
 ```{r}
-    for(cohort in cohorts){
-        if(cohort %in% names(all_genes_expression_list)){
-            print(paste0(cohort, " has been downloaded..."))
-            next
-        }
-        
-        flag = TRUE
-        page = 1
-        page_size = 2000
-        current <- vector(mode = "list")
-        
-        while(flag){
-            current[[page]] <- try(Samples.mRNASeq(format = "csv",
-                                           page = page, 
-                                           page_size = page_size,
-                                           gene = gene_list[[i]], 
-                                           cohort = cohort), 
-                                   silent = T)
-            if(class(current[[page]]) == "try-error"){
-                print(paste0(cohort, " downloading failed..."))
-                break
-            }
-            
-            current[[page]] <- as.matrix(current[[page]])
-            
-            if(nrow(current[[page]]) < page_size){
-                flag = FALSE
-            }
-            page = page + 1
-        }
-        
-        project <- do.call(rbind, current)
-        all_genes_expression_list[[cohort]] <- as.data.frame(project)
-    }
+library(TCGAbiolinks)
+
+projects <- getGDCprojects()
+projects[projects$project_id == "TCGA-COAD", ]$primary_site
 ```
 
+```{r}
+COAD_query <- GDCquery(project = "TCGA-COAD", 
+                       data.category = "Transcriptome Profiling", 
+                       access = "open", 
+                       data.type = "Gene Expression Quantification", 
+                       workflow.type = "STAR - Counts")
+COAD_query %>% getResults()
+saveRDS(COAD_query, 
+        "../../../data/zhuyi/dermatomyositis/TCGA-COAD-query.rds")
+```
 
+```{r}
+GDCdownload(query = COAD_query, 
+            directory = "../../../data/zhuyi/dermatomyositis/TCGA-COAD")
+```
 
+```{r}
+library(SummarizedExperiment)
+
+tables <- GDCprepare(query = COAD_query, 
+                     directory = "../../../data/zhuyi/dermatomyositis/TCGA-COAD/")
+tables %>% assays
+saveRDS(tables, "../../../data/zhuyi/dermatomyositis/TCGA_COAD.rds")
+TCGA_COAD <- readRDS("../../../data/zhuyi/dermatomyositis/TCGA_COAD.rds")
+```
+
+```{r}
+library(EnsDb.Hsapiens.v86)
+library(stringr)
+
+sample_info <- TCGA_COAD %>% colData %>% as.data.frame()
+sample_info$tissue_type %>% table
+mtx <- assay(TCGA_COAD, "fpkm_uq_unstrand") %>% t %>% as.data.frame
+mtx %>% dim
+mtx <- mtx %>% tibble::rownames_to_column("sample") 
+ids <- setNames(sample_info$tissue_type, sample_info$barcode)
+mtx$group <- ids[mtx$sample]
+mtx <- mtx %>% dplyr::relocate(group) %>% tibble::column_to_rownames("sample")
+mtx[1:10, 1:10]
+EnsDb.Hsapiens.v86 %>% columns()
+colnames(mtx)[-1] <- mapIds(EnsDb.Hsapiens.v86, keys = str_replace(colnames(mtx)[-1], "\\..+$", ""), keytype = "GENEID", column = "SYMBOL")
+```
+
+```{r}
+for(gene in genes){
+    res_roc <- roc(mtx[, 'group', drop = TRUE] ~ mtx[, gene, drop = TRUE])
+    
+    pdf(paste("../../../data/zhuyi/dermatomyositis/res/04_diagnostic efficacy/", "ROC_TCGA_varfication_", gene, ".pdf", sep = ""))
+    
+     plot(res_roc, 
+          print.auc = TRUE, 
+          legacy.axes = TRUE, 
+          print.thres = TRUE, 
+          col = "red", 
+          print.thres.pch = 19, 
+          print.thres.cex = 2, 
+          grid = TRUE, 
+          main = paste(gene))
+    
+    dev.off()
+}
+```
+
+# CRC subgroup analysis
+```{r}
+library(ConsensusClusterPlus)
+library(magrittr)
+library(Biobase)
+library(scater)
+library(bluster)
+
+es_CRC <- readRDS("../../../data/zhuyi/dermatomyositis/CRC_es.rds")
+mtx <- es_CRC[es_CRC$group == "CRC"] %>% exprs()
+mads <- apply(mtx, 1, mad)
+ids <- mads %>% sort(decreasing = T) %>% head(10000) %>% names
+ids %>% str
+mtx <- mtx[ids, ]
+mtx %>% dim
+mtx <- sweep(mtx, 1, apply(mtx, 1, median), FUN = "-")
+
+res <- ConsensusClusterPlus(d = mtx,
+                            maxK = 10, 
+                            reps = 10, 
+                            pItem = 0.8, 
+                            seed = 101, 
+                            plot = "pdf", 
+                            clusterAlg = "pam", 
+                            distance = "euclidean", 
+                            title = "consensus_plot", 
+                            writeTable = F)
+
+pdata <- es_CRC[, es_CRC$group == "CRC"] %>% pData %>% as.data.frame()
+pdata$group <- as.character(pdata$group)
+pdata$group %>% table
+
+set.seed(104)
+umap <- calculateUMAP(x = mtx, transposed = F, pca = 50, ntop = 2000) %>% as.data.frame()
+clusters <- clusterRows(x = umap, BLUSPARAM = NNGraphParam(k = 20)) 
+clusters %>% table(useNA = "ifany")
+umap$group <- clusters
+
+umap$group <- sapply(umap$group, function(x){
+    switch(as.character(x),
+           '9' = "Group1",
+           '1' = "Group2",
+           '3' = "Group3",
+           '2' = "Group4",
+           '4' = "Group4",
+           '5' = "Group4",
+           '6' = "Group4",
+           '7' = "Group4",
+           '8' = "Group4")
+})
+
+umap %>% 
+    ggplot(aes(UMAP1, UMAP2)) +
+    geom_point(aes(color = group)) +
+    # geom_text(aes(label = group)) +
+    scale_color_discrete(name = "groups") +
+    guides(color = guide_legend(override.aes = list(size = 4))) +
+    theme_classic()
+
+ggsave("../../../data/zhuyi/dermatomyositis/res/05_CRC_subgroup_analysis/CRC_subgroups.tiff", width = 9)
+```
+
+```{r}
+df <- data.frame(group = res[[4]]$consensusClass, 
+                 row.names = names(res[[4]]$consensusClass))
+df$group <- paste("Group", df$group, sep = "")
+con_mtx <- res[[4]]$consensusMatrix
+rownames(con_mtx) <- res[[4]]$consensusClass %>% names
+colnames(con_mtx) <- res[[4]]$consensusClass %>% names
+colors <- RColorBrewer::brewer.pal(n = 4, name = "Set1")
+
+pdf("../../../data/zhuyi/dermatomyositis/res/05_CRC_subgroup_analysis/consensus_matrix.pdf", width = 9)
+pheatmap::pheatmap(con_mtx, 
+                   show_rownames = F, 
+                   show_colnames = F, 
+                   annotation_col = df, 
+                   annotation_colors = list(group = c("Group1" = colors[1], "Group2" = colors[2], "Group3" = colors[3], "Group4" = colors[4])), 
+                   main = "consensus matrix k = 4", 
+                   color = viridis::viridis(255, option = "D"))
+dev.off()
+```
+
+```{r}
+ids <- setNames(umap$group, rownames(umap))
+sample_info <- pData(es_CRC) %>% as.data.frame()
+sample_info$subgroup <- ids[sample_info$geo_accession]
+
+sample_info$`tnm.stage:ch1` %>% table
+sample_info <- sample_info %>% dplyr::select(`tnm.stage:ch1`, subgroup, `tnm.t:ch1`)
+sample_info <- sample_info %>% dplyr::filter(!is.na(`tnm.stage:ch1`), `tnm.stage:ch1` %in% c(1, 2, 3, 4))
+
+pdf("../../../data/zhuyi/dermatomyositis/res/05_CRC_subgroup_analysis/stage.pdf", width = 9)
+table(sample_info$subgroup, sample_info$`tnm.stage:ch1`) %>% 
+    prop.table(margin = 1) %>% magrittr::set_colnames(value = paste("Stage", 1:4)) %>% 
+    pheatmap::pheatmap(cluster_cols = F, color = viridis::viridis(20), angle_col = 0)
+dev.off()
+```
+
+# immune profile
 
 
 
