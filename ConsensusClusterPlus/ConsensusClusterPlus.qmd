@@ -1,0 +1,84 @@
+---
+title: "ConsensusClusterPlus"
+author: "YinCY"
+format: html
+editor: source
+---
+
+# Introduction
+Consensus Clustering is a method that provides quantitative evidence for determining the number and membership of possible clusters within a dataset, such as microarray gene expression. This method has gained popularity in cancer genomics, where new molecular subclasses of disease have been discovered. The Consensus Clustering method involves subsampling from a set of items, such as microarrays, and determines clusterings of specified cluster counts (k). Then, pairwise consensus values, the proportion that two items occupied the same cluster out of the number of times they occurred in the same subsample, are calculated and stored in a symmetrical consensus matrix for each k. The consensus matrix is summarized in several graphical displays that enable a user to decide upon a reasonable cluster number and membership. A web-based version of Consensus Clustering is publicly available.
+
+# Tutorial
+There are three main steps to use `ConsensusClusterPlus`  
+- preparing input data  
+- running the program  
+- generating cluster-consensus and item-consensus  
+
+## preparing input data
+The first step is to gather some data for cluster analysis. These data could be the result of an experiment such as a mRNA expression microarray or immunohistochemical staining intensities. The input data format is a matrix where columns are samples (items), rows are features and cells are numerical values.
+
+```{r}
+library(ALL)
+library(magrittr)
+library(ConsensusClusterPlus)
+data(ALL)
+
+d <- exprs(ALL)
+d[1:5, 1:5]
+```
+
+For the purpose of selecting the most informative genes for class detection, we reduce the dataset to the top 5,000 most variable genes, measured by median absolute deviation. The choice of 5,000 genes and MAD can be substituted with other statistical variability filters. Users can decide what type of filtering to use or to skip filtering.
+
+```{r}
+mads <- apply(d, 1, mad)
+d <- d[rev(order(mads))[1:5000], ]
+d %>% dim
+```
+
+```{r}
+# subtract median from each row
+d <- sweep(d, 1, apply(d, 1, median, na.rm = T))
+```
+
+## Running ConsensusClusterPlus
+```{r}
+results <- ConsensusClusterPlus(d = d, 
+                                maxK = 10, 
+                                reps = 100, 
+                                pItem = 0.8, 
+                                pFeature = 1, 
+                                distance = "euclidean", 
+                                clusterAlg = "pam", 
+                                seed = 101, 
+                                plot = "pdf")
+
+
+results %>% length
+results[2]
+mat <- results[[2]]
+
+pheatmap::pheatmap(mat = results[[2]][[1]], 
+                   color = viridis::viridis(255, option = "C"), 
+                   border_color = "grey", 
+                   cutree_cols = 2, 
+                   cutree_rows = 2)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,298 @@
+---
+title: "04 Operations On Genomic Intervals"
+author: "YinCY"
+format: html
+editor: visual
+---
+
+Considerable time in computational genomics is spent on overlapping different features of the genome. Each feature can be represented with a genomic interval within the chromosomal coordinate system. In addition, each interval can carry different sorts of information. An interval may for instance represent exon coordinates or a transcription factor binding site. On the other hand, you can have base-pair resolution, continuous scores over the genome such as read coverage, or scores that could be associated with only certain bases such as in the case of CpG methylation.
+
+Typically, you will need to overlap intervals of interest with other features of the genome, again represented as intervals. For example, you may want to overlap transcription factor binding sites with CpG islands or promoters to quantify what percentage of binding sites overlap with your regions of interest. Overlapping mapped reads from high-throughput sequencing experiments with genomic features such as exons, promoters, and enhancers can also be classified as operations on genomic intervals. You can think of a million other ways that involve overlapping two sets of different features on the genome.
+
+# Operations on genomic intervals with `GenomicRanges` package
+## How to create and manipulate a GRanges object
+```{r}
+#| message: false
+#| warning: false
+
+
+library(GenomicRanges)
+library(magrittr)
+
+gr <- GRanges(seqnames = c("chr1", "chr2", "chr2"), 
+              ranges = IRanges(start = c(50, 150, 200), end = c(100, 200, 300)), 
+              strand = c("+", "-", "+"))
+gr
+```
+
+```{r}
+gr[1:2, ]
+gr[1:2]
+```
+
+```{r}
+gr <- GRanges(seqnames = c("che1", "chr2", "chr2"), 
+              ranges = IRanges(start = c(50, 150, 200), 
+                               end = c(100, 200, 300)), 
+              name = c("id1", "id3", "id2"), 
+              scores = c(100, 90, 50))
+
+mcols(gr) <- DataFrame(name2 = c("pax6", "meis1", "zic4"), 
+                       score2 = c(1, 2, 3))
+gr
+
+mcols(gr) <- cbind(mcols(gr), 
+                   DataFrame(name2 = c("pax6", "meis1", "zic4"), 
+                             score2 = c(1, 2, 3)))
+
+gr
+```
+
+```{r}
+gr %>% elementMetadata()
+gr %>% values()
+```
+
+```{r}
+gr$name3 <- c("A", "B", "C")
+gr
+```
+
+## Getting Genomic regions into R as GRanges objects
+```{r}
+filePath <- system.file("extdata", "cpgi.hg19.chr21.bed", 
+                        package = "compGenomRData")
+
+cpgi.df <- read.table(file = filePath, 
+                      header = FALSE, 
+                      stringsAsFactors = F)
+cpgi.df
+```
+
+```{r}
+cpgi.gr <- GRanges(seqnames = cpgi.df$V1, 
+                   ranges = IRanges(start = cpgi.df$V2, 
+                                    end = cpgi.df$V3))
+cpgi.gr
+```
+
+```{r}
+library(rtracklayer)
+
+gr <- import.bed(filePath)
+gr
+```
+
+```{r}
+session <- browserSession(object = "UCSC", url = "http://genome-euro.ucsc.edu/cgi-bin/")
+genome(session) <- "mm9"
+```
+
+```{r}
+query <- ucscTableQuery(x = session, 
+                        track = "CpG Islands", 
+                        table = "cpgIslandExt", 
+                        range = GRangesForUCSCGenome(genome = "mm9", chrom = "chr12"))
+
+query %>% track
+```
+
+## Finding regions that do/do not overlap with another set of regions
+```{r}
+#| message: false
+#| warning: false
+
+
+library(genomation)
+
+filePathPeaks <- system.file("extdata", 
+                             "wgEncodeHaibTfbsGm12878Sp1Pcr1xPkRep1.broadPeak.gz", 
+                             package = "compGenomRData")
+
+pk1.gr <- readBroadPeak(file = filePathPeaks)
+```
+
+```{r}
+subsetByOverlaps(x = pk1.gr, ranges = gr)
+```
+
+Count the number of peaks that overlap with a given CpG island.
+```{r}
+counts <- countOverlaps(query = pk1.gr, subject = cpgi.gr)
+counts %>% str
+```
+
+```{r}
+# return a matrix indicate which peaks overlap with which CpG island
+findOverlaps(pk1.gr, cpgi.gr)
+```
+
+```{r}
+# find nearest CpGi to each TSS
+n.ind <- nearest(x = pk1.gr, subject = cpgi.gr)
+n.ind %>% str
+```
+
+```{r}
+dists <- distanceToNearest(x = pk1.gr, 
+                           subject = cpgi.gr, 
+                           select = "arbitrary")
+dists
+```
+
+# Dealing with mapped high-throughput sequencing reads
+## Counting mapped reads for a set of regions
+```{r}
+#| message: false
+#| warning: false
+
+library(Rsamtools)
+filepath <- system.file("extdata", 
+                        "refseq.hg19.chr21.bed", 
+                        package = "compGenomRData")
+
+promoter.gr <- import.bed(con = filepath)
+start(promoter.gr) <- start(promoter.gr) - 1000
+end(promoter.gr) <- end(promoter.gr) + 1000
+promoter.gr <- promoter.gr[seqnames(promoter.gr) == "chr21"]
+promoter.gr
+```
+
+```{r}
+bamfilepath <- system.file("extdata", 
+                           "wgEncodeHaibTfbsGm12878Sp1Pcr1xAlnRep1.chr21.bam", 
+                           package = "compGenomRData")
+param <- ScanBamParam(which = promoter.gr)
+counts <- countBam(file = bamfilepath, param = param)
+counts %>% dim
+counts %>% head
+```
+
+
+```{r}
+#| message: false
+#| warning: false
+
+
+library(GenomicAlignments)
+alns <- readGAlignments(file = bamfilepath, param = param)
+```
+
+# Dealing with continuous scores over the genome
+```{r}
+covs <- coverage(x = alns)
+covs
+```
+
+get coverage from the BAM file.
+```{r}
+covs <- coverage(x = bamfilepath, param = param)
+covs$chr21
+```
+
+```{r}
+bwfile <- system.file("extdata", 
+                      "wgEncodeHaibTfbsA549.chr21.bw", 
+                      package = "compGenomRData")
+bwfile
+
+# get coverage vectors
+bw.gr <- import(con = bwfile, which = promoter.gr)
+```
+
+```{r}
+cov.bw <- coverage(x = bw.gr, weight = "score")
+cov.bw <- import(bwfile, which = promoter.gr, as = "RleList")
+cov.bw
+```
+
+## Extracting subsections of Rle and RleList objects
+```{r}
+myviews <- Views(subject = cov.bw, start = as(promoter.gr, "IRangesList"))
+myviews
+```
+
+```{r}
+myviews[[1]]
+```
+
+```{r}
+plot(myviews[[1]][[1]], type = "h")
+```
+
+```{r}
+viewMeans(myviews[[1]]) %>% head
+```
+
+```{r}
+viewMaxs(myviews[[1]]) %>% head
+```
+
+# Genomic intervals with more information: SummarizedExperiment class
+## Create SummarizedExperiment object
+```{r}
+nrows <- 200
+ncols <- 6
+
+counts <- matrix(data = runif(nrows * ncols, 1, 1e4), nrows)
+
+rowRanges <- GRanges(seqnames = rep(c("chr1", "chr2"), c(50, 150)), 
+                     ranges = IRanges(start = floor(runif(200, 1e5, 1e6)), 
+                                      width = 100), 
+                     strand = sample(c("+", "-"), 200, TRUE), 
+                     feature_id = paste0("gene", 1:200))
+rowRanges
+
+# create table for the columns
+coldata <- DataFrame(timepoints = 1:6, 
+                     row.names = LETTERS[1:6])
+se <- SummarizedExperiment(assays = list(counts = counts), 
+                           rowRanges = rowRanges, 
+                           colData = coldata)
+se
+```
+
+# Visualizing and summarizing genomic intervals
+## Visualizing intervals on a locus of interest
+```{r}
+#| message: false
+#| warning: false
+
+
+library(Gviz)
+
+cpgi.track <- AnnotationTrack(range = cpgi.gr, 
+                              name = "CpG")
+cpgi.track
+```
+
+```{r}
+gene.track <- BiomartGeneRegionTrack(genome = "hg19", 
+                                     chromosome = "chr21", 
+                                     start = 27698681, 
+                                     end = 28083310, 
+                                     name = "ENSEMBL")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
