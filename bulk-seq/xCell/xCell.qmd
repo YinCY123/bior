@@ -1,0 +1,156 @@
+---
+title: "xCell"
+author: "YinCY"
+format: html
+editor: source
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+library(xCell)
+library(magrittr)
+```
+
+When loading the `xCell` package, an object named “xCell.data” is loaded. This is a list containing the spill over and calibration parameters, the signatures, and the list of genes it uses.
+
+The input for `xCell` is a gene expression matrix from human mixed samples. It should be read prior to running the `xCell` functions. The matrix should contain HUGO gene symbols as row names and the columns are samples.
+
+If the gene expression data are from a microarray, no normalization is required. If the gene expression data are from a sequencing platform, values must be normalized to gene length (i.e., RPKM, TPM, FPKM). `xCell` uses the expression levels ranking and not the actual values, thus further normalization does not have an effect.
+
+# xCell Pipeline
+1. `rawEnrichmentAnalysis`  
+This function reads a gene expression matrix and returns an enrichment score for each of the 64 cell types across the input gene expression samples. For its calculations, `xCell` considers 10,808 common genes. The list of genes can be found in:
+
+```{r}
+xCell.data$genes %>% str
+```
+
+As a minimal requirement, at least 5000 genes are required to be available in the input gene expression matrix; however, low number of shared genes may affect the accuracy of the results.
+
+`xCell` uses multiple signatures for each cell type. Altogether, there are 489 signatures that correspond to the 64 cell types. The full list of signatures is available in:
+
+```{r}
+xCell.data$signatures
+```
+
+The scores are computed using single-sample gene set enrichment analysis (ssGSEA)[@Barbie2009-pe]. For each cell type, the average of the multiple scores from the multiple corresponding signatures is calculated. Finally, average scores are shifted such that the minimal score for each cell type is zero.
+
+Hence, `xCell` performs best with heterogeneous dataset. If a cell type has similar levels across all samples, the scores will be low and will not correspond well with the expected proportions. Thus, it is recommended to use all available data combined in one run and not to break down to smaller subsets.
+
+Note that scores of samples that were analyzed in different runs are therefore not comparable.
+
+```{r}
+#| eval: false
+scores <- rawEnrichmentAnalysis(expr, signatures, genes, file.name, parallel.sz, parallel.type = "FORK")
+```
+
+2. `transformScores`
+This function is used to transform scores from raw enrichment scores to a linear scale that resembles percentages, `xCell` uses precomputed calibration parameters for the transformations. `xCell` uses different set of parameters for sequencing-based gene expression values and microarray-based values.
+
+```{r}
+# sequencing-based parameters
+xCell.data$spill$fv
+```
+
+```{r}
+# microarray-based parameter
+xCell.data$spill.array$fv
+```
+
+```{r}
+#| eval: false
+tscores <- transformScores(scores, fit.vals, scale, fn)
+```
+
+‘scores’ are the output of `rawEnrichmentAnalysis`; ‘fit.vals’ are the calibration parameters as described above; scale if a logical, of whether to scale the transformed scores (default is TRUE and recommended). ‘fn’ is optional and can be used to specify a file name to save the transformed scores to a tab delimited text file.
+
+3. `spillOver`  
+This function is used to perform the spill-over compensation applied by `xCell` to reduce dependency between scores of closely related cell types. The spill over is performed using a precomputed dependency matrix ‘K‘. Different matrices are used for sequencing-based and microarray-based inputs.
+
+```{r}
+# K matrix for sequencing-based data
+xCell.data$spill$K %>% .[1:10, 1:5]
+```
+
+```{r}
+# K matrix for microarray-based data
+xCell.data$spill.array$K[1:10, 1:5]
+```
+
+```{r}
+#| eval: false
+spillOver(transformedScores, K, alpha = 0.5, file.name = NULL)
+```
+
+In addition, `xCell` provides significance assessment of the null hypothesis that the cell type is not in the mixture. It is important to understand this null hypothesis—the p-values that are calculated do not provide significance for the estimate itself, only if the estimate is significantly different from zero. Thus, this is a tool that can allow to remove cell types that are not in the mixture. We will discuss how removing cell types that are not in the mixture from the analysis may improve the inferences.
+
+The available functions for significance are as follows:
+
+1. `xCellSignificanceBetaDist`  
+This function uses predefined beta distribution parameters from random mixtures generated using the reference data sets. This is the method used in the `xCell` manuscript, and it is recommended.
+
+2. `xCellSignificanceRandomMatrix`
+Use random matrix and calculates beta distribution parameters.
+
+`xCell` contains a wrapper function to run all three steps using one function
+
+```{r}
+#| message: false
+#| warning: false
+
+xCellAnalysis(expr, signatures = NULL, genes = NULL, 
+              spill = NULL, rnaseq = TRUE, file.name = NULL, 
+              scale = TRUE, alpha = 0.5, save.raw = F, 
+              parallel.sz = 4, parallel.type = "SOCK", 
+              cell.types.use = NULL)
+```
+
+# example
+```{r}
+sdy <- readRDS(file = "../../../github/xCell/vignettes/sdy420.rds")
+sdy
+```
+
+```{r}
+raw.scores <- rawEnrichmentAnalysis(expr = as.matrix(sdy$expr),
+                                    signatures = xCell.data$signatures,
+                                    genes = xCell.data$genes)
+```
+
+The next step is transforming the raw scores and applying the spill-over compensation. To get best results, it is best to run the spill-over compensation only on relevant cell types (e.g., if we know there are no macrophages in the mixtures, it is best to remove them from the analysis). Thus, we subset the scores matrix to only cell types that are also measured in the CyTOF dataset.
+
+```{r}
+cell.types.use <- intersect(colnames(xCell.data$spill$K), 
+                            rownames(sdy$fcs))
+transformed_scores <- transformScores(scores = raw.scores[cell.types.use, ], 
+                                      fit.vals = xCell.data$spill.array$fv)
+
+scores <- spillOver(transformedScores = transformed_scores, 
+                    K = xCell.data$spill.array$K)
+```
+
+Find the correlation between the `xCell` scores and the cell types fractions from the CyTOF immunoprofilings.  
+
+```{r}
+#| message: false
+#| warning: false
+
+library(psych)
+library(ggplot2)
+
+fcs <- sdy$fcs[rownames(scores), colnames(scores)]
+res <- corr.test(x = t(scores), t(fcs), adjust = "none")
+
+qplot(x = rownames(res$r), y = diag(res$r), 
+      fill = diag(res$p) < 0.05, 
+      geom = "col", 
+      main = "SDY420 association with immunoprofiling", 
+      ylab = "Pearson R") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_x_discrete(name = NULL) +
+    scale_fill_discrete(name = "p value < 0.05")
+```
+
+

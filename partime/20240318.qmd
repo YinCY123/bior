@@ -1,0 +1,40 @@
+---
+title: "20240318"
+author: "YinCY"
+format: html
+editor: source
+---
+
+```{r}
+library(ggplot2)
+library(ggrepel)
+library(dplyr)
+
+df <- readxl::read_excel("../../data/partime/20240318/冰冰凉凉+-峰面积.xlsx") %>% 
+    as.data.frame() %>% 
+    tibble::column_to_rownames("...1") %>% 
+    tibble::rownames_to_column("id")
+
+df <- df %>% 
+    tidyr::pivot_longer(cols = 2:3, names_to = "class", values_to = "value")
+
+df$id <- factor(df$id, levels = paste0("M", 1:41))
+```
+
+```{r}
+ggplot(data = df) + 
+    geom_bar(aes(x = id, y = value, fill = class), position = "fill", stat = "identity") +
+    scale_x_discrete(name = NULL, expand = c(0,0)) +
+    scale_y_continuous(name = "percentage", expand = c(0,0)) +
+    scale_fill_manual(name = NULL, values = c(子实体 = "tomato", 孢子粉 = "steelblue")) +
+    theme(axis.text.x = element_text(size = 6))
+
+ggsave("../../data/partime/20240318/bar_plot.tiff", width = 12)
+```
+
+
+
+
+
+
+
