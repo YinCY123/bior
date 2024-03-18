@@ -48,7 +48,7 @@ We will illustrate the main functionalities of crisprDesign by performing a comm
 
 library(crisprDesign)
 library(crisprBase)
-library(BSgenome.Hsapiens.UCSC.hg38)
+library(BSgenome.Hsapiens.UCSC.hg38.masked)
 library(magrittr)
 ```
 
@@ -100,7 +100,7 @@ gr <- gr[1]
 `findSpacers` is the main function to obtain a list of all possible spacer sequences targeting protospacers located in the target DNA sequence(s). If a `GRanges` object is provided as input, a `BSgenome` object (object containing sequences of a reference genome) will need to be provided as well:
 
 ```{r}
-bsgenome <- BSgenome.Hsapiens.UCSC.hg38
+bsgenome <- BSgenome.Hsapiens.UCSC.hg38.masked
 guideSet <- findSpacers(x = gr, 
                         bsgenome = bsgenome, 
                         crisprNuclease = SpCas9)
@@ -160,7 +160,7 @@ guideSet
 ## Off-target search
 In order to select gRNAs that are most specific to our target of interest, it is important to avoid gRNAs that target additional loci in the genome with either perfect sequence complementarity (multiple on-targets), or imperfect complementarity through tolerated mismatches (off-targets).
 
-For instance, both the SpCas9 and AsCas12a nucleases can be tolerant to mismatches between the gRNA spacer sequence (RNA) and the protospacer sequence (DNA), thereby making it critical to characterize off-targets to minimize the introduction of double-stranded breaks (DSBs) beyond our intended target.
+For instance, both the `SpCas9` and `AsCas12a` nucleases can be tolerant to mismatches between the gRNA spacer sequence (RNA) and the protospacer sequence (DNA), thereby making it critical to characterize off-targets to minimize the introduction of double-stranded breaks (DSBs) beyond our intended target.
 
 The `addSpacerAlignments` function appends a list of putative on- and off-targets to a `GuideSet` object using one of three methods. The first method uses the fast aligner `bowtie` (Langmead et al. 2009) via the `crisprBowtie` package to map spacer sequences to a specified reference genome. This can be done by specifying `aligner="bowtie"` in `addSpacerAlignments`.
 
@@ -172,7 +172,7 @@ We can control the alignment parameters and output using several function argume
 
 Finally, the `txObject` argument in `addSpacerAlignmentsused` allows users to provide a `TxDb` object, or a `TxDb` object converted in a `GRangesList` using the `TxDb2GRangesList` function, to annotate genomic alignments with a gene model annotation. This is useful to understand whether or not off-targets are located in the CDS of another gene, for instance.
 
-For the sake of time here, we will search only for on- and off-targets located in the beginning of human chr12 where IQSEC3 is located. We note note that users should always perform a genome-wide search.
+For the sake of time here, we will search only for on- and off-targets located in the beginning of human chr12 where IQSEC3 is located. We note that users should always perform a genome-wide search.
 
 We will use the bowtie method, with a maximum of 2 mismatches. First, we need to build a bowtie index sequence using the fasta file provided in `crisprDesign`. We use the `RBowtie` package to build the index:
 
@@ -199,8 +199,7 @@ Finally, we also need to specify a BSgenome object storing DNA sequences of the 
 #| message: false
 #| warning: false
 
-library(BSgenome.Hsapiens.UCSC.hg38)
-bsgenome <- BSgenome.Hsapiens.UCSC.hg38
+bsgenome <- BSgenome.Hsapiens.UCSC.hg38.masked
 
 
 guideSet <- addSpacerAlignments(object = guideSet, 
@@ -224,7 +223,7 @@ To look at the individual on- and off-targets and their context, use the `alignm
 guideSet %>% alignments()
 ```
 
-The functions onTargets and offTargets will return on-target alignments (no mismatch) and off-target alignment (with at least one mismatch), respectively.
+The functions `onTargets` and `offTargets` will return on-target alignments (no mismatch) and off-target alignment (with at least one mismatch), respectively.
 
 ```{r}
 guideSet %>% onTargets()
@@ -271,16 +270,69 @@ guideSet
 
 
 ## Restriction enzymes
+Restriction enzymes are usually involved in the gRNA library synthesis process. Removing gRNAs that contain specific restriction sites is often necessary. We provide the function addRestrictionEnzymes to indicate whether or not gRNAs contain restriction sites for a user-defined set of enzymes:
+
+```{r}
+guideSet <- addRestrictionEnzymes(object = guideSet)
+```
+
+When no enzymes are specified, the function adds annotation for the following default enzymes: EcoRI, KpnI, BsmBI, BsaI, BbsI, PacI, ISceI and MluI. The function also has two additional arguments, `flanking5` and `flanking3`, to specify nucleotide sequences flanking the spacer sequence (5’ and 3’, respectively) in the lentiviral cassette that will be used for gRNA delivery. The function will effectively search for restriction sites in the full sequence `[flanking5][spacer][flanking3]`.
+
+```{r}
+# mcols(guideSet)[, "enzymeAnnotation"]
+enzymeAnnotation(guideSet)
+```
+
+## Gene Annotation
+The function `addGeneAnnotation` adds transcript- and gene-level contextual information to gRNAs from a `TxDb`-like object:
+
+```{r}
+guideSet <- addGeneAnnotation(object = guideSet, 
+                              txObject = grListExample)
+
+guideSet
+```
+
+```{r}
+geneAnnotation(guideSet)
+```
+
+It contains a lot of information that contextualizes the genomic location of the protospacer sequences.
+
+The ID columns (`tx_id`, `gene_id`, `protein_id`, `exon_id`) give Ensembl IDs. The `exon_rank` gives the order of the exon for the transcript, for example “2” indicates it is the second exon (from the 5’ end) in the mature transcript.
+
+The columns `cut_cds`, `cut_fiveUTRs`, `cut_threeUTRs` and `cut_introns` indicate whether the guide sequence overlaps with CDS, 5’ UTR, 3’ UTR, or an intron, respectively.
+
+`percentCDS` gives the location of the `cut_site` within the transcript as a percent from the 5’ end to the 3’ end. `aminoAcidIndex` gives the number of the specific amino acid in the protein where the cut is predicted to occur. `downstreamATG` shows how many in-frame ATGs are downstream of the `cut_site` (and upstream from the defined percent transcript cutoff, `met_cutoff`), indicating a potential alternative translation initiation site that may preserve protein function.
 
 
+## TSS annotation
+Similarly, one might want to know which protospacer sequences are located within promoter regions of known genes:
 
+```{r}
+data("tssObjectExample")
+tssObjectExample
+```
 
+```{r}
+guideSet <- addTssAnnotation(object = guideSet, 
+                             tssObject = tssObjectExample)
+guideSet %>% tssAnnotation()
+```
 
+## SNP information
+Common single-nucleotide polymorphisms (SNPs) can change the on-target and off-target properties of gRNAs by altering the binding. The function `addSNPAnnotation` annotates gRNAs with respect to a reference database of SNPs (stored in a VCF file), specified by the `vcf` argument.
 
+VCF files for common SNPs (dbSNPs) can be downloaded from NCBI on the dbSNP website. We include in this package an example VCF file for common SNPs located in the proximity of human gene IQSEC3. This was obtained using the dbSNP151 RefSNP database obtained by subsetting around IQSEC.
 
-
-
-
+```{r}
+vcf <- system.file("extdata", 
+                   file = "common_snps_dbsnp151_example.vcf.gz", 
+                   package = "crisprDesign")
+guideSet <- addSNPAnnotation(object = guideSet, 
+                             vcf = vcf)
+guideSet
+```
 
 
 
