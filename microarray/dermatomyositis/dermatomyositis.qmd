@@ -813,6 +813,7 @@ umap$group <- sapply(umap$group, function(x){
            '7' = "Group4",
            '8' = "Group4")
 })
+saveRDS(umap, "../../../data/zhuyi/dermatomyositis/subgroups.rds")
 
 umap %>% 
     ggplot(aes(UMAP1, UMAP2)) +
@@ -862,6 +863,102 @@ dev.off()
 ```
 
 # immune profile
+```{r}
+#| message: false
+#| warning: false
+
+library(xCell)
+library(Biobase)
+library(magrittr)
+
+es_CRC <- readRDS("../../../data/zhuyi/dermatomyositis/CRC_es.rds")
+mtx_CRC <- es_CRC %>% exprs()
+fdata <- es_CRC %>% featureData() %>% pData
+ids <- setNames(fdata$`Gene Symbol`, fdata$ID)
+ids %>% str
+
+mtx_CRC <- mtx_CRC %>% as.data.frame %>% tibble::rownames_to_column("ID")
+mtx_CRC$symbol <- ids[mtx_CRC$ID]
+mtx_CRC <- mtx_CRC %>% dplyr::relocate(symbol)
+mtx_CRC <- mtx_CRC %>% dplyr::filter(!is.na(symbol))
+
+idx <- mtx_CRC$symbol %>% duplicated
+mtx_CRC <- mtx_CRC[!idx, ]
+mtx_CRC$symbol %>% duplicated %>% table
+rownames(mtx_CRC) <- mtx_CRC$symbol
+mtx_CRC <- mtx_CRC[, -c(1, 2)]
+mtx_CRC <- as.matrix(mtx_CRC)
+
+pdata <- es_CRC %>% phenoData() %>% pData
+group_crc <- pdata %>% dplyr::filter(group == "CRC") %>% dplyr::pull(geo_accession) %>% unique()
+group_crc %>% str
+mtx_CRC <- mtx_CRC[, group_crc]
+
+mtx_CRC[1:10, 1:5]
+```
+
+```{r}
+raw_scores <- rawEnrichmentAnalysis(expr = mtx_CRC, 
+                                    signatures = xCell.data$signatures, 
+                                    genes = xCell.data$genes)
+
+transformed_scores <- transformScores(scores = raw_scores, 
+                                      fit.vals = xCell.data$spill.array$fv)
+
+scores <- spillOver(transformedScores = transformed_scores, 
+                    K = xCell.data$spill.array$K)
+scores %>% class
+scores %>% dim
+scores <- scores %>% round(digits = 4)
+scores[1:10, 1:5]
+```
+
+```{r}
+df <- scores %>% 
+    as.data.frame %>% 
+    tibble::rownames_to_column("cell_type") %>% 
+    tidyr::pivot_longer(cols = dplyr::starts_with("GSM"), names_to = "sample", values_to = "value")
+
+
+df <- readRDS("../../../data/zhuyi/dermatomyositis/immune_profile.rds")
+subgroups <- readRDS("../../../data/zhuyi/dermatomyositis/subgroups.rds")
+ids <- setNames(subgroups$group, rownames(subgroups))
+
+df$subgroup <- ids[df$sample]
+df <- as.data.frame(df)
+
+saveRDS(df, "../../../data/zhuyi/dermatomyositis/immune_profile.rds")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
