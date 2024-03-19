@@ -1,0 +1,91 @@
+---
+title: "GSEABase"
+author: "YinCY"
+format: html
+editor: visual
+---
+
+# Introduction
+The `GSEABase` package implements data structures and methods to represent, manipulate, and analyze gene sets in the context of gene set enrichment analysis. This includes construction of gene sets from reference resources, ID mapping, coloring according to phenotype association, and storing in gene set collections.
+
+# GeneSet
+A `GeneSet` stores a set of related gene identifiers. Important components of the gene set are a vector of identifiers, general descriptive information about the set, and information about how the gene set was constructed. To construct a gene set, use `GeneSet`. For example, to create a gene set from the identifiers in a subset of the sample `ExpressionSet` in the `Biobase` package use.
+
+```{r}
+#| message: false
+#| warning: false
+
+library(GSEABase)
+library(Biobase)
+library(magrittr)
+
+data('sample.ExpressionSet')
+sample.ExpressionSet
+
+egs <- GeneSet(type = sample.ExpressionSet[201:250, ], setName = "Sample")
+```
+
+```{r}
+egs %>% geneIds() %>% str
+```
+
+The gene set records that the identifiers are probeset names from the annotation package hgu95av2.db, and that the source of the gene set was an ExpressionSet. Additional details are available.
+
+```{r}
+egs %>% details
+```
+
+The set identifier, set version, and creation date provide mechanisms for carefully curating gene sets. Additional information is automatically copied from the expression set used to create egs.
+
+View additional methods for creating gene sets
+
+```{r}
+showMethods(f = "GeneSet", inherited = FALSE)
+```
+
+The identifier type of gene sets created from expression sets is `AnnotationIdentifier`. Additional predefined identifiers are available:
+
+```{r}
+getClass(Class = "GeneIdentifierType") %>% slot(name = "subclasses") %>% names
+```
+
+It is possible to map between identifier types.
+
+```{r}
+mapIdentifiers(what = egs, 
+               to = SymbolIdentifier(), 
+               verbose = TRUE)
+```
+
+A gene set can be created with different types of identifier, e.g., to create a gene set with Entrez IDs.
+
+```{r}
+library(annotate)
+
+eids <- unique(getEG(geneIds(egs), "hgu95av2"))
+eids <- eids[!is.na(eids)]
+?GeneSet
+GeneSet(type = EntrezIdentifier(), geneIds = as.character(eids))
+```
+
+
+```{r}
+egs %>% details
+```
+
+
+# GeneColorSet
+A `GeneColorSet` is a gene set with “coloring” to indicate how features of genes and phenotypes are associated. The following sample data describes how changes in expression levels of several genes (with Entrez and Symbol names) influence cisplatin resistance phenotype.
+
+```{r}
+data("tbl")
+```
+
+Gene color sets can be used in the same way as gene sets, e.g., for subsetting expression sets (provided the map between identifiers is 1:1, so that coloring corresponding to identifiers can be determined). The `coloring` method allows access to the coloring information with a data frame interface; `phenotype`, `geneColor` and `phenotypeColor` provide additional accessors.
+
+# GeneSetCollection
+
+
+
+
+

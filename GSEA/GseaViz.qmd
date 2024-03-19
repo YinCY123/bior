@@ -1,0 +1,152 @@
+---
+title: "GseaViz"
+author: "YinCY"
+format: html
+editor: source
+---
+
+
+```{r}
+#| message: false
+#| warning: false
+
+library(GseaVis)
+```
+
+```{r}
+test_data <- system.file("extdata", "gseaRes.RDS", package = "GseaVis")
+gseaRes <- readRDS(test_data)
+```
+
+# classic plot
+```{r}
+gseaNb(object = gseaRes, 
+       geneSetID = "GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS")
+```
+
+```{r}
+gseaNb(object = gseaRes, 
+       geneSetID = "GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS", 
+       subPlot = 1)
+```
+
+```{r}
+gseaNb(object = gseaRes, 
+       geneSetID = "GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS", 
+       subPlot = 2)
+```
+
+```{r}
+gseaNb(object = gseaRes, 
+       geneSetID = "GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS", 
+       subPlot = 2, 
+       termWidth = 30)
+```
+
+```{r}
+mygenes <- c("Entpd8", "Htr2a", "Nt5e", "Actn3", 
+             "Entpd1", "Pfkp", "Tpi1", "Igf1", "Ddit4", "Ak9")
+gseaNb(object = gseaRes, 
+       geneSetID = "GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS", 
+       subPlot = 2, 
+       addGene = mygenes)
+```
+
+```{r}
+gseaNb(object = gseaRes, 
+       geneSetID = "GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS", 
+       subPlot = 2, 
+       addGene = mygenes, 
+       geneCol = "black", 
+       arrowType = "open")
+```
+
+```{r}
+gseaNb(object = gseaRes, 
+       geneSetID = "GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS", 
+       subPlot = 3, 
+       addGene = mygenes, 
+       rmSegment = TRUE)
+```
+
+# New style GSEA
+```{r}
+gseaNb(object = gseaRes, 
+       geneSetID = "GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS", 
+       newGsea = T)
+```
+
+```{r}
+gseaNb(object = gseaRes, 
+       geneSetID = "GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS", 
+       newGsea = T, 
+       addPoint = F)
+```
+
+```{r}
+gseaNb(object = gseaRes, 
+       geneSetID = "GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS", 
+       newGsea = T, 
+       addGene = mygenes)
+```
+
+```{r}
+gseaNb(object = gseaRes, 
+       geneSetID = "GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS", 
+       newGsea = T, 
+       rmSegment = T, 
+       addGene = mygenes)
+```
+
+# Add NES and Pvalue
+```{r}
+gseaNb(object = gseaRes, 
+       geneSetID = "GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS", 
+       newGsea = T, 
+       addGene = mygenes, 
+       addPval = T)
+```
+
+# Multiple GSEA plot
+```{r}
+terms <- c("GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS", 
+           "GOBP_REGULATION_OF_OSSIFICATION", 
+           "GOBP_TISSUE_MIGRATION", 
+           "GOBP_CELL_MATRIX_ADHESION")
+
+lapply(terms, function(x){
+    gseaNb(object = gseaRes, 
+           geneSetID = x, 
+           addPval = T, 
+           pvalX = 0.75, 
+           pvalY = 0.75, 
+           pCol = "black", 
+           pHjust = 0)
+}) -> gseaList
+
+cowplot::plot_grid(plotlist = gseaList, ncol = 2, align = "hv")
+```
+
+```{r}
+geneSetID = c('GOBP_NUCLEOSIDE_DIPHOSPHATE_METABOLIC_PROCESS',
+              'GOBP_REGULATION_OF_OSSIFICATION',
+              'GOBP_TISSUE_MIGRATION')
+
+# all plot
+gseaNb(object = gseaRes,
+       geneSetID = geneSetID)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
