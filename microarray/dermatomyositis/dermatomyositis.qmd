@@ -870,6 +870,7 @@ dev.off()
 library(xCell)
 library(Biobase)
 library(magrittr)
+library(ggpubr)
 
 es_CRC <- readRDS("../../../data/zhuyi/dermatomyositis/CRC_es.rds")
 mtx_CRC <- es_CRC %>% exprs()
@@ -895,9 +896,12 @@ group_crc %>% str
 mtx_CRC <- mtx_CRC[, group_crc]
 
 mtx_CRC[1:10, 1:5]
+
+saveRDS(mtx_CRC, "../../../data/zhuyi/dermatomyositis/mtx_CRC_symbol.rds")
 ```
 
 ```{r}
+mtx_CRC <- readRDS("../../../data/zhuyi/dermatomyositis/mtx_CRC_symbol.rds")
 raw_scores <- rawEnrichmentAnalysis(expr = mtx_CRC, 
                                     signatures = xCell.data$signatures, 
                                     genes = xCell.data$genes)
@@ -914,34 +918,145 @@ scores[1:10, 1:5]
 ```
 
 ```{r}
+set.seed(101)
+x <- xCellSignifcanceBetaDist(scores = scores, 
+                              beta_params = xCell.data$spill.array$beta_params, 
+                              rnaseq = F)
+x %>% class
+x %>% dim
+ids <- x %>% apply(1, function(x){sum(x > 0) >= ncol(scores) * 0.8})
+ids %>% table
+cells_to_retain <- ids[ids == TRUE] %>% names
+
+scores[1:10, 1:5]
+scores <- scores[rownames(scores) %in% cells_to_retain, ]
+```
+
+```{r}
 df <- scores %>% 
     as.data.frame %>% 
     tibble::rownames_to_column("cell_type") %>% 
     tidyr::pivot_longer(cols = dplyr::starts_with("GSM"), names_to = "sample", values_to = "value")
 
-
-df <- readRDS("../../../data/zhuyi/dermatomyositis/immune_profile.rds")
 subgroups <- readRDS("../../../data/zhuyi/dermatomyositis/subgroups.rds")
 ids <- setNames(subgroups$group, rownames(subgroups))
 
 df$subgroup <- ids[df$sample]
 df <- as.data.frame(df)
 
-saveRDS(df, "../../../data/zhuyi/dermatomyositis/immune_profile.rds")
+df$subgroup <- factor(df$subgroup, levels = c("Group1", "Group2", "Group3", "Group4"))
+my_comprisons <- list(c("Group2", "Group3"), c("Group2", "Group4"), c("Group3", "Group4"))
+
+ggboxplot(data = df, 
+          x = 'subgroup', 
+          y = 'value', 
+          color = "subgroup",
+          facet.by = 'cell_type', 
+          scales = "free", 
+          add = "jitter", 
+          nrow = 3) +
+    scale_y_continuous(name = "imune infiltration") +
+    stat_compare_means(comparisons = my_comprisons)
+
+ggsave("../../../data/zhuyi/dermatomyositis/res/06_immune_profile/immune_infltration_subgroups.png", 
+       width = 50, height = 15, limitsize = FALSE)
 ```
 
+```{r}
+# immune check point
+immune_check_points <- c("CD200", "TNFRSF9", "TNFSF15", "LAIR1", "NRP1", 
+                         "CD80", "VTCN1", "TNFSF18", "TNFRSF4", "TNFRSF8", 
+                         "ADORA2A", "TNFRSF18", "CD86", "CD48", "CD276", 
+                         "CD200R1", "CD40LG", "TNFSF9", "LGALS9", "HHLA2", 
+                         "LAG3", "HAVCR2", "CD44", "CTLA4")
 
+df_CRC <- mtx_CRC %>% 
+    as.data.frame() %>% 
+    tibble::rownames_to_column("symbol") %>% 
+    tidyr::pivot_longer(cols = dplyr::starts_with("GSM"), names_to = "sample", values_to = "value")
 
+df_CRC$subgroups <- ids[df_CRC$sample]
+df_CRC$subgroups <- factor(df_CRC$subgroups, levels = c("Group1", "Group2", "Group3", "Group4"))
 
+ggboxplot(data = df_CRC[df_CRC$symbol %in% immune_check_points, ], 
+          x = "subgroups", 
+          y = "value", 
+          color = "subgroups",
+          add = "jitter", 
+          facet.by = "symbol", 
+          scales = "free", 
+          nrow = 3) +
+    stat_compare_means(comparisons = my_comprisons)
 
+ggsave("../../../data/zhuyi/dermatomyositis/res/06_immune_profile/immune_check_points.png", 
+       width = 30, height = 12)
+```
 
+```{r}
+library(stringr)
+sample_meta <- es_CRC %>% phenoData() %>% pData
+cids <- c("geo_accession", "characteristics_ch1.2", "characteristics_ch1.4", 
+          "characteristics_ch1.9", "characteristics_ch1.18", "characteristics_ch1.22", "characteristics_ch1.26", 
+          "age.at.diagnosis (year):ch1", "tumor.location:ch1", "group")
+sample_meta <- sample_meta[, cids]
+colnames(sample_meta) <- c("geo_accession", "gender", "tnm_stage", "chemotherapy_adjuvant", 
+                           "tp53_mutation", "kras_mutation", "braf_mutation", "age_at_diagnosis", 
+                           "tumor_location", "group")
+sample_meta <- sample_meta %>% dplyr::filter(group == "CRC")
+sample_meta$subgroup <- ids[sample_meta$geo_accession]
+sample_meta <- sample_meta[, !str_detect(colnames(sample_meta), "^group$")]
 
+sample_meta <- sample_meta %>% 
+    dplyr::mutate(gender = str_replace(gender, "Sex:", "") %>% str_trim(side = "both"), 
+                  tnm_stage = str_replace(tnm_stage, "tnm.stage:", "") %>% str_trim(side = "both"), 
+                  chemotherapy_adjuvant = str_replace(chemotherapy_adjuvant, "chemotherapy.adjuvant:", "") %>% str_trim(side = "both"), 
+                  tp53_mutation = str_replace(tp53_mutation, "tp53.mutation:", "") %>% str_trim(side = "both"), 
+                  kras_mutation = str_replace(kras_mutation, "kras.mutation:", "") %>% str_trim(side = "both"),
+                  braf_mutation = str_replace(braf_mutation, "braf.mutation:", "") %>% str_trim(side = "both"), 
+                  age_at_diagnosis = as.numeric(str_trim(age_at_diagnosis, side = "both")), 
+                  tumor_location = as.character(str_trim(tumor_location, side = "both")))
 
+sample_meta <- sample_meta %>% 
+    dplyr::mutate(gender = factor(gender, levels = c("Male", "Female")) %>% as.numeric, 
+                  chemotherapy_adjuvant = factor(chemotherapy_adjuvant, levels = c("N", "N/A", "Y")) %>% as.numeric, 
+                  tnm_stage = as.numeric(tnm_stage),
+                  tp53_mutation = factor(tp53_mutation, levels = c("WT", "N/A", "M")) %>% as.numeric, 
+                  kras_mutation = factor(kras_mutation, levels = c("WT", "N/A", "M")) %>% as.numeric, 
+                  braf_mutation = factor(braf_mutation, levels = c("WT", "N/A", "M")) %>% as.numeric, 
+                  tumor_location = factor(tumor_location, levels = c("distal", "proximal")) %>% as.numeric, 
+                  subgroup = str_extract(subgroup, "[0-9]{1,}$") %>% as.numeric)
+sample_meta
 
+saveRDS(sample_meta, "../../../data/zhuyi/dermatomyositis/sample_meta.rds")
+```
 
+```{r}
+#| message: false
+#| warning: false
 
+library(psych)
+library(ggplot2)
+library(ggpubr)
 
-
+cols <- sample_meta %>% colnames %>% .[-1]
+for(col in cols){
+    res <- corr.test(x = t(scores), y = sample_meta[, col, drop = T], method = "spearman", adjust = "fdr")
+    df_to_plot <- data.frame(r = res$r, 
+                             colors = res$p <= 0.05, 
+                             cell_type = rownames(res$r))
+    df_to_plot %>% 
+        ggplot(aes(cell_type, r)) +
+        geom_col(aes(fill = colors)) +
+        theme(axis.text.x = element_text(angle = -60, hjust = 0, size = 5)) +
+        scale_x_discrete(name = NULL) +
+        scale_y_continuous(name = "Spearman R") +
+        scale_fill_manual(name = "p <= 0.05", values = c("steelblue", "tomato"))
+    
+    ggsave(paste("../../../data/zhuyi/dermatomyositis/res/06_immune_profile/", 
+                 "immune_infiltration_correlated_with_", col, ".png", sep = ""), 
+           width = 10)
+}
+```
 
 
 

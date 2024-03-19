@@ -110,7 +110,6 @@ xCellAnalysis(expr, signatures = NULL, genes = NULL,
 # example
 ```{r}
 sdy <- readRDS(file = "../../../github/xCell/vignettes/sdy420.rds")
-sdy
 ```
 
 ```{r}
