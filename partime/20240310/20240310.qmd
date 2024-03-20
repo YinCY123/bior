@@ -1,0 +1,133 @@
+---
+title: "20240310"
+format: html
+---
+
+# refrence
+```{r}
+library(magrittr)
+library(SingleR)
+
+mtx <- read.table("../../data/partime/20240310/GSE36952_RPKM.txt", 
+                  sep = "\t", 
+                  header = TRUE)
+
+mtx[1:10, ]
+mtx <- mtx[, 1:7]
+mtx <- mtx[!duplicated(mtx$HGNC.SYMBOL), ]
+rownames(mtx) <- mtx$HGNC.SYMBOL
+mtx <- mtx[, -1]
+mtx <- as.matrix(mtx)
+
+labels <- rep(c("M1", "M2"), each = 3)
+```
+
+
+# data
+```{r}
+data <- readxl::read_excel("/home/yincy/git/data/partime/20240310/reference_data/result/1.3.gene_expression/FPKM_anno.xlsx") %>% 
+    as.data.frame()
+data$id %>% duplicated %>% table
+data <- data %>% tibble::column_to_rownames("id")
+data <- as.matrix(data)
+data[1:10, ]
+```
+
+```{r}
+label_pred <- SingleR(test = data, 
+                      ref = mtx, 
+                      labels = labels)
+
+
+label_pred$pruned.labels
+scores <- label_pred$scores
+rownames(scores) <- colnames(data)
+
+pdf("../../data/partime/20240310/similarity_score.pdf")
+pheatmap::pheatmap(scores, 
+                   legend = T, 
+                   legend_breaks = c(0.33, 0.39),
+                   legend_labels = c("low", "high"),
+                   cluster_cols = F, 
+                   clustering_method = "ward.D2", 
+                   main = "Similarity Score", 
+                   angle_col = 0)
+dev.off()
+```
+
+
+# lipolysis
+```{r}
+#| message: false
+#| warning: false
+
+
+library(biomaRt)
+library(GO.db)
+
+GO.db %>% columns
+
+df <- data.frame(goid = keys(GO.db), 
+                 term = mapIds(GO.db, keys = keys(GO.db), keytype = "GOID", column = "TERM"), 
+                 ontology = mapIds(GO.db, keys = keys(GO.db), keytype = "GOID", column = "ONTOLOGY"), 
+                 definition = mapIds(GO.db, keys = keys(GO.db), keytype = "GOID", column = "DEFINITION"))
+df %>% dplyr::filter(grepl("Fatty acid biosynthesis", term, ignore.case = T), ontology == "BP")
+```
+
+```{r}
+library(KEGGREST)
+
+listDatabases()
+?keggList
+pathways <- keggList(database = "pathway", organism = "hsa")
+
+pathways[grepl("fatty acid", pathways, ignore.case = T)]
+fatty_acid_biosynthesis <- c("hsa00061", "hsa01040")
+```
+
+```{r}
+fatty_acid_biosynthesis_genes <- vector(mode = "list")
+
+for(pathway in fatty_acid_biosynthesis){
+    fatty_acid_biosynthesis_genes[[pathway]] <- keggLink(pathway)[, 2]
+}
+
+fatty_acid_biosynthesis_genes <- fatty_acid_biosynthesis_genes %>% 
+    unlist() %>% 
+    unname()
+
+fatty_acid_biosynthesis_genes <- fatty_acid_biosynthesis_genes[grep("^hsa:", fatty_acid_biosynthesis_genes)]
+
+fatty_acid_biosynthesis_genes <- gsub("^hsa:", "", fatty_acid_biosynthesis_genes)
+
+library(EnsDb.Hsapiens.v86)
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+EnsDb.Hsapiens.v86 %>% columns()
+
+goi <- data.frame(entrez = fatty_acid_biosynthesis_genes, 
+                  symbol = mapIds(EnsDb.Hsapiens.v86, 
+                                  keys = fatty_acid_biosynthesis_genes, 
+                                  keytype = "ENTREZID", 
+                                  column = "SYMBOL"))
+goi <- goi %>% dplyr::filter(!is.na(symbol))
+fatty_acid_genes_expression <- data[goi$symbol, ]
+```
+
+
+```{r}
+pdf("../../data/partime/20240310/fatty_acid_biosysnthesis.pdf")
+pheatmap::pheatmap(log1p(fatty_acid_genes_expression), 
+                   clustering_method = "ward.D2", 
+                   angle_col = 0, 
+                   legend_breaks = c(1, 5), 
+                   legend_labels = c("low", "high"))
+
+dev.off()
+```
+
+
+
+
+
+
+

@@ -1,0 +1,30 @@
+---
+title: "20240306"
+author: "YinCY"
+format: html
+---
+
+```{r}
+library(openxlsx)
+
+data <- read.xlsx("../../../data/partime/data.xlsx", 
+                  sheet = 1)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
