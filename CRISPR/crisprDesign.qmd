@@ -234,7 +234,6 @@ guideSet %>% offTargets()
 ### Iterative spacer alignments
 gRNAs that align to hundreds of different locations are highly unspecific and undesirable. This can also cause `addSpacerAlignments` to be slow. To mitigate this, we provide `addSpacerAlignmentsIterative`, an iterative version of `addSpacerAlignments` that curtails alignment searches for gRNAs having more hits than the user-defined threshold (see `?addSpacerAlignmentsIterative`).
 
-
 ### Faster alignemnt by removing repeat elements
 To remove protospacer sequences located in repeats or low-complexity DNA sequences (regions identified by `RepeatMasker`), which are usually not of interest due to their low specificity, we provide the convenience function `removeRepeats`:
 
@@ -245,7 +244,6 @@ guideSet <- removeRepeats(object = guideSet,
 
 guideSet
 ```
-
 
 ## Off-target scoring
 After retrieving a list of putative off-targets and on-targets for a given spacer sequence, we can use `addOffTargetScores` to predict the likelihood of the nuclease to cut at the off-targets based on mismatch tolerance. Currently, only off-target scoring for the SpCas9 nuclease are available (MIT and CFD algorithms):
@@ -268,7 +266,6 @@ guideSet %>% alignments()
 guideSet <- addOnTargetScores(object = guideSet, method = "crisprater")
 guideSet
 ```
-
 
 ## Restriction enzymes
 
