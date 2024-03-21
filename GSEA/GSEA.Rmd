@@ -307,11 +307,7 @@ $$
 
 In practice, we will partition the null into positive and negative values and use the average of these to normalize the positive and negative enrichment scores, respectively.  
 
-
-
 Remember that, in addition to the gene set enrichment scores, we will also need a normalized null distribution for every gene set. Each element of a given null distribution will be determined in a similar fashion  
-
-
 
 # USing RNA-seq datasets with GSEA
 ## Quantification Types and Input Data
