@@ -9,7 +9,181 @@ editor: source
 In order to make sense of genomic data one often aims to plot such data in a genome browser, along with a variety of genomic annotation features, such as gene or transcript models, `CpG` island, repeat regions, and so on. These features may either be extracted from public data bases like ENSEMBL or UCSC, or they may be generated or curated in-house. Many of the currently available genome browsers do a reasonable job in displaying genome annotation data, and there are options to connect to some of them from within `R` (e.g., using the `rtracklayer` package). However, none of these solutions offer the flexibility of the full `R` graphics system to display large numeric data in a multitude of different ways. The `Gviz` package (Hahne and Ivanek 2016) aims to close this gap by providing a structured visualization framework to plot any type of data along genomic coordinates. It is loosely based on the `GenomeGraphs` package by Steffen Durinck and James Bullard, however the complete class hierarchy as well as all the plotting methods have been restructured in order to increase performance and flexibility. All plotting is done using the grid graphics system, and several specialized annotation classes allow to integrate publicly available genomic annotation data from sources like `UCSC` or `ENSEMBL`.
 
 # Basic Features
-The fundamental concept behind the `Gviz` package is similar to the approach taken by most genome browsers, in that individual types of genomic features or data are represented by separate tracks. Within the package, each track constitutes a single object inheriting from class `GdObject`, and there are constructor functions as well as a broad range of methods to interact with and to plot these tracks. When combining multiple objects, the individual tracks will always share the same genomic coordinate system, thus taking the burden of aligning the plot elements from the user.
+The fundamental concept behind the `Gviz` package is similar to the approach taken by most genome browsers, in that **individual types of genomic features or data are represented by separate tracks**. Within the package, each track constitutes a single object inheriting from class `GdObject`, and there are constructor functions as well as a broad range of methods to interact with and to plot these tracks. **When combining multiple objects, the individual tracks will always share the same genomic coordinate system, thus taking the burden of aligning the plot elements from the user**.
+
+It is worth mentioning that, at a given time, tracks in the sense of the Gviz package are only defined for a single chromosome on a specific genome, at least for the duration of a given plotting operation. You will later see that a track may still contain information for multiple chromosomes, however most of this is hidden except for the currently active chromosome, and the user will have to explicitly switch the chromosome to access the inactive parts. While the package in principle imposes no fixed structure on the chromosome or on the genome names, it makes sense to stick to a standardized naming paradigm, in particular when fetching additional annotation information from online resources. By default this is enforced by a global option `ucscChromosomeNames`, which is set during package loading and which causes the package to check all supplied chromosome names for validity in the sense of the UCSC definition (chromosomes have to start with the `chr` string). You may decide to turn this feature off by calling options(`ucscChromosomeNames=FALSE`). For the remainder of this vignette however, we will make use of the UCSC genome and chromosome identifiers, e.g., the `chr7` chromosome on the mouse `mm9` genome.
+
+```{r}
+#| message: false
+#| warning: false
+
+library(Gviz)
+library(GenomicRanges)
+library(magrittr)
+```
+
+The most simple genomic features consist of start and stop coordinates, possibly overlapping each other. CpG islands or microarray probes are real life examples for this class of features. In the Bioconductor world those are most often represented as run-length encoded vectors, for instance in the `IRanges` and `GRanges` classes. To seamlessly integrate with other Bioconductor packages, we can use the same data structures to generate our track objects. A sample set of CpG island coordinates has been saved in the `cpgIslands` object and we can use that for our first annotation track object. The constructor function `AnnotationTrack` is a convenient helper to create the object.
+
+```{r}
+data("cpgIslands")
+class(cpgIslands)
+
+cpgIslands
+```
+
+```{r}
+chr <- cpgIslands %>% seqnames %>% unique %>% as.character
+chr %>% str
+
+gen <- cpgIslands %>% genome
+atrack <- AnnotationTrack(range = cpgIslands, 
+                         name = "CpG")
+atrack
+```
+
+Please note that the `AnnotationTrack` constructor (as most constructors in this package) is fairly flexible and can accommodate many different types of inputs. For instance, the `start` and `end` coordinates of the annotation features could be passed in as individual arguments start and end, as a `data.frame` or even as an `IRanges` or `GRangesList` object. Furthermore, a whole bunch of coercion methods are available for those package users that prefer the more traditional R coding paradigm, and they should allow operations along the lines of `as(obj, 'AnnotationTrack')`.
+
+With our first track object being created we may now proceed to the plotting. There is a single function `plotTracks` that handles all of this. As we will learn in the remainder of this vignette, `plotTracks` is quite powerful and has a number of very useful additional arguments. For now we will keep things very simple and just plot the single CpG islands annotation track.
+
+```{r}
+plotTracks(atrack)
+```
+
+As you can see, the resulting graph is not particularly spectacular. There is a title region showing the track’s name on a gray background on the left side of the plot and a data region showing the seven individual CpG islands on the right. This structure is similar for all the available track objects classes and it somewhat mimics the layout of the popular UCSC Genome Browser. If you are not happy with the default settings, the `Gviz` package offers a multitude of options to fine-tune the track appearance.
+
+Apart from the relative distance of the CpG islands, this visualization does not tell us much. One obvious next step would be to indicate the genomic coordinates we are currently looking at in order to provide some reference. For this purpose, the `Gviz` package offers the `GenomeAxisTrack` class. Objects from the class can be created using the constructor function of the same name.
+
+```{r}
+gtrack <- GenomeAxisTrack()
+```
+
+Since a `GenomeAxisTrack` object is always relative to the other tracks that are plotted, there is little need for additional arguments. Essentially, the object just tells the `plotTracks` function to add a genomic axis to the plot. Nonetheless, it represent a separate annotation track just as the CpG island track does. We can pass this additional track on to `plotTracks` in the form of a list.
+
+```{r}
+plotTracks(trackList = list(gtrack, atrack))
+```
+
+You may have realized that the genomic axis does not take up half of the available vertical plotting space, but only uses the space necessary to fit the axis and labels. Also the title region for this track is empty. In general, the `Gviz` package tries to find reasonable defaults for all the parameters controlling the look and feel of a plots so that appealing visualizations can be created without too much tinkering. However, all features on the plot including the relative track sizes can also be adjusted manually.
+
+As mentioned before in the beginning of this vignette, a plotted track is always defined for exactly one chromosome on a particular genome. We can include this information in our plot by means of a chromosome ideogram. An ideogram is a simplified visual representation of a chromosome, with the different chromosomal staining bands indicated by color, and the centromere (if present) indicated by the shape. The necessary information to produce this visualization is stored in online data repositories, for instance at UCSC. The `Gviz` package offers very convenient connections to some of these repositories, and the `IdeogramTrack` constructor function is one example for such a connection. With just the information about a valid UCSC genome and chromosome, we can directly fetch the chromosome ideogram information and construct a dedicated track object that can be visualized by `plotTracks`. Please not that you will need an established internet connection for this to work, and that fetching data from UCSC can take quite a long time, depending on the server load. The `Gviz` package tries to cache as much data as possible to reduce the bandwidth in future queries.
+
+```{r}
+itrack <- IdeogramTrack(genome = gen, chromosome = chr)
+
+plotTracks(trackList = list(itrack, gtrack, atrack))
+```
+
+Ideogram tracks are the one exception in all of `Gviz`’s track objects in the sense that they are not really displayed on the same coordinate system like all the other tracks. Instead, **the current genomic location is indicated on the chromosome by a red box** (or, as in this case, a red line if the width is too small to fit a box).
+
+So far we have only looked at very basic annotation features and how to give a point of reference to our plots. Naturally, we also want to be able to handle more complex genomic features, such as gene models. One potential use case would be to utilize gene model information from an existing local source. Alternatively, we could download such data from one of the available online resources like UCSC or ENSEBML, and there are constructor functions to handle these tasks. For this example we are going to load gene model data from a stored `data.frame`. The track class of choice here is a `GeneRegionTrack` object, which can be created via the constructor function of the same name. Similar to the `AnnotationTrack` constructor there are multiple possible ways to pass in the data.
+
+```{r}
+data("geneModels")
+geneModels
+```
+
+```{r}
+grtrack <- GeneRegionTrack(geneModels, genome = gen, 
+                          chromosome = chr, 
+                          name = "Gene Model")
+
+plotTracks(list(itrack, grtrack, gtrack, atrack))
+```
+
+In all those previous examples the plotted genomic range has been determined automatically from the input tracks. Unless told otherwise, the package will always display the region from the leftmost item to the rightmost item in any of the tracks. Of course such a static view on a chromosomal region is of rather limited use. We often want to zoom in or out on a particular plotting region to see more details or to get a broader overview. To that end, `plotTracks` supports the `from` and `to` arguments that let us choose an arbitrary genomic range to plot.
+
+```{r}
+plotTracks(list(itrack, grtrack, atrack), 
+           from = 26700000, 
+           to = 26750000)
+```
+
+Another pair of arguments that controls the zoom state are `extend.left` and `extend.right`. Rather than `from` and `to`, those arguments are relative to the currently displayed ranges, and can be used to quickly extend the view on one or both ends of the plot. In addition to positive or negative absolute integer values one can also provide a float value between -1 and 1 which will be interpreted as a zoom factor, i.e., a value of 0.5 will cause zooming in to half the currently displayed range.
+
+```{r}
+plotTracks(trackList = list(itrack, gtrack, atrack, grtrack), 
+           extend.left = 0.5, 
+           extend.right = 1000000)
+```
+
+You may have noticed that the layout of the gene model track has changed depending on the zoom level. This is a feature of the `Gviz` package, which automatically tries to find the optimal visualization settings to make best use of the available space. At the same time, when features on a track are too close together to be plotted as separate items with the current device resolution, the package will try to reasonably merge them in order to avoid overplotting.
+
+Often individual ranges on a plot tend to grow quite narrow, in particular when zooming far out, and a couple of tweaks become helpful in order to get nice plots, for instance to drop the bounding borders of the exons.
+
+```{r}
+plotTracks(trackList = list(itrack, gtrack, atrack, grtrack), 
+           extend.left = 0.5, 
+           extend.right = 1000000, 
+           col = NULL)
+```
+
+When zooming further in it may become interesting to take a look at the actual genomic sequence at a given position, and the `Gviz` package provides the track class SequenceTrack that let’s you do just that. Among several other options it can draw the necessary sequence information from one of the `BSgenome` packages.
+
+```{r}
+#| message: false
+#| warning: false
+
+
+library(BSgenome.Hsapiens.UCSC.hg38)
+
+strack <- SequenceTrack(sequence = Hsapiens, 
+                        chromosome = chr)
+
+strack %>% seqnames()
+
+plotTracks(trackList = list(itrack, gtrack, atrack, grtrack, strack), 
+           from = 26591822, 
+           to = 26591852, 
+           cex = 0.8)
+```
+
+So far we have replicated the features of a whole bunch of other genome browser tools out there. The real power of the package comes with a rather general track type, the `DataTrack`. `DataTrack` object are essentially run-length encoded numeric vectors or matrices, and we can use them to add all sorts of numeric data to our genomic coordinate plots. There are a whole bunch of different visualization options for these tracks, from dot plots to histograms to box-and-whisker plots. The individual rows in a numeric matrix are considered to be different data groups or samples, and the columns are the raster intervals in the genomic coordinates. Of course, the data points (or rather the data ranges) do not have to be evenly spaced; each column is associated with a particular genomic location. For demonstration purposes we can create a simple `DataTrack` object from randomly sampled data.
+
+```{r}
+set.seed(255)
+lim <- c(26700000, 26750000)
+coords <- sort(c(lim[1], 
+                 sample(seq(from = lim[1], to = lim[2]), 99), 
+                 lim[2]))
+
+dat <- runif(100, min = -10, max = 10)
+dtrack <- DataTrack(data = dat, 
+                    start = coords[-length(coords)], 
+                    end = coords[-1], 
+                    chromosome = chr, 
+                    genome = gen, 
+                    name = "uniform")
+
+dtrack
+```
+
+```{r}
+plotTracks(trackList = list(itrack, gtrack, atrack, grtrack, dtrack), 
+           from = lim[1], 
+           to = lim[2])
+```
+
+The first thing to notice is that the title panel to the right of the plot now contains a y-axis indicating the range of the displayed data. The default plotting type for numeric vectors is a simple dot plot. This is by far not the only visualization option, and in a sense it is wasting quite a lot of information because the run-length encoded ranges are not immediately apparent. We can change the plot type by supplying the `type` argument to `plotTracks`. 
+
+```{r}
+plotTracks(trackList = list(itrack, gtrack, grtrack, dtrack), 
+           from = lim[1],
+           to = lim[2], 
+           type = "histogram")
+```
+
+As we can see, the data values in the numeric vector are indeed matched to the genomic coordinates of the `DataTrack` object. Such a visualization can be particularly helpful when displaying for instance the coverage of NGS reads along a chromosome, or to show the measurement values of mapped probes from a micro array experiment.
+
+
+# Plotting parameters
+## Setting parameters
+
+
+
+
+
+
+
 
 
 
