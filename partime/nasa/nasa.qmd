@@ -560,6 +560,7 @@ library(fgsea)
 library(magrittr)
 library(ggplot2)
 library(ggrepel)
+library(EnsDb.Mmusculus.v79)
 
 all_contrast_markers <- readRDS("../../../data/partime/nasa/res/all_contrast_markers.rds")
 ```
@@ -572,11 +573,6 @@ names(gene_rank_list) <- names(all_contrast_markers)
 to_go <- c("small pre-B.", "large pre-B.", "B cell", 
            "NK cells", "Dendritic cells", "Monocytes", 
            "Neutro prog.")
-```
-
-# volcano
-```{r}
-library(EnsDb.Mmusculus.v79)
 
 con <- all_contrast_markers %>% names()
 ```
@@ -620,7 +616,7 @@ for(con in names(all_contrast_markers)){
             scale_y_continuous(name = "-log10 P value") +
             theme_classic()
         
-        ggsave(paste("../../../data/partime/nasa/res/volcano/", con, "_", cell, "_ggrepel.tiff", sep = ""))
+        ggsave(paste("../../../data/partime/nasa/res/volcano/", con, "_", cell, ".tiff", sep = ""))
     }
 }
 ```

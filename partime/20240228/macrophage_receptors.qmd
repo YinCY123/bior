@@ -49,17 +49,9 @@ macrophage_receptors %>% str
 write.table(macrophage_receptors, "macrophage_receptors.txt", row.names = F, quote = F, col.names = F)
 ```
 
-```{r}
-protein_input
-
-grep("^TLR", protein_input$protein_name, value = TRUE)
-```
 
 
-```{r}
-load("../../../github/CellChat/data/PPI.mouse.rda")
 
-```
 
 
 
