@@ -68,6 +68,7 @@ You may have realized that the genomic axis does not take up half of the availab
 As mentioned before in the beginning of this vignette, a plotted track is always defined for exactly one chromosome on a particular genome. We can include this information in our plot by means of a chromosome ideogram. An ideogram is a simplified visual representation of a chromosome, with the different chromosomal staining bands indicated by color, and the centromere (if present) indicated by the shape. The necessary information to produce this visualization is stored in online data repositories, for instance at UCSC. The `Gviz` package offers very convenient connections to some of these repositories, and the `IdeogramTrack` constructor function is one example for such a connection. With just the information about a valid UCSC genome and chromosome, we can directly fetch the chromosome ideogram information and construct a dedicated track object that can be visualized by `plotTracks`. Please not that you will need an established internet connection for this to work, and that fetching data from UCSC can take quite a long time, depending on the server load. The `Gviz` package tries to cache as much data as possible to reduce the bandwidth in future queries.
 
 ```{r}
+#| cache: true
 itrack <- IdeogramTrack(genome = gen, chromosome = chr)
 
 plotTracks(trackList = list(itrack, gtrack, atrack))
@@ -173,6 +174,12 @@ plotTracks(trackList = list(itrack, gtrack, grtrack, dtrack),
 ```
 
 As we can see, the data values in the numeric vector are indeed matched to the genomic coordinates of the `DataTrack` object. Such a visualization can be particularly helpful when displaying for instance the coverage of NGS reads along a chromosome, or to show the measurement values of mapped probes from a micro array experiment.
+
+
+## type of tracks
+```{r}
+grep("Track$", ls("package:Gviz"), value = TRUE) %>% sort
+```
 
 
 # Plotting parameters
