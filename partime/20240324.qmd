@@ -2,6 +2,7 @@
 title: "20240324"
 author: "YinCY"
 format: html
+<<<<<<< HEAD
 editor: source
 ---
 
@@ -62,23 +63,43 @@ pathview(cpd.data = sim.cpd.data,
 ```
 
 
+```{r}
+compounds <- c("Taurine", "glutamate", "Serine", "threonine", 
+               "Succinate", "proline", "Glycine", "pyridoxal", 
+               "Gamma-glutamylvaline", "Glycine", "phosphate", 
+               "Threonate", "Glutarate", "caprylate", "N-acetylglycine", 
+               "Glycine", "alanine", "Gamma-glutamylglycine", "Homoarginine", 
+               "Glutamate", "cysteine", "Citrulline", "ornithine", "Hexanoylglutamine",
+               "N-acetylproline", "Leucine", "N-palmitoyl-sphingosine") %>% 
+    tolower %>% unique
+write.csv(compounds, "/mnt/c/Users/yincy/Downloads/compounds.csv", 
+          row.names = F, quote = F)
 
+compound_ids <- read.csv("/mnt/c/Users/yincy/Downloads/name_map.csv")
+```
 
+```{r}
+library(KEGGREST)
+library(stringr)
 
+path_ids <- keggLink("pathway", source = compound_ids$KEGG %>% na.omit %>% as.character)
+path_ids <- path_ids %>% unname() %>% str_replace(., "path:map", "") %>% unique
+path_ids %>% str
+```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+```{r}
+kegg_ids <- compound_ids$KEGG %>% na.omit %>% as.character
+kegg_ids %>% str
+for(pathway in path_ids){
+    try(pathview(cpd.data = kegg_ids, 
+             pathway.id = pathway, 
+             species = "hsa", 
+             kegg.native = T, 
+             plot.col.key = F), 
+        silent = TRUE
+    )
+}
+```
 
 
 

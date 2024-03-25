@@ -124,13 +124,10 @@ When zooming further in it may become interesting to take a look at the actual g
 #| message: false
 #| warning: false
 
-
 library(BSgenome.Hsapiens.UCSC.hg38)
 
 strack <- SequenceTrack(sequence = Hsapiens, 
                         chromosome = chr)
-
-strack %>% seqnames()
 
 plotTracks(trackList = list(itrack, gtrack, atrack, grtrack, strack), 
            from = 26591822, 
@@ -138,7 +135,7 @@ plotTracks(trackList = list(itrack, gtrack, atrack, grtrack, strack),
            cex = 0.8)
 ```
 
-So far we have replicated the features of a whole bunch of other genome browser tools out there. The real power of the package comes with a rather general track type, the `DataTrack`. `DataTrack` object are essentially run-length encoded numeric vectors or matrices, and we can use them to add all sorts of numeric data to our genomic coordinate plots. There are a whole bunch of different visualization options for these tracks, from dot plots to histograms to box-and-whisker plots. The individual rows in a numeric matrix are considered to be different data groups or samples, and the columns are the raster intervals in the genomic coordinates. Of course, the data points (or rather the data ranges) do not have to be evenly spaced; each column is associated with a particular genomic location. For demonstration purposes we can create a simple `DataTrack` object from randomly sampled data.
+So far we have replicated the features of a whole bunch of other genome browser tools out there. The real power of the package comes with a rather general track type, the `DataTrack`. `DataTrack` object are essentially run-length encoded numeric vectors or matrices, and we can use them to add all sorts of numeric data to our genomic coordinate plots. There are a whole bunch of different visualization options for these tracks, from dot plots to histograms to box-and-whisker plots. The individual rows in a numeric matrix are considered to be different data groups or samples, and the columns are the raster intervals in the genomic coordinates. Of course, the data points (or rather the data ranges) do not have to be evenly spaced; each column is associated with a particular genomic location. For demonstration purposes we can create a simple `DataTrack` object from randomly sampled data. 
 
 ```{r}
 set.seed(255)
@@ -184,17 +181,204 @@ grep("Track$", ls("package:Gviz"), value = TRUE) %>% sort
 
 # Plotting parameters
 ## Setting parameters
+Although not implicitly mentioned before, we have already made use of the plotting parameter facilities in the `Gviz` package, or, as we will call them from now on, the ‘display parameters’. Display parameters are properties of individual track objects (i.e., of any object inheriting from the base `GdObject` class). They can either be set during object instantiation as additional arguments to the constructor functions or, for existing track objects, using the `displayPars` replacement method. In the former case, all named arguments that can not be matched to any of the constructor’s formal arguments are considered to be display parameters, regardless of their type or whether they are defined for a particular track class or not. The following code example rebuilds our `GeneRegionTrack` object with a bunch of display parameters and demonstrates the use of the `displayPars` accessor and replacement methods.
+
+```{r}
+grtrack <- GeneRegionTrack(geneModels, 
+                           genome = gen, 
+                           chromosome = chr, 
+                           name = "Gene Model", 
+                           transcriptAnnotation = "symbol", 
+                           background.title = "brown")
+
+displayPars(grtrack) %>% head
+
+displayPars(grtrack) <- list(background.panel = "#FFFEDB", col = NULL)
+
+displayPars(grtrack) %>% head
+
+plotTracks(trackList = list(itrack, gtrack, atrack, grtrack))
+```
+
+For our gene model track we have now added the gene symbols of the different transcripts to the plot, removed the gray border around the individual exons models, and changed the background color of both the title and the data panel to a yellowish hue. There is a third option to set display parameters for a single plotting operation (rather than the permanent setting in the track object) by passing in additional arguments to the plotTracks function. We have already made use of this feature, for instance in the previous data plotting type example. It is worth mentioning that all display parameters which are passed along with the plotTracks function apply to all track objects in the plot. For some objects classes a particular display parameter may not make any sense, and in that case it is simply ignored. Also, the settings only apply for one single plotting operation and will not be retained in the plotted track objects. They do however get precedence over the object-internal parameters. The following line of code exemplifies this behavior.
+
+```{r}
+plotTracks(trackList = list(itrack, gtrack, atrack, grtrack), 
+           background.panel = "#FFFEDB", 
+           background.title = "darkblue")
+```
+
+In order to make full use of the flexible parameter system we need to know which display parameters control which aspect of which track class. The obvious source for this information are the man pages of the respective track classes, which list all available parameters along with a short description of their effect and default values in the `Display Parameters` section. Alternatively, we can use the `availableDisplayPars` function, which prints out the available parameters for a class as well as their default values in a list-like structure. The single argument to the function is either a class name of a track object class, or the object itself, in which case its class is automatically detected.
+
+```{r}
+dp <- availableDisplayPars(grtrack)
+dp %>% class
+dp %>% tail
+```
+
+## Schemes
+Users might find themselves changing the same parameters over and over again, and it would make sense to register these modifications in a central location once and for all. To this end the `Gviz` package supports display parameter schemes. A scheme is essentially just a bunch of nested named lists, where the names on the first level of nesting should correspond to track class names, and the names on the second level to the display parameters to set. The currently active scheme can be changed by setting the global option `Gviz.scheme`, and a new scheme can be registered by using the `addScheme` function, providing both the list and the name for the new scheme. The `getScheme` function is useful to get the current scheme as a list structure, for instance to use as a skeleton for your own custom scheme.
+
+```{r}
+getOption("Gviz.scheme")
+scheme <- getScheme()
+scheme$GeneRegionTrack$fill <- "salmon"
+scheme$GeneRegionTrack$col <- NULL
+scheme$GeneRegionTrack$transcriptAnnotation <- "transcript"
+addScheme(scheme = scheme, name = "myScheme")
+
+options(Gviz.scheme = "myScheme")
+
+grtrack <- GeneRegionTrack(range = geneModels, 
+                           genome = gen, 
+                           chromosome = chr, 
+                           name = "Gene Model")
+
+plotTracks(list(itrack, grtrack))
+```
 
 
+```{r}
+options(Gviz.scheme = "default")
+grtrack <- GeneRegionTrack(range = geneModels, 
+                           genome = gen, 
+                           chromosome = chr, 
+                           name = "Gene Model", 
+                           transcriptAnnotation = "symbol")
+
+plotTracks(list(itrack, grtrack))
+```
+
+In order to make these settings persistent across R sessions one can create one or several schemes in the global environment in the special object `.GvizSchemes`, for instance by putting the necessary code in the `.Rprofile` file. This object needs to be a named list of schemes, and it will be collected when the `Gviz` package loads. Its content is then automatically added to the collection of available schemes. The following pseudo-code exemplifies this and could go into an `.Rprofile` file.
+
+```{r}
+#| eval: false
+
+.GvizSchemes <- list(myScheme = list(
+    GeneRegionTrack = list(fill = "salmon", 
+                           col = NULL, 
+                           transcriptAnnotation = "transcript")
+))
+```
 
 
+## Plotting direction
+By default all tracks will be plotted in a 5’ -> 3’ direction. It sometimes can be useful to actually show the data relative to the opposite strand. To this end one can use the `reverseStrand` display parameter, which does just what its name suggests. Since the combination of forward and reverse stranded tracks on a single plot does not make too much sense, one should usually set this as a global display parameter in the `plotTracks` function. The function will however cast a warning if a mixture of forward and reverse strand tracks has been passed in for plotting.
+
+```{r}
+plotTracks(trackList = list(itrack, gtrack, atrack, grtrack), 
+           reverseStrand = TRUE)
+```
 
 
+# Track classes
+## GenomeAxisTrack
+`GenomeAxisTrack` objects can be used to add some reference to the currently displayed genomic location to a `Gviz` plot. In their most basic form they are really just a horizontal axis with genomic coordinate tick-marks. Using the `GenomeAxisTrack` constructor function is the recommended way to instantiate objects from the class. There is no need to know in advance about a particular genomic location when constructing the object. Instead, the displayed coordinates will be determined from the context, e.g., from the `from` and `to` arguments of the `plotTracks` function, or, when plotted together with other track objects, from their genomic locations.
+
+```{r}
+axisTrack <- GenomeAxisTrack()
+plotTracks(axisTrack, from = 1e6, to = 9e6)
+```
+
+As an optional feature one can highlight particular regions on the axis, for instance to indicated stretches of N nucleotides or gaps in genomic alignments. Such regions have to be supplied to the optional `range` argument of the constructor function as either an `GRanges` or an `IRanges` object.
+
+```{r}
+axisTrack <- GenomeAxisTrack(range = IRanges(start = c(2e6, 4e6), 
+                                             end = c(3e6, 7e6), 
+                                             names = rep("N-stretch", 2)))
+plotTracks(axisTrack, from = 1e6, to = 9e6, showId = TRUE)
+```
+
+### Display parameters for GenomeAxisTrack objects
+There are a whole bunch of display parameters to alter the appearance of `GenomeAxisTrack` plots. For instance, one could add directional indicators to the axis using the `add53` and `add35` parameters.
+
+```{r}
+plotTracks(axisTrack, from = 1e6, to = 9e6, 
+           add35 = TRUE, 
+           add53 = TRUE, 
+           littleTicks = TRUE)
+```
+
+The Gviz package tries to come up with reasonable defaults for the axis annotation. In our previous example, the genomic coordinates are indicated in megabases. We can control this via the exponent parameter, which takes an integer value greater then zero. The location of the tick marks are displayed as a fraction of `\(10^{exponent}\)`.
+
+```{r}
+plotTracks(axisTrack, 
+           from = 1e6, 
+           to = 9e6, 
+           exponent = 4)
+```
+
+```{r}
+plotTracks(axisTrack, 
+           from = 1e6, 
+           to = 9e6, 
+           labelPos = "alternating")
+```
+
+Sometimes a full-blown axis is just too much, and all we really need in the plot is a small scale indicator. We can change the appearance of the `GenomeAxisTrack` object to such a limited representation by setting the `scale` display parameter. Typically, this will be a numeric value between 0 and 1, which is interpreted as the fraction of the plotting region used for the scale. The plotting method will apply some rounding to come up with reasonable and human-readable values. For even more control we can pass in a value larger than 1, which is considered to be an absolute range length. In this case, the user is responsible for the scale to actually fit in the current plotting range.
+
+```{r}
+plotTracks(axisTrack, from = 1e6, to = 9e6, scale = 0.5, 
+           labelPos = "below", 
+           col = "steelblue", 
+           fontcolor = "red")
+```
 
 
+## IdeogramTrack
+While a genomic axis provides helpful points of reference to a plot, it is sometimes important to show the currently displayed region in the broader context of the whole chromosome. Are we looking at distal regions, or somewhere close to the centromere? And how much of the complete chromosome is covered in our plot. To that end the `Gviz` package defines the `IdeogramTrack` class, which is an idealized representation of a single chromosome. When plotted, these track objects will always show the whole chromosome, regardless of the selected genomic region. However, the displayed coordinates are indicated by a box that sits on the ideogram image. The chromosomal data necessary to draw the ideogram is not part of the `Gviz` package itself, instead it is downloaded from an online source (UCSC). Thus it is important to use both chromosome and genome names that are recognizable in the UCSC data base when dealing with `IdeogramTrack` objects. You might want to consult the UCSC webpage or use the ucscGenomes function in the `rtracklayer` package for a listing of available genomes.
+
+Assuming the chromosome data are available online, a simple call to the `IdeogramTrack` constructor function including the desired genome and chromosome name are enough to instantiate the object. Since the connection to UCSC can be slow, the package tries to cache data that has already been downloaded for the duration of the R session. If needed, the user can manually clear the cache by calling the `clearSessionCache` function. Of course it is also possible to construct `IdeogramTrack` objects from local data. Please see the class’ man page for details.
+
+```{r}
+ideoTrack <- IdeogramTrack(genome = "hg19", 
+                           chromosome = "chrX")
+plotTracks(ideoTrack, 
+           from = 85e6, 
+           to = 129e6, 
+           showId = F, # do not show chromosome name
+           showBandId = TRUE,
+           cex.bands = 0.5
+           )
+```
+
+```{r}
+plotTracks(ideoTrack, 
+           from = 85e6, 
+           to = 129e6, 
+           showId = F, 
+           centromereShape = "circle")
+```
 
 
+## DataTrack
+Probably the most powerful of all the track classes in the `Gviz` package are `DataTracks`. Essentially they constitute run-length encoded numeric vectors or matrices, meaning that one or several numeric values are associated to a particular genomic coordinate range. These ranges may even be overlapping, for instance when looking at results from a running window operation. There can be multiple samples in a single data set, in which case the ranges are associated to the columns of a numeric matrix rather than a numeric vector, and the plotting method provides tools to incorporate sample group information. Thus the starting point for creating `DataTrack` objects will always be a set of ranges, either in the form of an `IRanges` or `GRanges` object, or individually as start and end coordinates or widths. The second ingredient is a numeric vector of the same length as the number of ranges, or a numeric matrix with the same number of columns. Those may even already be part of the input `GRanges` object as `elemenMetadata` values. For a complete description of all the possible inputs please see the class’ online documentation. We can pass all this information to the `DataTrack` constructor function to instantiate an object. We will load our sample data from an `GRanges` object that comes as part of the `Gviz` package.
 
+```{r}
+data("twoGroups")
+dTRack <- DataTrack(range = twoGroups, name = "uniform", type = "boxplot")
+plotTracks(dTRack)
+```
+
+The `a` type for instance averages the values at each genomic location before plotting the derived values as a line. The decision for a particular plot type is totally up to the user, and one could even overlay multiple types by supplying a character vector rather than a character scalar as the `type` argument. For example, this will combine a boxplot with an average line and a data grid.
+
+```{r}
+plotTracks(dTRack, type = c("boxplot", "a", "g"))
+```
+
+```{r}
+twoGroups %>% mcols %>% colnames()
+
+plotTracks(dTRack, type = c("heatmap"), 
+           showSampleNames = TRUE, 
+           cex.sampleNames = 0.6)
+```
+
+```{r}
+plotTracks(dTRack, 
+           groups = rep(c("control", "treated"), each = 3),
+           type = c("a", "p", "confint"))
+```
 
 
 
