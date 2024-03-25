@@ -1,0 +1,145 @@
+---
+title: "20240323"
+author: "YinCY"
+format: html
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+
+library(openxlsx)
+library(tidyverse)
+library(ggrepel)
+library(EnsDb.Hsapiens.v86)
+
+data <- read.xlsx("/home/yincy/git/data/partime/20240323/差异蛋白.xlsx")
+threshold <- 1.5
+
+data <- data %>% 
+    rowwise() %>% 
+    mutate(logFC = log2(mean(c(ratio1, ratio2, ratio3))), 
+           pvalue = t.test(c(ratio1, ratio2, ratio3), alternative = "two.sided", mu = 1)$p.value) %>% 
+    ungroup() %>% 
+    mutate(log10pval = -log10(pvalue), 
+           size = ifelse(pvalue <= 0.05 & logFC >= log2(threshold), "large", 
+                         ifelse(pvalue <= 0.05 & logFC <= -log2(threshold), "large", "nc")), 
+           colors = ifelse(pvalue <= 0.05 & logFC >= log2(threshold), "tomato", 
+                           ifelse(pvalue <= 0.05 & logFC <= -log2(threshold), "steelblue", "grey")))
+data$Accession <- str_replace(data$Accession, pattern = "-[0-9]{1,}$", "")
+data$symbol <- mapIds(EnsDb.Hsapiens.v86, keys = data$Accession, keytype = "UNIPROTID", column = "SYMBOL")
+data <- data %>% dplyr::relocate(symbol) %>% dplyr::filter(!is.na(symbol))
+
+data %>% dplyr::filter(symbol %in% c("MGAT4A", "FBXO44"))
+
+data %>% 
+    ggplot(aes(logFC, log10pval)) +
+    geom_point(aes(size = size, color = colors), show.legend = "none") +
+    geom_label_repel(data = data[data$pvalue <= 0.05 & abs(data$logFC) >= log2(threshold), ], aes(logFC, log10pval, label = symbol)) +
+    geom_vline(xintercept = c(-log2(threshold), 0, log2(threshold)), linetype = 2, color = "grey") +
+    geom_hline(yintercept = -log10(0.05), linetype = 2, color = "grey") +
+    scale_color_manual(values = c("grey" = "grey", "steelblue" = "steelblue", "tomato" = "tomato"))+
+    scale_size_manual(values = c("large" = 5,  "nc" = 1))
+
+ggsave("/home/yincy/git/data/partime/20240323/volcano.png", 
+       height = 10, dpi = 300)
+```
+
+
+```{r}
+#| message: false
+#| warning: false
+
+library(fgsea)
+library(msigdbr)
+library(stringr)
+
+
+msigdbr::msigdbr_collections()
+df <- msigdbr(species = "Homo sapiens", category = "C2", subcategory = "CP:KEGG")
+
+df$gs_name <- gsub("^KEGG_", "", df$gs_name)
+df$gs_name <- gsub("_", " ", df$gs_name)
+df$gs_name <- str_to_title(df$gs_name)
+df
+
+gs <- split(df$gene_symbol, df$gs_name)
+```
+
+```{r}
+ranks <- setNames(log10(data$pvalue) * sign(data$logFC), data$symbol)
+
+res <- fgsea(pathways = gs, 
+             stats = ranks, 
+             minSize = 1, 
+             # maxSize = 1000,
+             gseaParam = 1)
+
+res %>% arrange(pval)
+write.csv(res[, 1:7], "/home/yincy/git/data/partime/20240323/kegg.csv", row.names = F)
+```
+
+```{r}
+size <- 3
+offset <- 0.2
+expand <- 5
+
+
+        df <- rbind(res %>% dplyr::filter(NES > 0) %>% dplyr::arrange(pval) %>% head(10), 
+                    res %>% dplyr::filter(NES < 0) %>% dplyr::arrange(pval) %>% head(10))
+        
+        df <- df %>% 
+            dplyr::mutate(log10pval = ifelse(NES > 0, -log10(pval), log10(pval)), 
+                          color = ifelse(NES > 0, "tomato", "steelblue")) %>% 
+            dplyr::group_by(color) %>% 
+            dplyr::arrange(-log10pval) %>% 
+            dplyr::ungroup() %>% 
+            dplyr::mutate(y = nrow(.):1)
+        
+        # print(paste(con, "--", cell, sep = ""))
+        # print(df)
+        
+        rng <- df$log10pval %>% range
+        
+        df %>% 
+            ggplot(aes(log10pval, reorder(pathway, log10pval))) +
+            geom_bar(aes(fill = color), stat = "identity") +
+            geom_text(data = df[df$NES > 0, ], aes(x = -offset, y = y, label = pathway), hjust = 1, size = size) +
+            geom_text(data = df[df$NES < 0, ], aes(x = offset, y = y, label = pathway), hjust = 0, size = size) +
+            scale_y_discrete(name = NULL, label = NULL) +
+            scale_fill_identity() +
+            scale_x_continuous(name = "-log10 P-value",
+                               breaks = round(c(rev(seq(0, min(-expand, rng[1]), -2)), seq(2, max(expand, rng[2]), 2)), 0),
+                               labels = round(abs(c(rev(seq(0, min(-expand, rng[1]), -2)), seq(2, max(expand, rng[2]), 2))), 0), 
+                               limits = range(min(-expand, rng[1]), max(expand, rng[2]))) +
+            theme_classic() +
+            theme(axis.ticks.y = element_blank(), 
+                  panel.grid.major.y = element_line(linetype = 2, linewidth = 0.3))
+        
+ggsave("/home/yincy/git/data/partime/20240323/KEGG.png", width = 8)
+```
+
+# 统计
+```{r}
+table <- read.xlsx("/home/yincy/git/data/partime/20240323/统计bmi.xlsx")
+
+table$年龄 <- gsub("岁", "", table$年龄) %>% as.numeric()
+
+age_mean <- mean(table$年龄)
+age_se <- sd(table$年龄)/sqrt(nrow(table)-1)
+
+bmi_mean <- mean(table$`BMI（Kg/m2）`)
+bmi_se <- sd(table$`BMI（Kg/m2）`)/sqrt(nrow(table)-1)
+```
+
+
+
+
+
+
+
+
+
+
+
