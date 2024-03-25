@@ -299,7 +299,7 @@ plotTracks(axisTrack, from = 1e6, to = 9e6,
            littleTicks = TRUE)
 ```
 
-The Gviz package tries to come up with reasonable defaults for the axis annotation. In our previous example, the genomic coordinates are indicated in megabases. We can control this via the exponent parameter, which takes an integer value greater then zero. The location of the tick marks are displayed as a fraction of `\(10^{exponent}\)`.
+The `Gviz` package tries to come up with reasonable defaults for the axis annotation. In our previous example, the genomic coordinates are indicated in megabases. We can control this via the exponent parameter, which takes an integer value greater then zero. The location of the tick marks are displayed as a fraction of `\(10^{exponent}\)`.
 
 ```{r}
 plotTracks(axisTrack, 
@@ -315,7 +315,7 @@ plotTracks(axisTrack,
            labelPos = "alternating")
 ```
 
-Sometimes a full-blown axis is just too much, and all we really need in the plot is a small scale indicator. We can change the appearance of the `GenomeAxisTrack` object to such a limited representation by setting the `scale` display parameter. Typically, this will be a numeric value between 0 and 1, which is interpreted as the fraction of the plotting region used for the scale. The plotting method will apply some rounding to come up with reasonable and human-readable values. For even more control we can pass in a value larger than 1, which is considered to be an absolute range length. In this case, the user is responsible for the scale to actually fit in the current plotting range.
+Sometimes a full-blown axis is just too much, and all we really need in the plot is a small scale indicator. We can change the appearance of the `GenomeAxisTrack` object to such a limited representation by setting the `scale` display parameter. Typically, this will be a numeric value between 0 and 1, which is interpreted as the fraction of the plotting region used for the scale. The plotting method will apply some rounding to come up with reasonable and human-readable values. **For even more control we can pass in a value larger than 1, which is considered to be an absolute range length**. In this case, the user is responsible for the scale to actually fit in the current plotting range.
 
 ```{r}
 plotTracks(axisTrack, from = 1e6, to = 9e6, scale = 0.5, 
@@ -326,7 +326,7 @@ plotTracks(axisTrack, from = 1e6, to = 9e6, scale = 0.5,
 
 
 ## IdeogramTrack
-While a genomic axis provides helpful points of reference to a plot, it is sometimes important to show the currently displayed region in the broader context of the whole chromosome. Are we looking at distal regions, or somewhere close to the centromere? And how much of the complete chromosome is covered in our plot. To that end the `Gviz` package defines the `IdeogramTrack` class, which is an idealized representation of a single chromosome. When plotted, these track objects will always show the whole chromosome, regardless of the selected genomic region. However, the displayed coordinates are indicated by a box that sits on the ideogram image. The chromosomal data necessary to draw the ideogram is not part of the `Gviz` package itself, instead it is downloaded from an online source (UCSC). Thus it is important to use both chromosome and genome names that are recognizable in the UCSC data base when dealing with `IdeogramTrack` objects. You might want to consult the UCSC webpage or use the ucscGenomes function in the `rtracklayer` package for a listing of available genomes.
+While a genomic axis provides helpful points of reference to a plot, it is sometimes important to show the currently displayed region in the broader context of the whole chromosome. Are we looking at distal regions, or somewhere close to the centromere? And how much of the complete chromosome is covered in our plot. To that end the `Gviz` package defines the `IdeogramTrack` class, which is an idealized representation of a single chromosome. When plotted, these track objects will always show the whole chromosome, regardless of the selected genomic region. However, the displayed coordinates are indicated by a box that sits on the ideogram image. The chromosomal data necessary to draw the ideogram is not part of the `Gviz` package itself, instead it is downloaded from an online source (UCSC). Thus it is important to use both chromosome and genome names that are recognizable in the UCSC data base when dealing with `IdeogramTrack` objects. You might want to consult the UCSC webpage or use the `ucscGenomes` function in the `rtracklayer` package for a listing of available genomes.
 
 Assuming the chromosome data are available online, a simple call to the `IdeogramTrack` constructor function including the desired genome and chromosome name are enough to instantiate the object. Since the connection to UCSC can be slow, the package tries to cache data that has already been downloaded for the duration of the R session. If needed, the user can manually clear the cache by calling the `clearSessionCache` function. Of course it is also possible to construct `IdeogramTrack` objects from local data. Please see the class’ man page for details.
 
@@ -369,7 +369,8 @@ plotTracks(dTRack, type = c("boxplot", "a", "g"))
 ```{r}
 twoGroups %>% mcols %>% colnames()
 
-plotTracks(dTRack, type = c("heatmap"), 
+plotTracks(dTRack, 
+           type = c("heatmap"), 
            showSampleNames = TRUE, 
            cex.sampleNames = 0.6)
 ```
@@ -380,9 +381,26 @@ plotTracks(dTRack,
            type = c("a", "p", "confint"))
 ```
 
+```{r}
+plotTracks(dTRack, 
+           groups = rep(c("control", "treated"), each = 3), 
+           type = c("a", "p"), 
+           legend = TRUE)
+```
 
+```{r}
+data("dtHoriz")
 
+dtHoriz <- dtHoriz[1:6, ]
+plotTracks(dtHoriz, 
+           type = "horiz", 
+           groups = rownames(values(dtHoriz)), 
+           showSampleNames = TRUE, 
+           cex.sampleNames = 0.6, 
+           separator = 1)
+```
 
+### Building Data Track objects from files
 
 
 
