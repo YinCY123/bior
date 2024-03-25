@@ -1,0 +1,166 @@
+---
+title: "hdf5"
+author: "YinCY"
+format: html
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+library(hdf5r)
+library(hdf5r.Extra)
+library(datasets)
+library(nycflights13)
+library(reshape2)
+library(magrittr)
+```
+
+# Introduction
+HDF5 is a data model, library, and file format for storing and managing data. It supports an unlimited variety of datatypes, and is designed for flexible and efficient I/O and for high volume and complex data.
+
+
+# A simple example
+##Creating files, groups and datasets
+```{r}
+test_filename <- tempfile(fileext = ".h5")
+file.h5 <- H5File$new(test_filename, mode = "w")
+file.h5
+```
+
+```{r}
+mtcars.grp <- file.h5$create_group("mtcars")
+flights.grp <- file.h5$create_group("flights")
+flights.grp
+```
+
+```{r}
+mtcars.grp[["mtcars"]] <- datasets::mtcars
+flights.grp[["weather"]] <- nycflights13::weather
+flights.grp[["flights"]] <- nycflights13::flights
+```
+
+```{r}
+weather_wind_dir <- subset(nycflights13::weather, 
+                            origin == "EWR", 
+                            select = c("year", "month", "day", "hour", "wind_dir"))
+
+weather_wind_dir <- na.exclude(weather_wind_dir)
+weather_wind_dir$wind_dir <- as.integer(weather_wind_dir$wind_dir)
+weather_wind_dir <- acast(weather_wind_dir, year + month + day ~ hour, 
+                          value.var = "wind_dir")
+
+flights.grp[["wind_dir"]] <- weather_wind_dir
+flights.grp
+```
+
+```{r}
+weather_wind_speed <- subset(nycflights13::weather, origin == "EWR", 
+                             select = c("year", "month", "day", "hour", "wind_speed"))
+weather_wind_speed <- na.exclude(weather_wind_speed)
+weather_wind_speed <- acast(weather_wind_speed, year + month + day ~ hour, 
+                            value.var = "wind_speed")
+
+flights.grp[["wind_speed"]] <- weather_wind_speed
+```
+
+```{r}
+h5attr(flights.grp[["wind_dir"]], "colnames") <- colnames(weather_wind_dir)
+h5attr(flights.grp[["wind_dir"]], "rownames") <- rownames(weather_wind_dir)
+h5attr(flights.grp[["wind_speed"]], "colnames") <- colnames(weather_wind_speed)
+h5attr(flights.grp[["wind_speed"]], "rownames") <- rownames(weather_wind_speed)
+```
+
+## Getting information about different objects
+### Content of files and groups
+```{r}
+file.h5 %>% names
+```
+
+```{r}
+flights.grp %>% names
+```
+
+```{r}
+flights.grp$ls()
+```
+
+### Information on attributes, datatypes and datasets
+```{r}
+flights.grp[["weather"]]$get_type()
+```
+
+```{r}
+flights.grp[["weather"]]$dims
+flights.grp[["weather"]]$maxdims
+flights.grp[["weather"]]$chunk_dims
+```
+
+```{r}
+flights.grp[["wind_dir"]] %>% h5attr_names()
+```
+
+```{r}
+h5attr(flights.grp[["wind_speed"]], "colnames")
+```
+
+## Closing the file
+As a last step, we want to close the file. For this, we have 2 options, the `close` and `close_all` methods of an h5-file. There are some non-obvious differences for novice users between the two. close will close the file, but groups and datatsets that are already open, will stay open. Furthermore, as along as any object is still open, the file cannot be re-opened in the regular fashion as HDF5 prevents a file from being opened more than once.
+
+```{r}
+file.h5$close_all()
+```
+
+# Advanced features
+```{r}
+h5 <- H5File$new("/home/yincy/git/data/partime/cai/data/GSE202051/GSE202051_totaldata-final-toshare.h5ad", mode = "r+")
+h5$ls()
+```
+
+
+```{r}
+h5 <- h5Read("/home/yincy/git/data/partime/cai/data/GSE202051/GSE202051_totaldata-final-toshare.h5ad")
+h5
+```
+
+
+# rhdf5
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
