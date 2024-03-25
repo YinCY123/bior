@@ -1,0 +1,105 @@
+---
+title: "20240324"
+author: "YinCY"
+format: html
+<<<<<<< HEAD
+editor: source
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+library(magrittr)
+library(KEGGREST)
+library(pathview)
+library(stringr)
+```
+
+```{r}
+compounds1 <- c("Taurine", "glutamate", "Serine", "threonine", "Succinate", "proline", "Glycine", "pyridoxal", 
+               "Gamma-glutamylvaline", "Glycine", "phosphate", "Threonate", "caprylate", "N-acetylglycine", "alanine", 
+               "Gamma-glutamylglycine") %>% tolower() %>% unique
+write.csv(compounds1, "/home/yincy/Downloads/compounds1.csv")
+compounds2 <- c("Homoarginine", "Glutamate", "cysteine", "Citrulline", "ornithine", 
+                "Hexanoylglutamine", "N-acetylproline", "Leucine", "N-palmitoyl-sphingosine") %>% tolower %>% unique
+write.csv(compounds2, "/home/yincy/Downloads/compounds2.csv")
+
+compounds1 <- read.table("/home/yincy/Downloads/name_map.csv", fill = TRUE, sep = ",", header = TRUE)
+compounds2 <- read.table("/home/yincy/Downloads/name_map2.csv", fill = TRUE, sep = ",", header = TRUE)
+
+keggid <- c(compounds1$KEGG, compounds2$KEGG) %>% na.omit() %>% unique()
+pathways <- keggLink(target = "pathway", source = keggid) %>% str_replace(pattern = "path:map", replacement = "") %>% unique
+```
+
+```{r}
+keggid <- setNames(rep(1, length(keggid)), keggid)
+
+pathview(cpd.data = keggid, 
+         pathway.id = pathways, 
+         species = "hsa", 
+         kegg.dir = "/home/yincy/git/data/partime/20240324/", 
+         cpd.idtype = "kegg",
+         kegg.native = T, 
+         match.data = T, 
+         min.nnodes = 1, 
+         map.cpdname = TRUE, 
+         plot.col.key = T)
+
+demo.paths$sel.paths
+data("gse16873.d")
+gse16873.d
+sim.cpd.data=sim.mol.data(mol.type="cpd", nmol=3000)
+
+```
+
+
+```{r}
+pathview(cpd.data = sim.cpd.data, 
+         pathway.id = demo.paths$sel.paths, 
+         species = "hsa", 
+         kegg.native = T, 
+         match.data = T)
+```
+
+
+```{r}
+compounds <- c("Taurine", "glutamate", "Serine", "threonine", 
+               "Succinate", "proline", "Glycine", "pyridoxal", 
+               "Gamma-glutamylvaline", "Glycine", "phosphate", 
+               "Threonate", "Glutarate", "caprylate", "N-acetylglycine", 
+               "Glycine", "alanine", "Gamma-glutamylglycine", "Homoarginine", 
+               "Glutamate", "cysteine", "Citrulline", "ornithine", "Hexanoylglutamine",
+               "N-acetylproline", "Leucine", "N-palmitoyl-sphingosine") %>% 
+    tolower %>% unique
+write.csv(compounds, "/mnt/c/Users/yincy/Downloads/compounds.csv", 
+          row.names = F, quote = F)
+
+compound_ids <- read.csv("/mnt/c/Users/yincy/Downloads/name_map.csv")
+```
+
+```{r}
+library(KEGGREST)
+library(stringr)
+
+path_ids <- keggLink("pathway", source = compound_ids$KEGG %>% na.omit %>% as.character)
+path_ids <- path_ids %>% unname() %>% str_replace(., "path:map", "") %>% unique
+path_ids %>% str
+```
+
+```{r}
+kegg_ids <- compound_ids$KEGG %>% na.omit %>% as.character
+kegg_ids %>% str
+for(pathway in path_ids){
+    try(pathview(cpd.data = kegg_ids, 
+             pathway.id = pathway, 
+             species = "hsa", 
+             kegg.native = T, 
+             plot.col.key = F), 
+        silent = TRUE
+    )
+}
+```
+
+
+
