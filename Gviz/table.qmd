@@ -1,0 +1,24 @@
+---
+title: "Untitled"
+format: html
+---
+
+```{r}
+library(openxlsx)
+library(magrittr)
+table <- read.xlsx("/home/yincy/git/data/partime/20240323/统计bmi.xlsx")
+
+table$年龄 <- gsub("岁", "", table$年龄) %>% as.numeric()
+
+age_mean <- mean(table$年龄)
+age_se <- sd(table$年龄)/sqrt(nrow(table)-1)
+
+bmi_mean <- mean(table$`BMI（Kg/m2）`)
+bmi_se <- sd(table$`BMI（Kg/m2）`)/sqrt(nrow(table)-1)
+```
+
+
+
+|统计指标|年龄（n=10）|BMI（n=10）|
+|:-------|:---|:--|
+|均值$\pm$标准差|55.30 $\pm$ 1.58|25.59 $\pm$ 1.07|
