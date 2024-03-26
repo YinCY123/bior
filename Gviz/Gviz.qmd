@@ -401,12 +401,417 @@ plotTracks(dtHoriz,
 ```
 
 ### Building Data Track objects from files
+A number of standard file types exist that all store numeric data along genomic coordinates. We have tried to make such files accessible in the `Gviz` package by providing additional options to the `DataTrack` constructor function. In the previous examples the range argument was a `GRanges` object. Instead, we can also pass in the path to a file on disk by means of a character scalar. The `DataTrack` class supports the most common file types like `wig`, `bigWig` or `bedGraph`, but also knows how to deal with `bam` files. You may have realized that some of these files are indexed, and we have taken the approach to stream the data from indexed files on the fly when it is needed for plotting.
+
+However let’s first start with the simple example of a `bedGraph` file. These files support a single data sample, and thus are equivalent to a `GRanges` object with a single numeric metadata column. `bedGraph` files are not indexed, so we have to load the whole file content when instantiating the object.
+
+```{r}
+bgFile <- system.file("extdata", "test.bedGraph", 
+                      package = "Gviz")
+
+dTrack2 <- DataTrack(range = bgFile, 
+                     genome = "hg19", 
+                     type = "l", 
+                     chromosome = "chr19", 
+                     name = "bedGraph")
+dTrack2 %>% class
+```
+
+```{r}
+plotTracks(dTrack2)
+```
+
+As we can see the constructor has returned a regular `DataTrack` object. The function to be used in order to read the data off the file has been automatically chosen by the package based on the file extension of the input file. Of course the number of these supported standard file types is limited, and a user may want to import a non-standard file through the same mechanism. To this end, the `DataTrack` constructor defines an additional argument called `importFunction`. As the name suggests, the value of this argument is a function which needs to handle the mandatory file argument. Upon evaluation this argument will be filled in with the path to the data file, and the user-defined function needs to provide all logic necessary to parse that file into a valid `GRanges` object. From this point on everything will happen just as if the range argument had been this `GRanges` object. In other words, numeric metadata columns will be shown as individual samples and non-numeric columns will be silently ignored. We can exemplify this in the next code chunk. Note that the `Gviz` package is using functionality from the `rtracklayer` package for most of the file import operations, just as we do here in a more explicit way.
+
+```{r}
+#| message: false
+#| warning: false
+
+library(rtracklayer)
+
+dTrack3 <- DataTrack(range = bgFile, 
+                     genome = "hg19", 
+                     type = "l", 
+                     chromosome = "chr19",
+                     name = "bedGraph",
+                     importFunction = function(file){import(con = file)})
+
+identical(dTrack2, dTrack3)
+```
+
+So far one could have easily done the whole process in two separate steps: first import the data from the file into a `GRanges` object and then provided this object to the constructor. The real power of the file support in the `Gviz` package comes with streaming from indexed files. As mentioned before, only the relevant part of the data has to be loaded during the plotting operation, so the underlying data files may be quite large without decreasing the performance or causing too big of a memory footprint. We will exemplify this feature here using a small `bam` file that is provided with the package. `bam` files contain alignments of sequences (typically from a next generation sequencing experiment) to a common reference. The most natural representation of such data in a `DataTrack` is to look at the alignment coverage at a given position only and to encode this in a single metadata column.
+
+```{r}
+bamFile <- system.file("extdata", "test.bam", package = "Gviz")
+dTrack4 <- DataTrack(range = bamFile, 
+                     genome = "hg19", 
+                     type = "h", 
+                     name = "coverage", 
+                     window = -1, 
+                     chromosome = "chr1")
+
+dTrack4 %>% class
+```
+
+```{r}
+plotTracks(dTrack4, from = 189990000, to = 190000000)
+```
+
+As seen in the previous code chunk, the `dTrack4` object is now of class `ReferenceDataTrack`. For the user this distinction is not particularly relevant with the exception that the `length` method for this class almost always returns 0 because the content of the object is only realized during the plotting operation. Obviously, streaming from the disk comes with a price in that file access is much slower than accessing RAM, however the file indexing allows for fairly rapid data retrieval, and other processes during the plotting operation tend to be much more costly, anyways. It is worth mentioning however that each plotting operation will cause reading off the file, and there are currently no caching mechanisms in place to avoid that. Nevertheless, plotting a larger chunk of the `bam` file still finishes in a reasonable time.
+
+```{r}
+plotTracks(dTrack4, chromosome = "chr1", from = 189891483, to = 190087517)
+```
+
+Of course users can provided their own file parsing function just like we showed in the previous example. The import function now needs to be able to deal with a second mandatory argument `selection`, which is a `GRanges` object giving the genomic interval that has to be imported from the file. In addition one needs to tell the `DataTrack` constructor that data should be streamed off a file by setting the `stream` argument to `TRUE`.
+
+```{r}
+#| eval: false
+myImportFun <- function(file, seelction){
+    # do something here
+}
+
+DataTrack(range = bamFile, 
+          genome = "hg19", 
+          type = "h")
+```
+
+### Data transformations
+The `Gviz` package offers quite some flexibility to transform data on the fly. This involves both rescaling operations (each data point is transformed on the track’s y-axis by a transformation function) as well as summarization and smoothing operations (the values for several genomic locations are summarized into one derived value on the track’s x-axis). To illustrate this let’s create a significantly bigger `DataTrack` than the one we used before, containing purely synthetic data for only a single sample.
+
+```{r}
+data <- sin(seq(pi, 10*pi, len = 500))
+dTrack.big <- DataTrack(start = seq(1, 100000, len = 500), 
+                        width = 15, 
+                        chromosome = "chrX", 
+                        genome = "hg19", 
+                        data = sin(seq(pi, 5*pi, len = 500)) * runif(500, 0.5, 1.5))
+
+plotTracks(dTrack.big, type = "hist")
+```
+
+Since the available resolution on our screen is limited we can no longer distinguish between individual coordinate ranges. The `Gviz` package tries to avoid overplotting by collapsing overlapping ranges (assuming the `collapseTracks` parameter is set to `TRUE`). However, it is often desirable to summarize the data, for instance by binning values into a fixed number of windows followed by the calculation of a meaningful summary statistic. This can be archived by a combination of the `window` and `aggregation` display parameters. The former can be an integer value greater than zero giving the number of evenly-sized bins to aggregate the data in. The latter is supposed to be a user-supplied function that accepts a numeric vector as a single input parameter and returns a single aggregated numerical value. For simplicity, the most obvious aggregation functions can be selected by passing in a character scalar rather than a function. Possible values are mean, median,extreme,sum, min and max. These presets are also much faster because they have been optimized to operate on large numeric matrices. The default is to compute the mean value of all the binned data points.
+
+```{r}
+plotTracks(dTrack.big, type = "hist", window = 50)
+```
+
+Instead of binning the data in fixed width bins one can also use the `window` parameter to perform more elaborate running window operations. For this to happen the parameter value has to be smaller than zero, and the additional display parameter `windowSize` can be used to control the size of the running window. This operation does not change the number of coordinate ranges on the plot, but instead the original value at a particular position is replaced by the respective sliding window value at the same position. **A common use case for sliding windows on genomic ranges is to introduce a certain degree of smoothing to the data**.
+
+```{r}
+plotTracks(dTrack.big, type = "hist", window = -1, windowSize = 2500)
+```
+
+In addition to transforming the data on the x-axis we can also apply arbitrary transformation functions on the y-axis. One obvious use-case would be to log-transform the data prior to plotting. The framework is flexible enough however to allow for arbitrary transformation operations. The mechanism works by providing a function as the `transformation` display parameter, which takes as input a numeric vector and returns a transformed numeric vector of the same length. The following code for instance truncates the plotted data to values greater than zero.
+
+```{r}
+plotTracks(dTrack.big, type = "l", 
+           transformation = function(x){x[x < 0] <- 0; x })
+```
+
+As seen before, the `a` type allows to plot average values for each of the separate groups. There is however an additional parameter `aggregateGroups` that generalizes group value aggregations. In the following example we display, for each group and at each position, the average values in the form of a dot-and-lines plot.
+
+```{r}
+plotTracks(dTRack, groups = rep(c("control", "treated"), each = 3), 
+           type = c("b"), 
+           aggregateGroups = TRUE)
+```
 
 
+This functionality again also relies on the setting of the `aggregation` parameter, and we can easily change it to display the maximum group values instead.
+
+```{r}
+plotTracks(dTRack, 
+           groups = rep(c("control", "treated"), each = 3), 
+           type = c("b"), 
+           aggregateGroups = TRUE, 
+           aggregation = "max")
+```
+
+## AnnotationTrack
+`AnnotationTrack` objects are the multi-purpose tracks in the `Gviz` package. Essentially they consist of one or several genomic ranges that can be grouped into composite annotation elements if needed. In principle this would be enough to represent everything from CpG islands to complex gene models, however for the latter the package defines the specialized `GeneRegionTrack` class, which will be highlighted in a separate section. Most of the features discussed here will also apply to `GeneRegionTrack` objects, though. As a matter of fact, the `GeneRegionTrack` class inherits directly from class `AnnotationTrack`.
+
+`AnnotationTrack` objects are easily instantiated using the constructor function of the same name. The necessary building blocks are the range coordinates, a chromosome and a genome identifier. Again we try to be flexible in the way this information can be passed to the function, either in the form of separate function arguments, as `IRanges`, `GRanges` or `data.frame` objects. Optionally, we can pass in the strand information for the annotation features and some useful identifiers. A somewhat special case is to build the object from a `GRangesList` object, which will automatically preserve the element grouping information contained in the list structure. For the full details on the constructor function and the accepted arguments see `?AnnotationTrack`. Let’s take a look at a very simple track:
+
+```{r}
+aTrack <- AnnotationTrack(start = c(10, 40, 120), 
+                          width = 15, 
+                          chromosome = "chrX", 
+                          strand = c("+", "*", "-"), 
+                          id = c("Huey", "Dewey", "Louie"), 
+                          genome = "hg19", 
+                          name = "foo")
+
+plotTracks(aTrack)
+```
+
+The ranges are plotted as simple boxes if no strand information is available,or as arrows to indicate their direction. We can change the range item shapes by setting the `shape` display parameter. It can also be helpful to add the names for the individual features to the plot. This can be archived by setting the `feathureAnnotation` parameter to `id`.
+
+```{r}
+plotTracks(aTrack, shape = "box", featureAnnotation = "id")
+```
+
+```{r}
+plotTracks(aTrack, 
+           shape = "ellipse", 
+           featureAnnotation = "id", 
+           fontcolor.feature = "darkblue")
+```
+
+In this very simplistic example each annotation feature consisted of a single range. In real life the genomic annotation features that we encounter often consists of several sub-units. We can create such composite `AnnotationTrack` objects by providing a grouping factor to the constructor. It needs to be of similar length as the total number of atomic features in the track, i.e, the number of genomic ranges that are passed to the constructor. The levels of the this factor will be used as internal identifiers for the individual composite feature groups, and we can toggle on their printing by setting `groupAnnotation` to ‘group’.
+
+```{r}
+aTrack.groups <- AnnotationTrack(start = c(50, 180, 260, 460, 860, 1240), 
+                                 width = c(15, 20, 40, 100, 200, 20), 
+                                 chromosome = "chrX", 
+                                 strand = rep(c("+", "*", "-"), c(1, 3, 2)), 
+                                 group = rep(c("Huey", "Dewey", "Louie"), c(1, 3, 2)), 
+                                 genome = "hg19", 
+                                 name = "foo")
+
+plotTracks(aTrack.groups, 
+           groupAnnotation = "group", 
+           just.group = "right")
+```
+
+```{r}
+plotTracks(aTrack.groups, 
+           groupAnnotation = "group", 
+           just.group = "above")
+```
+
+Arranging items on the plotting canvas is relatively straight forward as long as there are no overlaps between individual regions or groups of regions. Those inevitably cause overplotting which could seriously obfuscate the information on the plot. A logical solution to this problem is to stack overlapping items in separate horizontal lines to accommodate all of them. This involves some optimization, and the `Gviz` package automatically tries to come up with the most compact arrangement. Let’s exemplify this feature with a slightly modified `AnnotationTrack` object.
+
+```{r}
+aTrack.stacked <- AnnotationTrack(start = c(50, 180, 260, 800, 600, 1240), 
+                                  width = c(15, 20, 40, 100, 500, 20), 
+                                  chromosome = "chrX", 
+                                  strand = "*", 
+                                  group = rep(c("Huey", "Dewey", "Louie"), c(1, 3, 2)), 
+                                  genome = "hg19", 
+                                  name = "foo")
+
+plotTracks(aTrack.stacked, 
+           groupAnnotation = "group")
+```
+
+We now have our three annotation feature groups distributed over two horizontal lines. One can control the stacking of overlapping items using the stacking display parameter. Currently the three values `squish`, `dense` and `hide` are supported. Horizontal stacking is enabled via the squish option, which also is the default. The dense setting forces overlapping items to be joined in one meta-item and hide all together disables the plotting of `AnnotationTrack` items. Please note that adding identifiers to the plot only works for the squish option.
+
+```{r}
+plotTracks(aTrack.stacked, stacking = "dense")
+```
+
+In addition to annotation groups there is also the notion of a feature type in the `Gviz` package. Feature types are simply different types of annotation regions (e.g., mRNA transcripts, miRNAs, rRNAs, etc.) that are indicated by different colors. There is no limit on the number of different features, however each element in a grouped annotation item needs to be of the same feature type. We can query and set features using the `feature` and `feature<-` methods.
+
+```{r}
+feature(aTrack.stacked)
+feature(aTrack.stacked) <- c("foo", "bar", "bar", "bar", "no", "no")
+
+plotTracks(aTrack.stacked, 
+           featureAnnotation = "feature", 
+           groupAnnotation = "feature", 
+           fontcolor.feature = 1, 
+           cex.feature = 0.7)
+```
+
+Unless we tell the `Gviz` package how to deal with the respective feature types they will all be treated in a similar fashion, i.e., they will be plotted using the default color as defined by the `fill` display parameter. To define colors for individual feature types we simply have to add them as additional display parameters, where the parameter name matches the feature type and its value is supposed to be a valid R color qualifier. Of course this implies that we can only use feature names that are not already occupied by other display parameters defined in the package.
+
+```{r}
+plotTracks(aTrack.stacked, 
+           groupAnnotation = "group", 
+           foo = "darkred", 
+           bar = "darkgreen")
+```
+
+Stacking of annotation items to avoid overplotting only works as long as there is enough real estate on the plotting canvas to separate all items, i.e., we need all items to be at least a single pixel wide to correctly display them. This limitation is automatically enforced by the `Gviz` package, however it implies that unless neighboring items are more than one pixel apart we can not distinguish between them and will inevitably introduce a certain amount of overplotting. This means that on a common screen device we can only look at a very limited genomic region of a few kb in full resolution. Given that an average chromosome is in the order of a few gb, we still need a reasonable way to deal with the overplotting problem despite the item stacking functionality. As default, the `Gviz` package will merge all overlapping items into one unified meta-item and only plot that (see ‘Collapse’ section below for details). In order to indicate the amount of overplotting that was introduced by this process we can use the `showOverplotting` display parameter. It uses a color scale (based on the original colors defined for the track), with lighter colors indicating areas of low or no overplotting, and more saturated colors indicating areas of high overplotting density. We exemplify this feature on an `AnnotationTrack` object that represents a good portion of a real human chromosome.
+
+```{r}
+data("denseAnnTrack")
+plotTracks(denseAnnTrack, showOverplotting = TRUE)
+```
 
 
+### Collapsing
+All track types that inherit from class `AnnotationTrack` support the collapsing of overlapping track items, either because they have initially been defined as overlapping coordinates, or because the current device resolution does not allow to sufficiently separate them. For instance, two elements of a feature group may be separated by 100 base pairs on the genomic scale, however when plotted to the screen, those 100 base pairs translate to a distance of less than one pixel. In this case we can no longer show the items as two separate entities. One solution to this problem would be to allow for arbitrary overplotting, in which case the last one of the overlapping items that is drawn on the device wins. This is not optimal in many ways, and it also poses a significant burden on the graphical engine because a lot of stuff has to be drawn which no one will ever see.
+
+To this end the `Gviz` package provides an infrastructure to reasonably collapse overlapping items, thereby adjusting the information content that can be shown to the available device resolution. By default this feature is turned on, and the user does not have to worry too much about it. However, one should be aware of the consequences this may have on a given visualization. If you absolutely do not want collapsing to take place, you may completely turn it off by setting the display parameter `collapse` to `FALSE`. Please note that by doing this the `showOverplotting` parameter will also stop working. If you opt in, there is some considerable amount of detailed control to fine tune the collapsing to your needs.
+
+Let's start with a small example track for which element collapsing has been turned off and no adjustments to the ranges have been made. We plot both the item identifiers and the group identifiers to examplify what is going on.
+
+```{r}
+data(collapseTrack)
+ctrack
+
+plotTracks(ctrack, min.width = 1)
+```
+
+```{r}
+plotTracks(ctrack, min.width = 1, collapse = TRUE)
+```
+
+```{r}
+plotTracks(ctrack, min.width = 3, min.distance = 5, collapse = TRUE)
+```
+
+```{r}
+plotTracks(ctrack, 
+           min.width = 3, 
+           min.distance = 5, 
+           collapse = TRUE, 
+           mergeGroups = TRUE, 
+           extend.left = 0.1)
+```
+
+```{r}
+plotTracks(ctrack, 
+           min.width = 3, 
+           min.distance = 5, 
+           collapse = TRUE, 
+           mergeGroups = TRUE, 
+           extend.left = 0.1)
+```
 
 
+### Building AnnotationTrack objects from files
+Just like we showed before for `DataTrck` objects it is possible to stream the data for an `AnnotationTrack` object off the file system. We will again use the `bam` file as an example. This Time the default import function reads the coordinates of all the sequence alignments from the file and even knows how to deal with grouped elements.
+
+```{r}
+aTrack2 <- AnnotationTrack(range = bamFile, 
+                           genome = "hg19", 
+                           name = "Reads", 
+                           chromosome = "chr1")
+aTrack2 %>% class
+```
+
+```{r}
+plotTracks(aTrack2, 
+           from = 189995000, 
+           to = 190000000)
+```
+
+Since `AnnotationTrack` objects are somewhat more complicated than `DataTrack` objects, the constructor provides another level of flexibility when reading the data from a file. More specifically, the user has the ability to map the provided metadata columns of the `GRanges` object that is returned by the import function to the respective columns in the final `AnnotationTrack` object. If no explicit mapping is provided, the package will try to find a default mapping based on the input file type and the desired track type. The current mapping of a track is displayed by its show method as can be seen above. The mechanism for changing this default mapping is quite straight forward: if the values in the relevant constructor arguments (in this case `group`, `id` and `feature`) are character scalars, the metadata columns of the `GRanges` object that is returned by the import function are mapped against their values. For instance we can map the id column to the group attribute and thus suppress the grouping of sequence alignments that originate from the same sequencing read.
+
+```{r}
+aTrack3 <- AnnotationTrack(range = bamFile, 
+                           genome = "hg19", 
+                           name = "Reads", 
+                           chromosome = "chr1", 
+                           group = "id")
+aTrack3
+```
+
+```{r}
+plotTracks(aTrack3, 
+           from = 189995000, 
+           to = 190000000)
+```
+
+Please note that if no metadata column can be mapped to the constructor arguments their values are assumed to be normal character scalars and they will be recycled accordingly to fill the track’s slots. One can ask for the package’s default mappings by using the `availableDefaultMapping` function.
+
+```{r}
+availableDefaultMapping(bamFile, "AnnotationTrack")
+```
+
+```{r}
+plotTracks(list(dTrack4, aTrack2), from = 189990000, to = 190000000)
+```
+
+```{r}
+plotTracks(list(dTrack4, aTrack2), 
+           from = 189990000, 
+           to = 190000000)
+```
+
+## GeneRegionTrack
+`GeneRegionTrack` objects are in principle very similar to `AnnotationTrack` objects. The only difference is that they are a little more gene/transcript centric, both in terms of plotting layout and user interaction, and that they may define a global start and end position (a feature which is not particularly relevant for the normal user). The constructor function of the same name is a convenient tool to instantiate the object from a variety of different sources. In a nutshell, we need to pass start and end positions (or the width) of each annotation feature in the track and also supply the exon, transcript and gene identifiers for each item which will be used to create the transcript groupings. A somewhat special case is to build a `GeneRegionTrack` object directly from one of the popular TxDb objects, an option that is treated in more detail below. For more information about all the available options see the class’s manual page (`?GeneRegionTrack`).
+
+There are a number of accessor methods that make it easy to query and replace for instance exon, transcript or gene assignments. There is also some support for gene aliase or gene symbols which are often times more useful than cryptic data base gene identifiers. The following code that re-uses the `GeneRegionTrack` object from the first section examplifies some of these features.
+
+```{r}
+data("geneModels")
+
+grtrack <- GeneRegionTrack(range = geneModels, 
+                           genome = "hg19", 
+                           chromosome = "chr7", 
+                           name = "foo")
+grtrack %>% gene %>% head
+grtrack %>% transcript %>% head
+grtrack %>% exon %>% head
+grtrack %>% symbol %>% head
+
+plotTracks(grtrack, transcriptAnnotation = "symbol")
+```
+
+
+```{r}
+plotTracks(grtrack, 
+           collapseTranscripts = TRUE, 
+           shape = "arrow", 
+           transcriptAnnotation = "symbol")
+```
+
+```{r}
+plotTracks(grtrack, 
+           collapseTranscripts = "longest", 
+           shape = "arrow", 
+           transcriptAnnotation = "symbol")
+```
+
+```{r}
+plotTracks(grtrack, 
+           collapseTranscripts = "meta", 
+           shape = "arrow", 
+           transcriptAnnotation = "symbol")
+```
+
+
+### Building GeneRegionTrack objects from TxDbs
+The `GenomicFeatures` packages provides an elegant framework to download gene model information from online sources and to store it locally in a `SQLite` data base. Because these so called `TxDb` objects have become the de-facto standard for genome annotation information in Bioconductor we tried to make it as simple as possible to convert them into `GeneRegionTracks`. Essentially one only has to call the constructor function with the `TxDb` object as a single argument. We exemplify this on a small sample data set that comes with the `GenomicFeatures` package.
+
+```{r}
+#| message: false
+#| warning: false
+
+library(GenomicFeatures)
+
+samplefile <- system.file("extdata", "hg19_knownGene_sample.sqlite", 
+                          package = "GenomicFeatures")
+samplefile
+txdb <- loadDb(samplefile)
+GeneRegionTrack(txdb)
+```
+
+
+```{r}
+txTr <- GeneRegionTrack(txdb, 
+                        chromosome = "chr6", 
+                        start = 35000000, 
+                        end = 40000000)
+txTr
+```
+
+```{r}
+plotTracks(txTr)
+```
+
+
+```{r}
+library(ensembldb)
+library(EnsDb.Hsapiens.v86)
+
+edb <- EnsDb.Hsapiens.v86
+seqlevelsStyle(edb) <- "UCSC"
+
+eTrack <- GeneRegionTrack(edb, 
+                          chromosome = "chr6", 
+                          start = 35000000, 
+                          end = 40000000)
+
+plotTracks(eTrack)
+```
+
+
+## BiomartGeneRegionTrack
 
 
 
