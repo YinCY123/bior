@@ -5,17 +5,18 @@ format: html
 ---
 
 # Introduction
-Chromatin immunoprecipitation with sequencing (ChIP-seq) is a widely used technique for identifying the genomic binding sites of a target protein. Conventional analyses of `ChIP-seq` data aim to detect absolute binding (i.e., the presence or absence of a binding site) based on peaks in the read coverage. An alternative analysis strategy is to detect of changes in the binding profile between conditions (Ross-Innes et al. 2012; Pal et al. 2013). These differential binding (DB) analyses involve counting reads into genomic intervals and testing those counts for significant differences between conditions. This defines a set of putative DB regions for further examination. DB analyses are statistically easier to perform than their conventional counterparts, as the effect of genomic biases is largely mitigated when counts for different libraries are compared at the same genomic region. DB regions may also be more relevant as the change in binding can be associated with the biological difference between conditions.
+Chromatin immunoprecipitation with sequencing (ChIP-seq) is a widely used technique for identifying the genomic binding sites of a target protein. **Conventional analyses of `ChIP-seq` data aim to detect absolute binding (i.e., the presence or absence of a binding site) based on peaks in the read coverage. An alternative analysis strategy is to detect of changes in the binding profile between conditions (Ross-Innes et al. 2012; Pal et al. 2013).** These differential binding (DB) analyses involve counting reads into genomic intervals and testing those counts for significant differences between conditions. This defines a set of putative DB regions for further examination. **DB analyses are statistically easier to perform than their conventional counterparts, as the effect of genomic biases is largely mitigated when counts for different libraries are compared at the same genomic region.** DB regions may also be more relevant as the change in binding can be associated with the biological difference between conditions.
 
-This book describes the use of the `csaw` Bioconductor package to detect differential binding (DB) in ChIP-seq experiments with sliding windows (Lun and Smyth 2016). In these analyses, we detect and summarize DB regions between conditions in a de novo manner, i.e., without making any prior assumptions about the location or width of bound regions. We demonstrate on data from a variety of real studies focusing on changes in transcription factor binding and histone mark enrichment. Our aim is to facilitate the practical implementation of window-based DB analyses by providing detailed code and expected output. The code here can be adapted to any dataset with multiple experimental conditions and with multiple biological samples within one or more of the conditions; it is similarly straightforward to accommodate batch effects, covariates and additional experimental factors. Indeed, though the book focuses on ChIP-seq, the same software can be adapted to data from any sequencing technique where reads represent coverage of enriched genomic regions.
+This book describes the use of the `csaw` Bioconductor package to detect differential binding (DB) in ChIP-seq experiments with sliding windows (Lun and Smyth 2016). **In these analyses, we detect and summarize DB regions between conditions in a de novo manner, i.e., without making any prior assumptions about the location or width of bound regions.** We demonstrate on data from a variety of real studies focusing on changes in transcription factor binding and histone mark enrichment. Our aim is to facilitate the practical implementation of window-based DB analyses by providing detailed code and expected output. The code here can be adapted to any dataset with multiple experimental conditions and with multiple biological samples within one or more of the conditions; it is similarly straightforward to accommodate batch effects, covariates and additional experimental factors. Indeed, though the book focuses on ChIP-seq, the same software can be adapted to data from any sequencing technique where reads represent coverage of enriched genomic regions.
 
 
 # Quick Start
-A typical `ChIP-seq` analysis in `csaw` would look something like that described below. This assumes that a vector of file paths to sorted and indexed BAM files is provided and a design matrix in suppied in. The code is split across several steps.
+A typical `ChIP-seq` analysis in `csaw` would look something like that described below. This assumes that a vector of file paths to sorted and indexed BAM files is provided and a design matrix in supplied in. The code is split across several steps.
 
 ```{r}
 #| message: false
 #| warning: false
+#| cache: true
 
 library(chipseqDBData)
 tf.data <- NFYAData()
@@ -31,8 +32,12 @@ design
 
 1. Loading in data from BAM file
 ```{r}
+#| message: false
+#| warning: false
+
 library(csaw)
 library(magrittr)
+library(SummarizedExperiment)
 
 param <- readParam(minq = 20)
 data <- windowCounts(bam.files = bam.files, 
@@ -40,17 +45,21 @@ data <- windowCounts(bam.files = bam.files,
                      width = 10, 
                      param = param)
 
+data %>% colData
+data %>% rowRanges
+data %>% assay(1) %>% .[1:10, ]
 data
 ```
 
-2. Filtering out interesting regions.  
+2. Filtering out uninteresting regions.  
 ```{r}
 binned <- windowCounts(bam.files = bam.files, 
                        bin = TRUE, 
                        width = 10000,
                        param = param)
 
-keep <- filterWindowsGlobal(data = data, background = binned)$filter > log2(5)
+keep <- filterWindowsGlobal(data = data, 
+                            background = binned)$filter > log2(5)
 keep %>% table
 data <- data[keep, ]
 ```
@@ -58,10 +67,13 @@ data <- data[keep, ]
 3. Calculating normalization factors
 ```{r}
 data <- normFactors(object = binned, se.out = data)
+data %>% colData
 ```
 
 4. Identifying DB windows
 ```{r}
+#| message: false
+#| warning: false
 library(edgeR)
 
 y <- asDGEList(object = data)

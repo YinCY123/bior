@@ -1,0 +1,125 @@
+---
+title: "04 Filtering out uninteresting windows"
+author: "YinCY"
+format: html
+---
+
+# Overview
+Many of the low abundance windows in the genome correspond to background regions in which DB is not expected. Indeed, windows with low counts will not provide enough evidence against the null hypothesis to obtain sufficiently low p-value for DB detection. Similarly, some approximations used in the statistical analysis will fail at low counts. Removing such uninteresting or ineffective tests reduces the severity of the multiple testing correction, increase detection power amongst the remaining tests and reduces computational work.
+
+FIltering is valid so long as it is independent of the test statistic under the null hypothesis. In the negative binomial framework, this corresponds to filtering on the overall binomial mean. The DB p-value retained after filteirng on the overall mean should be uniform under the null hypothesis, by analogy to the normal case. Row sums can be used for datasets where the effective library sizes are not very different, or where the counts are assumed to be Poisson-distribution between biological replicates.
+
+In edgeR, the log-transformed overall binomial mean is referred to as average abundance. This is computed with the `aveLogCPM()` function.
+
+```{r}
+library(chipseqDBData)
+
+tf.data <- NFYAData()
+tf.data
+
+bam.file <- head(tf.data, -1)
+bam.files
+```
+
+```{r}
+library(csaw)
+
+frag.len <- 110
+win.width <- 10
+param <- readParam(minq = 20)
+data <- windowCounts(bam.files = bam.files, 
+                     ext = frag.len, 
+                     width = win.width, 
+                     param = param)
+```
+
+```{r}
+library(edgeR)
+abundance <- aveLogCPM(asDGEList(data))
+abundance %>% summary
+```
+
+```{r}
+keep <- abundance > -1
+filtered.data <- data[keep, ]
+keep %>% summary
+```
+
+The exact choice of filter threshold may not be obvious. In particular, there is often no clear distinction in abundances between genuine binding and background events, e.g., due to the presence of many weak but genuine binding sites. A threshold that is too small will be ineffective, whereas a threshold that is too large may decrease power by removing true DB sites. Arbitrariness is unavoidable when balancing these opposing considerations.
+
+Nonetheless, several strategies for defining the threshold are described below. Users should start by choosing one of these filtering approaches to implement in their analyses. Each approach yields a logical vector that can be used in the same way as `keep.simple`.
+
+## By count size
+The simplest approach is to simply filter according to the count size. This removes windows for which the counts are simply too low for modelling and hypothesis testing. The code below retains windows with (library size-adjusted) average counts greater than 5.
+
+```{r}
+keep <- abundance > aveLogCPM(5, lib.size = mean(data$totals))
+keep %>% summary
+```
+
+However, a count-based filter becomes less effective as the library size increases. More windows will be retained with greater sequencing depth, even in uninteresting background regions. This increases both computational work and the severity of the multiplicity correction. The threshold may also be inappropriate when library sizes are very different.
+
+## By proportion
+One approach is to to assume that only a certain proportion - say, 0.1% - of the genome is genuinely bound. This corresponds to the top proportion of high-abundance windows. The total number of windows is calculated from the genome length and the `spacing` interval used in `windowCounts()`. The `filterWindowsProportion()` function returns the ratio of the rank of each window to this total, where higher-abundance windows have larger ranks. Users can then retain those windows with rank ratios above the unbound proportion of the genome.
+
+```{r}
+keep <- filterWindowsProportion(data = data)$filter > 0.999
+keep %>% summary
+```
+
+This approach is simple and has the practical advantage of maintaining a constant number of windows for the downstream analysis. However, it may not adapt well to different datasets where the proportion of bound sites can vary. Using an inappropriate percentage of binding sites will result in the loss of potential DB regions or inclusion of background regions.
+
+## By global enrichment
+An alternative approach involves choosing a filter threshold based on the fold change over the level of non-specific enrichment. The degree of background enrichment is estimated by counting reads into large bins across the genome. Binning is necessary here to increase the size of the counts when examining low-density background regions. This ensures that precision is maintained when estimating the background abundance.
+
+```{r}
+bin.size <- 2000L
+binned <- windowCounts(bam.files = bam.files, 
+                       bin = TRUE, 
+                       width = bin.size, 
+                       param = param)
+
+binned %>% rowRanges()
+```
+
+The median of the average abundances across all bins is computed and used as a global estimate of the background coverage. This global background is then compared to the window-based abundances. This determines whether a window is driven by background enrichment, and thus, unlikely to be interesting. However, some care is required as the sizes of the regions used for read counting are different between bins and windows. The average abundance of each bin must be scaled down to be comparable to those of the windows.
+
+The `filterWindowsGlobal()` function returns the increase in the abundance of each window over the global background. Windows are filtered by setting some minimum threshold on this increase. The aim is to eliminate the majority of uninteresting windows prior to further analysis. Here, a fold change of 3 is necessary for a window to be considered as containing a binding site. This approach has an intuitive and experimentally relevant interpretation that adapts to the level of non-specific enrichment in the dataset.
+
+```{r}
+filter.stat <- filterWindowsGlobal(data = data, 
+                                   background = binned)
+
+keep <- filter.stat$filter > log2(3)
+keep %>% summary
+```
+
+```{r}
+hist(filter.stat$filter, 
+     xlab = "log-fold change from global background", 
+     breaks = 100,
+     main = "", 
+     col = "grey80", 
+     xlim = c(0, 5))
+abline(v = log2(3), col = "red", lwd = 2)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

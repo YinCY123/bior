@@ -8,13 +8,13 @@ format: html
 
 The key step in the DB analysis is the manner in which reads are counted. The most obvious strategy is to count reads into pre-defined regions of interest, like promoters or gene bodies (Pal et al. 2013). This is simple but will not capture changes outside of those regions. In contrast, de novo analyses do not depend on pre-specified regions, instead using empirically defined peaks or sliding windows for read counting. Peak-based methods are implemented in the DiffBind and DBChIP software packages (Ross-Innes et al. 2012; Liang and Keles 2012), which count reads into peak intervals that have been identified with software like MACS (Zhang et al. 2008). This requires some care to maintain statistical rigour as peaks are called with the same data used to test for DB.
 
-Alternatively, window-based approaches count reads into sliding windows across the genome. This is a more direct strategy that avoids problems with data re-use and can provide increased DB detection power (Lun and Smyth 2014). In csaw, we define a window as a fixed-width genomic interval and we count the number of fragments overlapping that window in each library. For single-end data, each fragment is imputed by directional extension of the read to the average fragment length (Figure 2.1), while for paired-end data, the fragment is defined from the interval spanned by the paired reads. This is repeated after sliding the window along the genome to a new position. A count is then obtained for each window in each library, thus quantifying protein binding intensity across the genome.
+Alternatively, window-based approaches count reads into sliding windows across the genome. This is a more direct strategy that avoids problems with data re-use and can provide increased DB detection power (Lun and Smyth 2014). In `csaw`, we define a window as a fixed-width genomic interval and we count the number of fragments overlapping that window in each library. **For single-end data, each fragment is imputed by directional extension of the read to the average fragment length (@fig-02-01), while for paired-end data, the fragment is defined from the interval spanned by the paired reads.** This is repeated after sliding the window along the genome to a new position. A count is then obtained for each window in each library, thus quantifying protein binding intensity across the genome.
 
-![Reads are extended to the average fragment length(`ext`) and the number of overlapping extended reads is counted for each window of size `width`](figures/02_01.png)
+![Reads are extended to the average fragment length(`ext`) and the number of overlapping extended reads is counted for each window of size `width`](figures/02_01.png){#fig-02-01 fig-width=100% fig-align=center}
 
-For single-end data, we estimate the average fragment length from a cross-correlation plot for use as `ext`. Alternatively, the length can be estimated from diagnostics during ChIP or library preparation, e.g., post-fragmentation gel electrophoresis images. Typical values range from 100 to 300 bp, depending on the efficiency of sonication and the use of size selection steps in library preparation.
+**For single-end data, we estimate the average fragment length from a cross-correlation plot for use as `ext`. Alternatively, the length can be estimated from diagnostics during ChIP or library preparation, e.g., post-fragmentation gel electrophoresis images.** Typical values range from 100 to 300 bp, depending on the efficiency of sonication and the use of size selection steps in library preparation.
 
-We interpret the window size (`width`) as the width of the binding site for the target protien, i.e., its physical "footprint" on the genome. This is user-specified and has important implications for the power and resolution for a DB analysis. For TF analysis with small windows, the choice of spacing interval will also be affectd by the choice of window size.
+We interpret the window size (`width`) as the width of the binding site for the target protein, i.e., its physical "footprint" on the genome. This is user-specified and has important implications for the power and resolution for a DB analysis. For TF analysis with small windows, the choice of spacing interval will also be affected by the choice of window size.
 
 # Obtaining window-level counts
 To demonstrate, we will use some publicly availble data from the `chipseqDBData` package. The dataset below focuses on changes in the binding profile of the NF-YA transcription factor between embryonic stem cells and terminal neurons (Tiwari et al. 2012).
@@ -33,9 +33,12 @@ bam.files <- head(tf.data$Path, -1)
 bam.files
 ```
 
-The `windowCounts()` function uses a sliding window approach to count fragments for a set of BAM files, supplied as either a character vector or as a list of `BamFile` objects (from the `Rsamtools` package). We assume that the BAM files are sorted by position and have been indexed - for character inputs, the index files are assumed to have the same prefixes as the BAM files. It’s worth pointing out that a common mistake is to replace or update the BAM file without updating the index, which will cause `csaw` some grief.
+The `windowCounts()` function uses a sliding window approach to count fragments for a set of BAM files, supplied as either a character vector or as a list of `BamFile` objects (from the `Rsamtools` package). We assume that the BAM files are sorted by position and have been indexed - for character inputs, the index files are assumed to have the same prefixes as the BAM files. **It’s worth pointing out that a common mistake is to replace or update the BAM file without updating the index, which will cause `csaw` some grief.**
 
 ```{r}
+#| message: false
+#| warning: false
+
 library(csaw)
 library(magrittr)
 
@@ -49,7 +52,7 @@ data <- windowCounts(bam.files = bam.files,
 data
 ```
 
-The function returns a `RangedSummarizedExperiment` object where the matrix of counts is stored as the first `assy`. Each row corresponds to a genomic window while each column corresponds to a library. The coordinates of each window are stored in the `rowRanges`. The total number of reads in each library (also referred to as the library size) is stored as `totals` in the `colData`.
+The function returns a `RangedSummarizedExperiment` object where the matrix of counts is stored as the first `assy`. Each row corresponds to a genomic window while each column corresponds to a library. The coordinates of each window are stored in the `rowRanges`. The total number of reads in each library (also referred to as the library size) is stored as `totals` in the `colData`. 
 
 ```{r}
 data %>% assay(1) %>% head
@@ -63,7 +66,6 @@ data %>% rowRanges()
 data %>% colData
 ```
 
-
 # Filtering out low-quality reads
 Read extraction from the BAM files is controlled with the `param` argument in `windowCounts()`. This takes a `readParam` object that specifies a number of extraction parameters. The idea is to define the `readParam` object once in the entire analysis pipeline, which is then reused for all relevant functions. This ensures that read loading is consistent throughout the analysis.
 
@@ -71,9 +73,9 @@ Read extraction from the BAM files is controlled with the `param` argument in `w
 param
 ```
 
-In the example above, reads are filtered out based on the minimum mapping score with the minq argument. Low mapping scores are indicative of incorrectly and/or non-uniquely aligned sequences. Removal of these reads is highly recommended as it will ensure that only the reliable alignments are supplied to `csaw`. The exact value of the threshold depends on the range of scores provided by the aligner. The `subread` aligner (Liao, Smyth, and Shi 2013) was used to align the reads in this dataset, so a value of 20 might be appropriate.
+In the example above, reads are filtered out based on the minimum mapping score with the `minq` argument. Low mapping scores are indicative of incorrectly and/or non-uniquely aligned sequences. Removal of these reads is highly recommended as it will ensure that only the reliable alignments are supplied to `csaw`. **The exact value of the threshold depends on the range of scores provided by the aligner.** The `subread` aligner (Liao, Smyth, and Shi 2013) was used to align the reads in this dataset, so a value of 20 might be appropriate.
 
-Reads mapping to the same genomic position can be marked as putative PCR duplicates using software like the MarkDuplicates program from the Picard suite. Marked reads in the BAM file can be ignored during counting by setting `dedup=TRUE` in the `readParam` object. This reduces the variability caused by inconsistent amplification between replicates, and avoid spurious duplicate-driven DB between groups. An example of counting with duplicate removal is show below, where fewer reads are used from each library relative to `data\$totals`.
+Reads mapping to the same genomic position can be marked as putative PCR duplicates using software like the `MarkDuplicates` program from the `Picard` suite. **Marked reads in the BAM file can be ignored during counting by setting `dedup=TRUE` in the `readParam` object**. This reduces the variability caused by inconsistent amplification between replicates, and avoid spurious duplicate-driven DB between groups. An example of counting with duplicate removal is show below, where fewer reads are used from each library relative to `data\$totals`.
 
 ```{r}
 dedup.param <- readParam(minq = 20, dedup = TRUE)
@@ -84,20 +86,21 @@ demo %>% colData
 ```
 
 # Estimating the fragment length
-Cross-correlation plots are generated directly from BAM files using the `correlateReads()` function. This provides a measure of the immunoprecipitation (IP) efficiency of a ChIP-seq experiment (Kharchenko, Tolstorukov, and Park 2008). Efficient IP should yield a smooth peak at a delay distance corresponding to the average fragment length. This reflects the strand-dependent bimodality of reads around narrow regions of enrichment, e.g., TF binding sites.
+Cross-correlation plots are generated directly from BAM files using the `correlateReads()` function. This provides a measure of the immunoprecipitation (IP) efficiency of a ChIP-seq experiment (Kharchenko, Tolstorukov, and Park 2008). **Efficient IP should yield a smooth peak at a delay distance corresponding to the average fragment length**. This reflects the strand-dependent bimodality of reads around narrow regions of enrichment, e.g., TF binding sites.
 
 ```{r}
 max.delay <- 500
 dedup.on <- initialize(.Object = param, dedup = TRUE)
 x <- correlateReads(bam.files = bam.files, 
                     max.dist = max.delay, 
-                    param = param)
+                    param = dedup.on)
 
 plot(0:max.delay, 
      x, 
      type = "l", 
      ylab = "CCF", 
      xlab = "Delay (bp)")
+abline(v = 110, lty = 2, col = "grey")
 ```
 
 The location of the peak is used as an estimate of the fragment length for read extension in `windowCounts()`. An estimate of ~110 bp is obtained from the plot above. We can do this more precisely with the `maximizeCcf()` function, which returns a similar value.
@@ -106,11 +109,13 @@ The location of the peak is used as an estimate of the fragment length for read 
 maximizeCcf(profile = x)
 ```
 
-A sharp spike may also be observed in the plot at a distance corresponding to the read length. This is thought to be an artifact, caused by the preference of aligners towards uniquely mapped reads. Duplicate removal is typically required here (i.e., set dedup=TRUE in readParam()) to reduce the size of this spike. Otherwise, the fragment length peak will not be visible as a separate entity. The size of the smooth peak can also be compared to the height of the spike to assess the signal-to-noise ratio of the data (Landt et al. 2012). Poor IP efficiency will result in a smaller or absent peak as bimodality is less pronounced.
+A sharp spike may also be observed in the plot at a distance corresponding to the read length. This is thought to be an artifact, caused by the preference of aligners towards uniquely mapped reads. Duplicate removal is typically required here (i.e., set `dedup=TRUE` in `readParam()`) to reduce the size of this spike. Otherwise, the fragment length peak will not be visible as a separate entity. **The size of the smooth peak can also be compared to the height of the spike to assess the signal-to-noise ratio of the data** (Landt et al. 2012). Poor IP efficiency will result in a smaller or absent peak as bimodality is less pronounced.
 
-Cross-correlation plots can also be used for fragment length estimation of narrow histone marks such as histone acetylation and H3K4 methylation. However, they are less effective for regions of diffuse enrichment where bimodality is not obvious (e.g., H3K27 trimethylation).
+**Cross-correlation plots can also be used for fragment length estimation of narrow histone marks such as histone acetylation and H3K4 methylation**. However, they are less effective for regions of diffuse enrichment where bimodality is not obvious (e.g., H3K27 trimethylation).
 
 ```{r}
+#| message: false
+#| warning: false
 n <- 1000
 
 # using more data sets from 'chipseqDBData'
@@ -130,8 +135,38 @@ h3k4me3 <- correlateReads(k4data$Path[1],
                           param = dedup.on)
 ```
 
+```{r}
+plot(0:n, 
+     h3k9ac, 
+     col = "blue", 
+     ylim = c(0, 0.1), 
+     xlim = c(0, 1000), 
+     xlab = "Delay (bp)", 
+     ylab = "CCF", 
+     pch = 16, 
+     type = "l", 
+     lwd = 2)
 
+lines(0:n, h3k27me3, col = "red", pch = 16, lwd = 2)
+lines(0:n, h3k4me3, col = "forestgreen", pch = 16, lwd = 2)
 
+legend("topright", 
+       col = c("blue", "red", "forestgreen"), 
+       legend = c("H3K9ac", "H3K27me3", "H3K4me3"), 
+       pch = 16)
+```
+
+In general, use of different extension lengths is unnecessary in well-controlled datasets. Difference in lengths between libraries are usually smaller than 50 bp. This is less than the inherent variability in fragment lengths within each library. The effect on the coverage profile of within-library variability in lengths will likely mask the effect of small between-library differences in the average lengths. Thus, an `ext` list should only be specified for datasets that exhibit large differences in the average fragment sizes between libraries.
+
+# Choosing a window size
+We interpret the window size as the width of the binding  
+ footprint’’ for the target protein, where the protein residues directly contact the DNA. TF analyses typically use a small window size, e.g., 10 - 20 bp, which maximizes spatial resolution for optimal detection of narrow regions of enrichment. For histone marks, widths of at least 150 bp are recommended (Humburg et al. 2011). This corresponds to the length of DNA wrapped up in each nucleosome, which is the smallest relevant unit for histone mark enrichment. We consider diffuse marks as chains of adjacent histones, for which the combined footprint may be very large (e.g., 1-10 kbp).
+ 
+The choice of window size controls the compromise between spatial resolution and count size. Larger windows will yield larger read counts that can provide more power for DB detection. However, spatial resolution is also lost for large windows whereby adjacent features can no longer be distinguished. Reads from a DB site may be counted alongside reads from a non-DB site (e.g., non-specific background) or even those from an adjacent site that is DB in the opposite direction. This will result in the loss of DB detection power.
+
+We might expect to be able to infer the optimal window size from the data, e.g., based on the width of the enriched regions. However, in practice, a clear-cut choice of distance/window size is rarely found in real datasets. For many non-TF targets, the widths of the enriched regions can be highly variable, suggesting that no single window size is optimal. Indeed, even if all enriched regions were of constant width, the width of the DB events occurring those regions may be variable. This is especially true of diffuse marks where the compromise between resolution and power is more arbitrary.
+
+We suggest performing an initial DB analysis with small windows to maintain spatial resolution. The widths of the final merged regions can provide an indication of the appropriate window size. Alternatively, the analysis can be repeated with a series of larger windows, and the results combined. This examines a spread of resolutions for more comprehensive detection of DB regions.
 
 
 
