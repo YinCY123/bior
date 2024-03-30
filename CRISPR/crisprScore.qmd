@@ -1,0 +1,147 @@
+---
+title: "On-targte and off-target scoring for CRISPR gRNAs"
+author: "YinCY"
+format: html
+editor: source
+---
+
+# Overview
+The `crisprScore` package provides R wrappers of several on-target and off-target scoring methods for CRISPR guide RNAs (gRNAs). The following nucleases are supported: SpCas9, AsCas12a, enAsCas12a, and RfxCas13d (CasRx). The available on-target cutting efficiency scoring methods are RuleSet1, RuleSet3, Azimuth, DeepHF, DeepSpCas9, DeepCpf1, enPAM+GB, CRISPRscan and CRISPRater. Both the CFD and MIT scoring methods are available for off-target specificity prediction. The package also provides a Lindel-derived score to predict the probability of a gRNA to produce indels inducing a frameshift for the Cas9 nuclease. Note that DeepHF, DeepCpf1 and enPAM+GB are not available on Windows machines.
+
+# Getting started
+```{r}
+#| message: false
+#| warning: false
+
+library(crisprScore)
+```
+
+The `scoringMethodsInfo` data.frame contains a succint summary of scoring methods available in `crisprScore`.
+
+```{r}
+data("scoringMethodsInfo")
+
+scoringMethodsInfo
+```
+
+Each scoring algorithm requires a different contextual nucleotide sequence. The `left` and `right` columns indicates how many nucleotides upstream and downstream of the first nucleotide of the PAM sequence are needed for input, and the `len` column indicates the total number of nucleotides needed for input. The `crisprDesign` package provides user-friendly functionalities to extract and score those sequences automatically via the `addOnTargetScores` function.
+
+# On-targeting efficiency scores
+Predicting on-target cutting efficiency is an extensive area of research, and we try to provide in `crisprScore` the latest state-of-the-art algorithms as they become available.
+
+## Cas9 methods
+Different algorithms require different input nucleotide sequences to predict cutting efficiency as illustrated in the figure below.
+
+![**Sequence inputs for Cas9 scoring methods.**](figures/Score_01png.png)
+
+### Rule Set 1
+The Rule Set 1 algorithm is one of the first on-target efficiency methods developed for the Cas9 nuclease (Doench et al. 2014). It generates a probability (therefore a score between 0 and 1) that a given sgRNA will cut at its intended target. 4 nucleotides upstream and 3 nucleotides downstream of the PAM sequence are needed for scoring.
+
+```{r}
+flank5 <- "ACCT"
+spacer <- "ATCGATGCTGATGCTAGATA"
+pam <- "AGG"
+flank3 <- "TTG"
+input <- paste0(flank5, spacer, pam, flank3)
+results <- getRuleSet1Scores(sequences = input)
+```
+
+The Azimuth score described below is an improvement over Rule Set 1 from the same lab.
+
+### Azimuth
+The Azimuth algorithm is an improved version of the popular Rule Set 2 score for the Cas9 nuclease (Doench et al. 2016). It generates a probability (therefore a score between 0 and 1) that a given sgRNA will cut at its intended target. 4 nucleotides upstream and 3 nucleotides downstream of the PAM sequence are needed for scoring:
+
+```{r}
+flank5 <- "ACCT"
+spacer <- "ATCGATGCTGATGCTAGATA"
+pam <- "AGG"
+flank3 <- "TTG"
+input <- paste0(flank5, spacer, pam, flank3)
+results <- getAzimuthScores(sequences = input)
+results
+```
+
+### Rule Set3
+The Rule Set 3 is an improvement over Rule Set 1 and Rule Set 2/Azimuth developed for the SpCas9 nuclease, taking into account the type of tracrRNAs (DeWeirdt et al. 2022). **Two types of tracrRNAs are currently offered**.
+
+```
+GTTTTAGAGCTA-----GAAA-----TAGCAAGTTAAAAT... --> Hsu2013 tracrRNA
+GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAAT... --> Chen2013 tracrRNA
+```
+
+Similar to Rule Set 1 and Azimuth, the input sequence requires 4 nucleotides upstream of the protospacer sequence, the protospacer sequence itself (20nt spacersequence and PAM sequence), and 3 nucleotides downstream of the PAM sequence. 
+
+```{r}
+flank5 <- "ACCT"
+spacer <- "ATCGATGCTGATGCTAGATA"
+pam <- "AGG"
+flank3 <- "TTG"
+input <- paste0(flank5, spacer, pam, flank3)
+results <- getRuleSet3Scores(sequences = input, tracrRNA = "Hsu2013")
+```
+
+A more involved version of the algorithm takes into account gene context of the target protospacer sequence (Rule Set 3 Target) and will be soon implemented in `crisprScore`.
+
+### DeepHF
+The `DeepHF` algorithm is an on-target cutting efficiency prediction algorithm for several variants of the Cas9 nuclease (Wang et al. 2019) using a recurrent neural network (RNN) framework. Similar to the Azimuth score, it generates a probability of cutting at the intended on-target. The algorithm only needs the protospacer and PAM sequences as inputs:
+
+```{r}
+spacer <- "ATCGATGCTGATGCTAGATA"
+pam <- "AGG"
+input <- paste0(spacer, pam)
+results <- getDeepHFScores(sequences = input)
+results
+```
+
+Users can specify for which Cas9 they wish to score sgRNAs by using the argument enzyme: “WT” for Wildtype Cas9 (WT-SpCas9), “HF” for high-fidelity Cas9 (SpCas9-HF), or “ESP” for enhancedCas9 (eSpCas9). For wildtype Cas9, users can also specify the promoter used for expressing sgRNAs using the argument promoter (“U6” by default). See `?getDeepHFScores` for more details.
+
+
+### DeepSpCas9
+The DeepSpCas9 algorithm is an on-target cutting efficiency prediction algorithm for the SpCas9 nuclease (Kim et al. 2019). Similar to the Azimuth score, it generates a probability of cutting at the intended on-target. 4 nucleotides upstream of the protospacer sequence, and 3 nucleotides downstream of the PAM sequence are needed in top of the protospacer sequence for scoring:
+
+```{r}
+flank5 <- "ACCT"
+spacer <- "ATCGATGCTGATGCTAGATA"
+pam <- "AGG"
+flank3 <- "TTG"
+input <- paste0(flank5, spacer, pam, flank3)
+results <- getDeepSpCas9Scores(sequences = input)
+```
+
+Users can specify for which Cas9 they wish to score sgRNAs by using the argument enzyme: “WT” for Wildtype Cas9 (WT-SpCas9), “HF” for high-fidelity Cas9 (SpCas9-HF), or “ESP” for enhancedCas9 (eSpCas9). For wildtype Cas9, users can also specify the promoter used for expressing sgRNAs using the argument promoter (“U6” by default). See ?getDeepHFScores for more details.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
