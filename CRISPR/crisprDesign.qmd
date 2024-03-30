@@ -7,7 +7,7 @@ format: html
 # Introduction
 `crisprDesign` is the core package of the `crisprVerse` ecosystem, and plays the role of a one-step shop for designing and annotating CRISPR guide RNA (gRNA) sequences. This includes the characterization of no-targets and off-targets using different aligners, no- and off-target scoring, gene context annotation, SNP annotation, sequence feature characterization, repeat annotation, and many more.  
 
-The currently support five types of CRISPR modalities (modes of perturbation): CRISPR knockout (CRISPRko), CRISPR activation (CRISPRa), CRISPR interference (CRISPRi), CRISPR base editing (CRISPRbe), and CRISPR knockdown (CRISPRkd).
+The currently support five types of CRISPR modalities (modes of perturbation): `CRISPR knockout` (CRISPRko), `CRISPR activation` (CRISPRa), `CRISPR interference` (CRISPRi), `CRISPR base editing` (CRISPRbe), and `CRISPR knockdown` (CRISPRkd).
 
 It utilizes the `crisprBase` packae to enable gRNA design for any CRISPR nuclease and base editor via the `XrisprNuclease` and `BaseEditor` classes, respectively. Nucleases that are commonly used in the field are provided, including DNA-targeted nucleases and RNA-targeted nucleases (CasRx(RfxCas13d)).
 
@@ -53,7 +53,7 @@ library(magrittr)
 ```
 
 ## Nuclease specification
-The `crisprBase` package provides functionalities to create objects that store information about CRISPR nucleases, and functions to interact with those objects (see the `crisprBase` vignette). It also provides commonly-used CRISPR nucleases. Let’s look at the `SpCas9` nuclease object:
+The `crisprBase` package provides functionalities to create objects that store information about CRISPR nucleates, and functions to interact with those objects (see the `crisprBase` vignette). It also provides commonly-used CRISPR nucleases. Let’s look at the `SpCas9` nuclease object:
 
 ```{r}
 data("SpCas9")
