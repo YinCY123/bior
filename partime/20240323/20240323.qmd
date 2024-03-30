@@ -57,9 +57,9 @@ library(stringr)
 
 
 msigdbr::msigdbr_collections()
-df <- msigdbr(species = "Homo sapiens", category = "C2", subcategory = "CP:KEGG")
+df <- msigdbr(species = "Homo sapiens", category = "C5", subcategory = "GO:MF")
 
-df$gs_name <- gsub("^KEGG_", "", df$gs_name)
+df$gs_name <- gsub("^GOMF_", "", df$gs_name)
 df$gs_name <- gsub("_", " ", df$gs_name)
 df$gs_name <- str_to_title(df$gs_name)
 df
@@ -102,7 +102,7 @@ expand <- 5
         
         rng <- df$log10pval %>% range
         
-        df %>% 
+        gomf  <- df %>% 
             ggplot(aes(log10pval, reorder(pathway, log10pval))) +
             geom_bar(aes(fill = color), stat = "identity") +
             geom_text(data = df[df$NES > 0, ], aes(x = -offset, y = y, label = pathway), hjust = 1, size = size) +
@@ -117,8 +117,23 @@ expand <- 5
             theme(axis.ticks.y = element_blank(), 
                   panel.grid.major.y = element_line(linetype = 2, linewidth = 0.3))
         
+gobp
+gocc
+gomf
 ggsave("/home/yincy/git/data/partime/20240323/KEGG.png", width = 8)
 ```
+
+```{r}
+library(patchwork)
+library(cowplot)
+
+plot_grid(gobp, gocc, gomf, 
+          align = 'hv', 
+          nrow = 3)
+
+ggsave("../../../data/partime/20240323/gobpccmf.tiff", height = 22, width = 7.5)
+```
+
 
 # 统计
 ```{r}

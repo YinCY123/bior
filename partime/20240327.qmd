@@ -1,0 +1,74 @@
+---
+title: "20240327"
+author: "YinCY"
+format: html
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+library(openxlsx)
+library(magrittr)
+library(tidygraph)
+library(ggraph)
+library(igraph)
+
+df <- read.xlsx("/mnt/c/Users/yincy/Downloads/3.30.xlsx")
+df <- df %>% tibble::column_to_rownames("phylum")
+# df %>% apply(2, range)
+```
+
+```{r}
+nodes <- df %>% colnames
+mtx <- expand.grid(nodes, nodes, stringsAsFactors = F)
+colnames(mtx) <- c("from", "to")
+mtx <- mtx %>% dplyr::filter(from != to)
+
+l <- replicate(length(rownames(df)), mtx, simplify = F)
+m <- dplyr::bind_rows(l)
+m$phylum <- rep(rownames(df), each = nrow(mtx))
+m %>% head
+```
+
+```{r}
+phylum <- df %>% rownames %>% unique
+
+for(i in seq_len(nrow(m))){
+    m[i, 4] <- mean(df[m[i, 3], m[i, 2]] + df[m[i, 3], m[i, 1]])
+}
+colnames(m)[4] <- "coverage"
+m %>% head
+m$coverage %>% range
+```
+
+```{r}
+g <- graph_from_data_frame(m) %>% as_tbl_graph()
+g <- g %>% 
+    activate(edges) %>% 
+    filter(coverage > 0)
+```
+
+```{r}
+g %>% 
+    activate(nodes) %>% 
+    mutate(degree = centrality_degree(normalized = F)) %>% 
+    ggraph(layout = "circle") +
+    geom_node_point(aes(size = .N()$degree), color = "grey50") +
+    geom_edge_link(aes(edge_color = .E()$phylum, edge_width = .E()$coverage), 
+                  edge_alpha = 0.5) +
+    geom_node_text(aes(label = .N()$name), size = 3, 
+                   hjust = "outward", vjust = "outward", color = "black") +
+    scale_edge_width(name = "coverage", range = c(0.01, 2), breaks = c(0.005, 0.02, 0.2, 1, 5, 12)) +
+    scale_edge_color_discrete(name = "phylum") +
+    scale_size(name = "degree", range = c(1, 10)) +
+    coord_cartesian(clip = "off") +
+    theme(plot.margin = unit(rep(5, 4), "cm"), 
+          plot.background = element_rect(fill = "white"), 
+          legend.position = "top", 
+          panel.background = element_rect(fill = "white"))
+
+ggsave("phylum_new.pdf", width = 15, height = 17)
+```
+
+
