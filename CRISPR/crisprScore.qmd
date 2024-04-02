@@ -114,36 +114,3 @@ Users can specify for which Cas9 they wish to score sgRNAs by using the argument
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
