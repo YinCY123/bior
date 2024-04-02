@@ -1,0 +1,55 @@
+---
+title: "BridgeDbR"
+author: "YinCY"
+format: html
+---
+
+# Introduction
+`BridgeDb` is a combination of an application programming interface (API), library, and set of data files for mapping identifiers for identical objects. Because `BridgeDb` is use by projects in bioinformatics, like `WikiPathways` and `PathVisio`, identifier mapping databases are available for gene products (including proteins), metabolites, and metabolic conversions. We are also working on a disease database mapping file.
+
+# Concepts
+## Organisms
+However, for genes the organism is important: the same gene has different identifiers in different organisms. `BridgeDb` identifies organisms by their latin name and with a two character code. Because identifier mapping files provided by `PathVisio` have names with these short codes, it can be useful to have a conversion method:
+
+```{r}
+#| message: false
+#| warning: false
+
+library(BridgeDbR)
+
+BridgeDbR::getSystemCode("ChEBI")
+# code <- get
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
