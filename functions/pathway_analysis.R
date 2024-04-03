@@ -17,7 +17,7 @@ compounds <- read.table("/mnt/c/Users/yincy/Downloads/compounds.csv", header = F
 df$Name <- str_to_lower(df$Name)
 kegg_ids <- df %>% 
     dplyr::filter(Name %in% compounds) %>% 
-    dplyr::select(KEGG, Name)
+    dplyr::select(ChEBI, Name)
 
 pathways <- keggLink("pathway", kegg_ids$KEGG) %>% 
     str_replace("^path:map", "")
@@ -32,3 +32,5 @@ pathview(cpd.data = values,
          low = list(gene = "blue", cpd = "blue"), 
          mid = list(gene = "white", cpd = "white"), 
          high = list(gene = "red", cpd = "red"))
+
+
