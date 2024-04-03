@@ -2,7 +2,7 @@
 title: "TCGAretriever"
 author: "YinCY"
 format: html
-editor: visual
+editor: source
 ---
 
 ```{r}
@@ -17,6 +17,7 @@ library(EnsDb.Hsapiens.v86)
 ```
 
 # call cancer types
+
 ```{r}
 all_cancer_types <- get_cancer_types()
 all_cancer_types
@@ -24,12 +25,14 @@ all_cancer_types[grep("colon", all_cancer_types$name, ignore.case = T, value = F
 ```
 
 # all cancer studies
+
 ```{r}
 all_studies <- get_cancer_studies()
 all_studies %>% dplyr::filter(grepl("colon", name, ignore.case = T))
 ```
 
 # gene identifiers
+
 ```{r}
 all_gene_identifiers <- data.frame(ensembl = keys(EnsDb.Hsapiens.v86), 
                                    symbol = mapIds(EnsDb.Hsapiens.v86, keys = keys(EnsDb.Hsapiens.v86), keytype = "GENEID", column = "SYMBOL"))
@@ -76,32 +79,3 @@ df <- dplyr::left_join(df, clinical_data_coad, by = "sampleId")
 df %>% colnames()
 df$SAMPLE_TYPE %>% table
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
