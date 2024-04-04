@@ -2,7 +2,7 @@
 title: "rWikiPathways"
 author: "YinCY"
 format: html
-editor: visual
+editor: source
 ---
 
 ```{r}
@@ -13,13 +13,14 @@ library(rWikiPathways)
 library(magrittr)
 ```
 
-
 # which species supported by wikipathways
+
 ```{r}
 listOrganisms()
 ```
 
 # how many pathways available for a species
+
 ```{r}
 hs.pathways <- listPathways(organism = "Homo sapiens")
 hs.pathways %>% str
@@ -36,51 +37,26 @@ hs.pathways$name %>% str
 ```
 
 # get pathway information
+
 ```{r}
 getPathwayInfo(pathway = "WP554")
 ```
-
 
 ```{r}
 getXrefList(pathway = "WP554", systemCode = "L")
 ```
 
 # retrive pathways
+
 ```{r}
 gmpl <- getPathway(pathway = "WP554")
 gmpl
 ```
 
 # Identifier System Names and Codes
+
 ```{r}
 BridgeDbR::getSystemCode(name = "Ensembl")
 
 BridgeDbR::getSystemCode(name = "HGNC")
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
