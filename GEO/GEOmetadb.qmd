@@ -1,0 +1,45 @@
+---
+title: "GEOmetadb"
+author: "YinCY"
+format: html
+editor: source
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+library(GEOmetadb)
+library(fs)
+```
+
+```{r}
+file <- "../../data/GEOmetadb.sqlite.gz"
+
+con <- dbConnect(drv = SQLite(), file)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
