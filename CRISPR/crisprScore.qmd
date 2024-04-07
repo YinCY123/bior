@@ -44,6 +44,7 @@ pam <- "AGG"
 flank3 <- "TTG"
 input <- paste0(flank5, spacer, pam, flank3)
 results <- getRuleSet1Scores(sequences = input)
+results
 ```
 
 The Azimuth score described below is an improvement over Rule Set 1 from the same lab.
@@ -78,6 +79,7 @@ pam <- "AGG"
 flank3 <- "TTG"
 input <- paste0(flank5, spacer, pam, flank3)
 results <- getRuleSet3Scores(sequences = input, tracrRNA = "Hsu2013")
+results
 ```
 
 A more involved version of the algorithm takes into account gene context of the target protospacer sequence (Rule Set 3 Target) and will be soon implemented in `crisprScore`.

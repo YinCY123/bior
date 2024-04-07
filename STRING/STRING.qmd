@@ -67,7 +67,10 @@ Finally, we extract the most siginificant 200 genes and we produce an image of t
 
 ```{r}
 hits <- example1_mapped$STRING_id[1:200]
-string_db$plot_network(hits)
+
+png("PPI.png", width = 1000, height = 1000)
+string_db$plot_network(hits, network_flavor = "nicely")
+dev.off()
 ```
 
 

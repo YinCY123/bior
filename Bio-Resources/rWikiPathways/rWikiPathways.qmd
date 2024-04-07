@@ -13,50 +13,161 @@ library(rWikiPathways)
 library(magrittr)
 ```
 
-# which species supported by wikipathways
+# Getting started
+Lets first get oriented with what WikiPathways contains. For exmaple, here's how you check to see which species are currently supported by WikiPathways.
 
 ```{r}
 listOrganisms()
 ```
 
-# how many pathways available for a species
-
 ```{r}
 hs.pathways <- listPathways(organism = "Homo sapiens")
-hs.pathways %>% str
+hs.pathways
 ```
 
+Other similar functions:  
+- `listPathwayIds`  
+- `listPathwayNames`
+- `listPathwayUrls`
+
+
+Find pathways of interest with `Xref`.  
+
 ```{r}
-hs.pathways[1]
+tnf.pathways <- findPathwaysByXref(identifier = "TNF", systemCode = "H")
+tnf.pathways
 ```
 
-```{r}
-hs.pathways$id %>% str
-hs.pathways$url %>% str
-hs.pathways$name %>% str
-```
+Other similar functions:
 
-# get pathway information
+- `findPathwayIdsByXref`
+- `findPathwayNamesByXref`
+- `findPathwayUrlsByXref`
 
-```{r}
-getPathwayInfo(pathway = "WP554")
-```
+# My favorite pathways
+get all the Xrefs contained in the pathway, mapped to a datasource of our choice.
 
 ```{r}
-getXrefList(pathway = "WP554", systemCode = "L")
+getXrefList(pathway = "WP554", systemCode = "H")
 ```
 
 # retrive pathways
+If we want the metabolites, drugs and other small molecules associated with the pathways, then we’d simply provide the system code of a chemical database, e.g., Ce (ChEBI) or lk (InCHIKey). 
 
 ```{r}
-gmpl <- getPathway(pathway = "WP554")
-gmpl
+getXrefList(pathway = "WP554", 
+            systemCode = "Ce")
 ```
 
 # Identifier System Names and Codes
 
 ```{r}
 BridgeDbR::getSystemCode(name = "Ensembl")
-
-BridgeDbR::getSystemCode(name = "HGNC")
 ```
+
+# Give me more
+Retrieving pathways as data files and as images. The native file format for WikiPathways is GPML, a custom XML specification. 
+
+```{r}
+gpml <- getPathway(pathway = "WP554")
+```
+
+`WikiPathways` also provides a monthly data release archived at http://data.wikipathways.org. The archive includes GPML, GMT and SVG collections by organism and timestamped. There’s an R function for grabbing files from the archive.
+
+This will simply open the archive in your default browser so you can look around (in case you don’t know what you are looking for). By default, it opens to the latest collection of GPML files. However, if you provide an organism, then it will download that file to your current working directory or specified destpath.
+
+```{r}
+downloadPathwayArchive(organism = "Mus musculus", format = "gmt")
+```
+
+
+# BridgeDbR and rWikiPathways
+## Identifier System Names and Codes
+```{r}
+BridgeDbR::getSystemCode("Ensembl")
+BridgeDbR::getSystemCode("Entrez Gene")
+```
+
+
+## Use BridgeDbR with rWikiPathways
+```{r}
+tnf.pathwyas <- findPathwayIdsByXref(identifier = "TNF", 
+                                     systemCode = BridgeDbR::getSystemCode("HGNC"))
+
+getXrefList(pathway = "WP554", 
+            systemCode = BridgeDbR::getSystemCode("Ensembl"))
+```
+
+
+# rWikiPathways with RCy3
+```{r}
+gbm.pathways <- findPathwaysByText(query = "glioblastoma")
+human.gbm.pathways <- gbm.pathways %>% 
+    dplyr::filter(species == "Homo sapiens")
+```
+
+# rWikiPathways and BridgeDbR
+rWikiPathways leverages the WikiPathways API to communicate between R and WikiPathways, allowing any pathway to be queried, interrogated and downloaded in both data and image formats. Queries are typically performed based on “Xrefs”, standardized identifiers for genes, proteins and metabolites. Once you can identified a pathway, you can use the WPID (WikiPathways identifier) to make additional queries.
+
+BridgeDbR leverages the BridgeDb API to provide a number of functions related to ID mapping and identifiers in general for gene, proteins and metabolites.
+
+```{r}
+orgNames <- listOrganisms()
+orgNames %>% str
+```
+
+```{r}
+orgCodes <- BridgeDbR::getOrganismCode(name = orgNames[1])
+```
+
+```{r}
+tnf.pathways <- findPathwayIdsByXref(identifier = "TNF", systemCode = getSystemCode(name = "HGNC"))
+tnf.pathways
+```
+
+```{r}
+getXrefList(pathway = tnf.pathways[1], systemCode = getSystemCode(name = "HGNC"))
+```
+
+```{r}
+getXrefList(pathway = tnf.pathways[1], getSystemCode(name = "ChEBI"))
+```
+
+```{r}
+BridgeDbR::getFullName(syscode = "Ce")
+```
+
+
+# rWikiPathways with wikiprofiler
+```{r}
+library(wikiprofiler)
+wp <- read.wp("/mnt/c/Users/yincy/Downloads/wikipathways-20240310-gpml-Homo_sapiens/Hs_10q11.21q11.23_copy_number_variation_syndrome_WP5352_20240222.gpml")
+
+wpplot(wp)
+```
+
+```{r}
+p <- wpplot(ID = "WP554")
+
+p_fill <- wp_bgfill(p = p, 
+          value = setNames(rnorm(length(wp554_genes)), c("Ang 1-5", "Ang 1-7", "Ang 1-9", "Angiotensin II")), 
+          high = "red", 
+          low = "blue")
+
+p_fill
+ggsave("/mnt/c/Users/yincy/Downloads/WP5352.png", width = 10, height = 10)
+```
+
+```{r}
+datasource <- readr::read_tsv("datasources.tsv", col_names = F)
+datasource %>% dplyr::filter(X6 == "metabolite") 
+```
+
+```{r}
+listOrganisms()
+```
+
+
+
+
+

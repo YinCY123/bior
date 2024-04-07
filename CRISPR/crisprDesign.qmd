@@ -9,14 +9,13 @@ format: html
 
 The currently support five types of CRISPR modalities (modes of perturbation): `CRISPR knockout` (CRISPRko), `CRISPR activation` (CRISPRa), `CRISPR interference` (CRISPRi), `CRISPR base editing` (CRISPRbe), and `CRISPR knockdown` (CRISPRkd).
 
-It utilizes the `crisprBase` packae to enable gRNA design for any CRISPR nuclease and base editor via the `XrisprNuclease` and `BaseEditor` classes, respectively. Nucleases that are commonly used in the field are provided, including DNA-targeted nucleases and RNA-targeted nucleases (CasRx(RfxCas13d)).
+It utilizes the `crisprBase` packae to enable gRNA design for any CRISPR nuclease and base editor via the `CrisprNuclease` and `BaseEditor` classes, respectively. Nucleases that are commonly used in the field are provided, including DNA-targeted nucleases and RNA-targeted nucleases (CasRx(RfxCas13d)).
 
 `crisprDesign` is fully developed to work with the genome of any organism, and can also be used to design gRNAs targeting custom DNA sequences.
 
 Finally, more specialized gRNA design functionalities are also available, including design for optical pooled screening (OPS), paired gRNA design, and gRNA filtering and ranking functionalities.
 
-`crisprBase` might want to look at the following CRISPR-related package dependancies.
-
+`crisprBase` might want to look at the following CRISPR-related package dependancies.  
 - `crisprBase`: core CRISPR functions and S4 object.
 - `crisprBowtie`: aligns gRNA spacers to genomes using the ungapped aligner `bowtie`.
 - `crisprBwa`: aligns gRNA spacers to genomes using the ungapped aligner `BWA`.
@@ -37,10 +36,10 @@ While a gRNA spacer sequence may not always uniquely target the host genome (i.e
 - `strand`: forward (+) or reverse(-)
 - `pam_site`: genomic coordinate of the first nucleotide of the nuclease-specific PAM sequence (e.g. for SpCas9, the 'N' in the NGG PAM sequence, for AsCas12a, the first 'T' of the TTTV PAM sequence).
 
-For CRISPRko, we use an additional genomic coordinate, called cut_site, to represent where the double-stranded break (DSB) occurs. For SpCas9, the cut site (blunt-ended dsDNA break) is located 4nt upstream of the pam_site (PAM-proximal editing). For AsCas12a, the 5nt 5’ overhang dsDNA break will cause a cut 19nt after the PAM sequence on the targeted strand, and 23nt after the PAM sequence on the opposite strand (PAM-distal editing).
+For CRISPRko, we use an additional genomic coordinate, called `cut_site`, to represent where the double-stranded break (DSB) occurs. For SpCas9, the cut site (blunt-ended dsDNA break) is located 4nt upstream of the `pam_site` (PAM-proximal editing). For AsCas12a, the 5nt 5’ overhang dsDNA break will cause a cut 19nt after the PAM sequence on the targeted strand, and 23nt after the PAM sequence on the opposite strand (PAM-distal editing).
 
 # CRISPRko design
-We will illustrate the main functionalities of crisprDesign by performing a common task: designing gRNAs to knock out a coding gene. In our example, we will design gRNAs for the wildtype SpCas9 nuclease, with spacers having a length of 20nt.
+We will illustrate the main functionalities of `crisprDesign` by performing a common task: designing gRNAs to knock out a coding gene. In our example, we will design gRNAs for the wildtype `SpCas9` nuclease, with spacers having a length of 20nt.
 
 ```{r}
 #| message: false
@@ -53,7 +52,7 @@ library(magrittr)
 ```
 
 ## Nuclease specification
-The `crisprBase` package provides functionalities to create objects that store information about CRISPR nucleates, and functions to interact with those objects (see the `crisprBase` vignette). It also provides commonly-used CRISPR nucleases. Let’s look at the `SpCas9` nuclease object:
+The `crisprBase` package provides functionalities to create objects that store information about CRISPR nucleases, and functions to interact with those objects (see the `crisprBase` vignette). It also provides commonly-used CRISPR nucleases. Let’s look at the `SpCas9` nuclease object:
 
 ```{r}
 data("SpCas9")
@@ -88,6 +87,7 @@ gr <- queryTxObject(txObject = grListExample,
                     featureType = "cds", 
                     queryColumn = "gene_symbol", 
                     queryValue = "IQSEC3")
+gr
 ```
 
 We will only consider the first exon to speed up design:
@@ -267,17 +267,18 @@ guideSet
 ```
 
 ## Restriction enzymes
-Restriction enzymes are usually involved in the gRNA library synthesis process. Removing gRNAs that contain specific restriction sites is often necessary. We provide the function addRestrictionEnzymes to indicate whether or not gRNAs contain restriction sites for a user-defined set of enzymes:
+Restriction enzymes are usually involved in the gRNA library synthesis process. Removing gRNAs that contain specific restriction sites is often necessary. We provide the function `addRestrictionEnzymes` to indicate whether or not gRNAs contain restriction sites for a user-defined set of enzymes:
 
 ```{r}
 guideSet <- addRestrictionEnzymes(object = guideSet)
+guideSet
 ```
 
 When no enzymes are specified, the function adds annotation for the following default enzymes: EcoRI, KpnI, BsmBI, BsaI, BbsI, PacI, ISceI and MluI. The function also has two additional arguments, `flanking5` and `flanking3`, to specify nucleotide sequences flanking the spacer sequence (5’ and 3’, respectively) in the lentiviral cassette that will be used for gRNA delivery. The function will effectively search for restriction sites in the full sequence `[flanking5][spacer][flanking3]`.
 
 ```{r}
 # mcols(guideSet)[, "enzymeAnnotation"]
-enzymeAnnotation(guideSet)
+guideSet %>% enzymeAnnotation()
 ```
 
 ## Gene Annotation
@@ -330,6 +331,44 @@ guideSet <- addSNPAnnotation(object = guideSet,
                              vcf = vcf)
 guideSet
 ```
+
+## Filtering and ranking gRNAs
+Once gRNAs are fully annotated, it is easy to filter out any unwanted gRNAs since GuideSet objects can be subsetted like regular vectors in R.
+
+As an example, suppose that we only want to keep gRNAs that have percent GC between 20% and 80% and that do not contain a polyT stretch. This can be achieved using the following lines:
+
+```{r}
+guideSet <- guideSet[guideSet$percentGC >= 20]
+guideSet <- guideSet[guideSet$percentGC <= 80]
+
+guideSet <- guideSet[!guideSet$polyT]
+```
+
+Similarly, it is easy to rank gRNAs based on a set of criteria using the regular order function.
+
+For instance, let’s sort gRNAs by the CRISPRater on-target score:
+
+```{r}
+o <- order(-guideSet$score_crisprater)
+guideSet <- guideSet[o]
+guideSet
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
