@@ -1,0 +1,43 @@
+---
+title: "gggenes"
+author: "YinCY"
+format: html
+editor: source
+---
+
+# Drawing gene arrows with `geom_gene_arrow()`
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
