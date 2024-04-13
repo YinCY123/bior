@@ -19,7 +19,7 @@ library(org.Mm.eg.db)
 ```
 
 ```{r}
-kidney_macrophage <- readxl::read_xlsx("../../sslab/kidney/data/20200530_DE_FDR_2.xlsx")
+kidney_macrophage <- readxl::read_xlsx("../../previous_codes/kidney/data/20200530_DE_FDR_2.xlsx")
 
 # remove duplicated genes
 kidney_macrophage <- kidney_macrophage %>% 
