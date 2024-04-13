@@ -1,0 +1,88 @@
+---
+title: "Inference and analysis of cell-cell communication using CellChat"
+author: "YinCY"
+format: html
+editor: source
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+library(CellChat)
+library(patchwork)
+library(magrittr)
+```
+
+# Introduction
+This vignette outlines the steps of inference, analysis and visualization of cell-cell communication network for a single dataset using CellChat. We showcase CellChat’s diverse functionalities by applying it to a scRNA-seq data on cells from lesional (LS, diseased) human skin from patients.
+
+CellChat requires gene expression data of cells as the user input and models the probability of cell-cell communication by integrating gene expression with prior knowledge of the interactions between signaling ligands, receptors and their cofactors.
+
+Upon infering the intercellular communication network, CellChat provides functionality for further data exploration, analysis, and visualization.
+
+# data input, processing and initilization of CellChat object
+CellChat requires two user inputs: one is the gene expression data of cells, and the other is the user assigned cell labels.
+
+## Prepare required input data for CellChat analysis
+```{r}
+load("../../data/CellChat/data_humanSkin_CellChat.rda")
+data.input <- data_humanSkin$data
+meta <- data_humanSkin$meta
+
+cell_use <- rownames(meta)[meta$condition == "LS"]
+
+data.input <- data.input[, cell_use]
+meta <- meta[cell_use, ]
+colnames(meta)[1] <- "samples"
+```
+
+```{r}
+meta$labels %>% unique
+```
+
+# Create a CellChat object
+```{r}
+cellchat <- createCellChat(object = data.input,
+                           meta = meta, 
+                           group.by = "labels")
+cellchat
+```
+
+
+# Set the ligand-receptor interaction database
+```{r}
+CellChatDB <- CellChatDB.human
+CellChatDB.use <- subsetDB(CellChatDB.human)
+
+showDatabaseCategory(CellChatDB.use)
+```
+
+
+# Preprocessing the expression data for cell-cell communication analysis
+```{r}
+cellchat <- subsetData(cellchat)
+cellchat <- identifyOverExpressedGenes(cellchat)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
