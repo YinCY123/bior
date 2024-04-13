@@ -3,6 +3,7 @@ library(KEGGREST)
 library(pathview)
 library(magrittr)
 library(stringr)
+library(fs)
 
 
 ah <- AnnotationHub()
