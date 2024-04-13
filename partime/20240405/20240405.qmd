@@ -1,0 +1,89 @@
+---
+title: "20240405"
+author: "YinCY"
+format: html
+---
+
+
+```{r}
+#| message: false
+#| warning: false
+
+library(pheatmap)
+library(openxlsx)
+library(stringr)
+library(stringr.plus)
+library(RColorBrewer)
+library(magrittr)
+```
+
+```{r}
+data <- read.xlsx("工作簿1.xlsx")
+data
+```
+
+
+```{r}
+data <- data %>% tibble::column_to_rownames("phylum") 
+data
+```
+
+```{r}
+group <- str_extract(colnames(data), "^[:alpha:]+")
+col_df <- data.frame(row.names = colnames(data), 
+                     group = group)
+col_df$group %>% unique
+
+row_df <- data.frame(row.names = rownames(data), 
+                     phylum = c("others", str_extract_between(rownames(data)[-1], pattern1 = "__", pattern2 = ";")))
+row_df
+```
+
+```{r}
+cols <- colorRampPalette(colors = c("green", "red"))
+pdf("heatmap.pdf", width = 15, height = 9)
+pheatmap(data, 
+         cluster_rows = T,
+         cluster_cols = F,
+         annotation_row = row_df, 
+         annotation_col = col_df, 
+         clustering_method = "ward.D2", 
+         angle_col = 315, 
+         legend_breaks = seq(0, 0.4, 0.001),
+         # legend_labels = seq(-0.4, 0.4, 0.01), 
+         legend = T, 
+         color = cols(10), 
+         border_color = "blue", 
+         treeheight_row = 100)
+dev.off()
+```
+
+```{r}
+data %>% range
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
