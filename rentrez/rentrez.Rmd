@@ -52,6 +52,9 @@ Very often, the first thing you'll want to do with `rentrez` is search a given N
 
 ```{r}
 r_search <- entrez_search(db = "pubmed", term = "R language")
+
+aortic <- entrez_search(db = "gds", term = "aortic dissection", retmax = 1000)
+aortic$ids
 ```
 
 The object returned by a search acts like a list, and you can get a summary of its contents by printing it.
