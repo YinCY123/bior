@@ -2,7 +2,6 @@
 title: "20240324"
 author: "YinCY"
 format: html
-<<<<<<< HEAD
 editor: source
 ---
 
@@ -14,6 +13,7 @@ library(magrittr)
 library(KEGGREST)
 library(pathview)
 library(stringr)
+library()
 ```
 
 ```{r}
@@ -89,17 +89,41 @@ path_ids %>% str
 
 ```{r}
 kegg_ids <- compound_ids$KEGG %>% na.omit %>% as.character
+kegg_ids <- setNames(rep(1, length(kegg_ids)), kegg_ids)
 kegg_ids %>% str
+
+genes <- openxlsx::read.xlsx("/mnt/c/Users/yincy/Downloads/11.xlsx", colNames = F) %>% 
+    dplyr::pull(X1) %>% unique %>% str_trim(side = "both")
+genes <- setNames(rep(1, length(genes)), genes)
+genes %>% str
+
 for(pathway in path_ids){
     try(pathview(cpd.data = kegg_ids, 
+                 gene.data = genes, 
+                 gene.idtype = "ENZYME",
              pathway.id = pathway, 
              species = "hsa", 
              kegg.native = T, 
-             plot.col.key = F), 
+             plot.col.key = F, 
+             map.symbol = TRUE,
+             same.layer = FALSE, 
+             limit = list(gene = c(-1, 1), cpd = c(-1, 1)), 
+             low = list(gene = "blue", cpd = "blue"), 
+             mid = list(gene = "white", cpd = "white"), 
+             high = list(gene = "red", cpd = "red")), 
         silent = TRUE
     )
 }
 ```
 
 
+```{r}
+enzymes <- keggList(database = "enzyme")
+enzymes <- names(enzymes)
+enzymes %>% str
+```
+
+```{r}
+keggConv("gene", source = paste("ec:", enzymes, sep = ""))
+```
 

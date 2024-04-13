@@ -695,8 +695,8 @@
         <graphics name="TALDO1, TAL, TAL-H, TALDOR, TALH" fgcolor="#66CC66" bgcolor="#FFFFFF"
              type="line" coords="721,315,787,386,787,386,788,387,789,389,790,391,791,393,791,395,792,397,793,399,793,401,793,402,793,402,793,409,793,409,793,411,793,413,792,414,791,416,791,418,790,420,789,422,788,424,787,425,787,425,718,507"/>
     </entry>
-    <entry id="75" name="hsa:2023 hsa:2026 hsa:2027" type="gene" reaction="rn:R00658"
-        link="https://www.kegg.jp/dbget-bin/www_bget?hsa:2023+hsa:2026+hsa:2027">
+    <entry id="75" name="hsa:2023 hsa:2026 hsa:2027 hsa:387712" type="gene" reaction="rn:R00658"
+        link="https://www.kegg.jp/dbget-bin/www_bget?hsa:2023+hsa:2026+hsa:2027+hsa:387712">
         <graphics name="ENO1, ENO1-IT1, ENO1L1, HEL-S-17, MPB1, NNE, PPH..." fgcolor="#66CC66" bgcolor="#FFFFFF"
              type="line" coords="711,755,711,835"/>
     </entry>

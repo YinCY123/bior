@@ -75,8 +75,8 @@
         <graphics name="PGAM4, PGAM-B, PGAM1, PGAM3, dJ1000K24.1..." fgcolor="#66CC66" bgcolor="#FFFFFF"
              type="line" coords="347,374,347,419"/>
     </entry>
-    <entry id="16" name="hsa:2023 hsa:2026 hsa:2027" type="gene" reaction="rn:R00658"
-        link="https://www.kegg.jp/dbget-bin/www_bget?hsa:2023+hsa:2026+hsa:2027">
+    <entry id="16" name="hsa:2023 hsa:2026 hsa:2027 hsa:387712" type="gene" reaction="rn:R00658"
+        link="https://www.kegg.jp/dbget-bin/www_bget?hsa:2023+hsa:2026+hsa:2027+hsa:387712">
         <graphics name="ENO1, ENO1-IT1, ENO1L1, HEL-S-17, MPB1, NNE, PPH..." fgcolor="#66CC66" bgcolor="#FFFFFF"
              type="line" coords="347,432,347,477"/>
     </entry>

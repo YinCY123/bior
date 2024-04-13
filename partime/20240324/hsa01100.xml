@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <!DOCTYPE pathway SYSTEM "https://www.kegg.jp/kegg/xml/KGML_v0.7.2_.dtd">
-<!-- Creation date: Mar 18, 2024 14:40:12 +0900 (GMT+9) -->
+<!-- Creation date: Mar 26, 2024 14:38:55 +0900 (GMT+9) -->
 <pathway name="path:hsa01100" org="hsa" number="01100"
          title="Metabolic pathways"
          image="https://www.kegg.jp/kegg/pathway/hsa/hsa01100.png"
@@ -10463,7 +10463,7 @@
     <entry id="494" name="cpd:C21357" type="compound"
         link="https://www.kegg.jp/dbget-bin/www_bget?C21357">
         <graphics name="C21357" fgcolor="#E0E0E0" bgcolor="#E0E0E0"
-             type="circle" x="763" y="1464" width="14" height="14"/>
+             type="circle" x="763" y="1463" width="14" height="14"/>
     </entry>
     <entry id="480" name="cpd:C02657" type="compound"
         link="https://www.kegg.jp/dbget-bin/www_bget?C02657">
@@ -25222,8 +25222,8 @@
         <graphics name="GATM, AGAT, AT, CCDS3, FRTS, FRTS1, RFS" fgcolor="#FFCC66" bgcolor="#FFFFFF"
              type="line" coords="3957,1919,4177,1919"/>
     </entry>
-    <entry id="2131" name="hsa:1152 hsa:1159 hsa:1160 hsa:548596" type="gene" reaction="rn:R01881"
-        link="https://www.kegg.jp/dbget-bin/www_bget?hsa:1152+hsa:1159+hsa:1160+hsa:548596">
+    <entry id="2131" name="hsa:1152 hsa:1158 hsa:1159 hsa:1160 hsa:548596" type="gene" reaction="rn:R01881"
+        link="https://www.kegg.jp/dbget-bin/www_bget?hsa:1152+hsa:1158+hsa:1159+hsa:1160+hsa:548596">
         <graphics name="CKB, B-CK, BCK, CKBB, CPK-B, HEL-211, HEL-S-29..." fgcolor="#FFCC66" bgcolor="#FFFFFF"
              type="line" coords="4238,1918,4238,1978"/>
     </entry>
@@ -27236,8 +27236,8 @@
         <graphics name="ACADS, ACAD3, SCAD..." fgcolor="#B3B3E6" bgcolor="#FFFFFF"
              type="line" coords="2653,1928,2756,1928"/>
     </entry>
-    <entry id="2989" name="hsa:2023 hsa:2026 hsa:2027" type="gene" reaction="rn:R00658"
-        link="https://www.kegg.jp/dbget-bin/www_bget?hsa:2023+hsa:2026+hsa:2027">
+    <entry id="2989" name="hsa:2023 hsa:2026 hsa:2027 hsa:387712" type="gene" reaction="rn:R00658"
+        link="https://www.kegg.jp/dbget-bin/www_bget?hsa:2023+hsa:2026+hsa:2027+hsa:387712">
         <graphics name="ENO1, ENO1-IT1, ENO1L1, HEL-S-17, MPB1, NNE, PPH..." fgcolor="#6C63F6" bgcolor="#FFFFFF"
              type="line" coords="2399,1513,2399,1615"/>
     </entry>
