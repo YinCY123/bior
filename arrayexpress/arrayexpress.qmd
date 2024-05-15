@@ -1,0 +1,56 @@
+---
+title: "arrayexpress"
+author: "YinCY"
+format: html
+---
+
+
+# query arrayexpress 
+```{r}
+#| message: false
+#| warning: false
+
+library(magrittr)
+library(ArrayExpress)
+```
+
+If you want to use several words, they need to be separated by a '+' without any space.
+
+```{r}
+?queryAE
+sets <- queryAE(keywords = "uveitis+single+cell", 
+                species = "homo+sapiens")
+
+sets
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
