@@ -1,0 +1,67 @@
+---
+title: "forge a BSgenome package"
+author: "YinCY"
+format: html
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+library(magrittr)
+library(BSgenomeForge)
+library(Biostrings)
+```
+
+
+# Introduction
+BSgenome data package are one of the many types of annotation packages available in Bioconductor. They contain the genomic sequences, which comprise chromosome sequences and other DNA sequences of a particular genome assembly for a given organism. For example BSgenome.Hsapiens.UCSC.hg19 is BSgenome data package that contains the genomic sequences of hg19 genome from UCSC. Users can easily and efficiently access the sequences, or portions of the sequences, stored in these packages, via a common API implemented in the BSgenome software package.
+
+Bioconductor currently provides more than 100 BSgenome data packages, for more than 30 organisms. Most of them contain the genomic sequences of UCSC genome or NCBI assemblies. The package, typically in conjunction with tools available in the BSgenomeForge and Biostrings software packages. New BSgenome data packages get added on regular basis, based on user demand.
+
+The current process of forging a BSgenome data package requires one to download the sequence data files, either as a single twoBit file (e.g. musFur1.2bit) or in a collection of compressed FASTA files. The user then needs to prepare the BSgenome data package seed file, and then call `forgeBSgenomeDataPkg` function on the seed file to forge the package. This is quite a convoluted task that can be an inconvenience for the average user.
+
+The BSgenomeForge package simplifies the whole process, by allowing the user to use one function to create a BSgenome data package. It is comprised of two main functions: forgeBSgenomeDataPkgfromNCBI and forgeBSgenomeDataPkgfromUCSC which allow the user to forge BSgenome data packages with sequence data files sourced from NCBI or UCSC respectively.
+
+# Basic Usage
+## Using `forgeBSgenomeDataPkgFromNCBI()`
+```{r}
+forgeBSgenomeDataPkgFromNCBI(
+    assembly_accession = "GCA_000005845.2", 
+    pkg_maintainer = "YinCY <yinchunyou2012@163.com>",
+    organism = "	Escherichia coli", 
+    circ_seqs = character(0)
+)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
