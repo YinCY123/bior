@@ -1,0 +1,263 @@
+---
+title: "RCircos"
+author: "YinCY"
+format: html
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+library(magrittr)
+library(RCircos)
+```
+
+# Introduction
+The `RCircos` package provides a set of graphic functions which implement basic Circos 2D track plot for visualizing similarities and differences of genome structure and positional relationships between genomic intervals. The package is implemented with R graphics package that comes with R base installation and aimed to reduce the complexity of usage and increase the flexibility in integrating into other R pipelines of genomic data processing.
+
+Currently, following graphic functions are provided:
+
+- Chromosome ideogram plots for human, mouse, and rat
+
+- Data plots include:
+    + heatmap
+    + histogram
+    + scaterplot
+    + tiles
+    
+- Plot items for further decoration include:
+    + connectors
+    + links (lines and ribbons)
+    + text (gene) labels
+    
+    
+# Input Data Format
+`RCircos` takes the input data in the form of a data frame that could be an object
+returned from `read.table()` or generated with other pipelines in the current R
+session. The first three columns of the data frame, except for input to the link
+plot, must be genomic position information in the order of chromosome names,
+chromosome start, and chromosome end positions.
+
+```{r}
+#| message: false
+#| warning: false
+
+data("RCircos.Histogram.Data")
+RCircos.Histogram.Data %>% head
+```
+
+For gene labels and heatmaps plots, the gene/probe names must be provided in the fourth column. For other plots, this column could be optional.
+
+```{r}
+data("RCircos.Heatmap.Data")
+RCircos.Heatmap.Data %>% head
+```
+
+Different from other plot data, the input data for link line plot has only paired genomic position information for each row in the order of chromosome name A, chromStart A, chromEnd A, chromsome B, chromStart B, and chromEnd B.
+
+```{r}
+data("RCircos.Link.Data")
+RCircos.Link.Data %>% head
+```
+
+Note: `RCircos` will convert the input data to `RCircos` plot data but it does not provide functionality for general data processing. If the data frame does not have genomic position information, you have to add the information to the data frame before passing it to RCircos functions.
+
+# Plot Track Layout
+RCircos follows the same algorithms of Circos plot and arranges data plots in tracks. A track could be placed either inside or outside of chromosome ideogram and the detailed position for a track could be easily manipulated by changing of the track width and track numbers.
+
+# Getting Started: Initialize RCircos core components
+## Initialize RCircos core components
+The first step of making `RCircos` plot is to initialize `RCircos` core components. To setup `RCircos` core components, user needs load the chromosome ideogram data into current R session. The `RCircos` package have three build-in datasets for human, mouse, and rat chromosome ideograms which can be loaded with `data()` command. Ideogram data in text files with same format can also be loaded with `read.table()` function in R.
+
+```{r}
+data("UCSC.HG19.Human.CytoBandIdeogram")
+UCSC.HG19.Human.CytoBandIdeogram %>% head
+```
+
+```{r}
+data("UCSC.HG38.Human.CytoBandIdeogram")
+UCSC.HG38.Human.CytoBandIdeogram %>% head
+```
+
+After the chromosome ideogram data is loaded, `RCircos` core components can be initialized with function of `RCircos.Set.Core.Components()`.
+
+This function needs four arguments:
+
+- `cytoinfo` the chromosome ideogram data loaded.  
+- `chr.exclude` chromosomes should be excluded from ideogram, e.g., chr.exclude = c("chrX", "chrY");. If it is set to NULL, no chromsome will be excluded.
+
+- `track.inside` how many tracks will be plotted inside chromosome ideogram.
+
+- `track.outside` how many data tracks will be ploted outside chromosome ideogram.
+
+Following code initialize `RCircos` core components with all human chromosome ideogram and 10 data tracks space inside of chromosome ideogram.
+
+```{r}
+chr.exclude <- NULL
+cyto.info <- UCSC.HG19.Human.CytoBandIdeogram
+tracks.inside <- 10
+tracks.outside <- 0
+
+RCircos.Set.Core.Components(cyto.info = cyto.info, 
+                            chr.exclude = chr.exclude, 
+                            tracks.inside = tracks.inside, 
+                            tracks.outside = tracks.outside)
+```
+
+`RCircos` use three core components to perform data transformation and data plot.
+
+*RCircos cytoband data*. RCircos cytoband data is derived from the input chromosome ideogram data. Except of the chromosome name, start and end position, band name and stain intensity for each band, chrmosome highlight colors, band length in base pairs and chromosome units as well as the relative location on the circular layout are also included. These data are used to calculate the plot location of each genomic data.
+
+*RCircos plot positions*. RCircos plot positions are x and y cordinates for circular line of radius 1.0 and the total number  of points for the circular line are decided by the total number of chromosome units. One chromosome units is a plot point which covers a defined number of base pairs and total units for chromosome ideogram include units of each band plus chromosome padding area, both of them are defined in the list of plot parameters.
+
+*RCircos plot parameters*. RCircos plot parameters are only components open to users. With the get and reset methods, users can modify the parameters for updating other two core components. 
+
+The core components are stored in `RCircos` session and **each component is supplied with one Get method for advanced usage**. In addition, simply call the function `RCircos.List.Parameters()` will list all current plot parameters.
+
+```{r}
+rcircos.params <- RCircos.Get.Plot.Parameters()
+rcircos.cyto <- RCircos.Get.Plot.Ideogram()
+rcircos.position <- RCircos.Get.Plot.Positions()
+```
+
+```{r}
+RCircos.List.Plot.Parameters()
+```
+
+## Modifying RCircos core components
+Among the three `RCircos` core components, `RCircos` cytoband data and `RCircos` plot positions are calculated based on plot parameter setting. Users can modify `RCircos` core components by changing plot parameters. Once the plot parameter(s) is changed, call and pass the new parameters to the function of `RCircos.Reset.Plot.Parameters()`, other two components will be checked for update.
+
+```{r}
+rcircos.params <- RCircos.Get.Plot.Parameters()
+rcircos.params$base.per.unit <- 3000
+RCircos.Reset.Plot.Parameters(rcircos.params)
+RCircos.List.Plot.Parameters()
+```
+
+# Making a Plot with RCircos
+Plotting with `RCircos` is a stepwise process. First, an initialization step is needed. Thus, tracks and other aspects of the plot are added sequentially. The result is available after the plot has been entirely constructed. 
+
+## Initialize Graphic Device
+RCircos provides a set of graphic plot function but does not handle graphic devices. To make RCircos plots, a graphic device has to be opened first. Currently, RCircos works with files supported by R graphics package such as tiff, png, pdf images as well as GUI windows. For example, to make a pdf file with RCircos plot image.
+
+```{r}
+out.file <- "RCircosDemoHumanGenome.pdf"
+pdf(file = out.file, height = 8, width = 8, compress = TRUE)
+RCircos.Set.Plot.Area()
+par(mai = c(0.25, 0.25, 0.25, 0.25))
+plot.new()
+plot.window(c(-2.5, 2.5), c(-2.5, 2.5))
+dev.off()
+```
+
+## Plot Chromosome Ideogram
+For RCircos plot, a common first step is to draw chromosome ideograms and label chromosomes with names and highlights. After the RCircos core components were initialized and graphic device was open, simply call the function of `RCircos.Chromosome.Ideogram.Plot()` will add the chromosome ideogram to the current plot.
+
+```{r, message=FALSE}
+RCircos.Set.Core.Components(cyto.info = cyto.info, 
+                            tracks.inside = 10, 
+                            tracks.outside = 0)
+RCircos.Set.Plot.Area(margins = 0.25)
+RCircos.Chromosome.Ideogram.Plot()
+```
+
+## Gene Labels and connectors on RCircos Plot
+Due to the resolution issues, only limited number of gene names can be labeled. For best visualization, cex should be no less than 0.4 when draw gene labels. When cex is set to 0.4, width of character will be 5000 chromosome units when each unit covers 3000 base pairs. If the gene name list supplied is too long, it will be truncated to fit the chromosome length. Also the long gene name will span more than one track so one or more tracks may be needed to skip for next track.
+
+Connectors are used to mark a genomic position with their names or variant status. Currently, `RCircos` only provide connector plot between genes and their genomic positions. The following code draw connectors on the first track inside chromosome ideogram and plot gene names on the next track.
+
+```{r}
+data("RCircos.Gene.Label.Data")
+RCircos.Gene.Label.Data %>% head
+```
+
+```{r, message=FALSE}
+name.col <- 4
+side <- "in"
+track.num <- 1
+
+RCircos.Set.Core.Components(cyto.info = cyto.info)
+RCircos.Set.Plot.Area()
+RCircos.Chromosome.Ideogram.Plot()
+RCircos.Gene.Connector.Plot(genomic.data = RCircos.Gene.Label.Data, 
+                            track.num = track.num, 
+                            side = side)
+RCircos.Gene.Name.Plot(RCircos.Gene.Label.Data, 
+                       name.col = name.col,
+                       track.num = 2, 
+                       side = side)
+
+?RCircos.Gene.Connector.Plot
+```
+
+## Heatmap, Histgram, Line, Scater, and Tile Plot
+```{r}
+data("RCircos.Heatmap.Data")
+RCircos.Heatmap.Data %>% head
+
+data("RCircos.Scatter.Data")
+RCircos.Scatter.Data %>% head
+
+data("RCircos.Tile.Data")
+RCircos.Tile.Data %>% head
+
+data("RCircos.Line.Data")
+RCircos.Line.Data %>% head
+
+data("RCircos.Ribbon.Data")
+RCircos.Ribbon.Data %>% head
+```
+
+```{r, message=FALSE}
+data.col <- 6
+track.num <- 5
+side <- "ine"
+
+RCircos.Set.Core.Components(cyto.info = cyto.info)
+RCircos.Set.Plot.Area()
+RCircos.Chromosome.Ideogram.Plot()
+RCircos.Heatmap.Plot(heatmap.data = RCircos.Heatmap.Data, 
+                    track.num = 1, 
+                    data.col = 5, 
+                    side = "in")
+RCircos.Scatter.Plot(RCircos.Scatter.Data, 
+                     data.col = 5, 
+                     track.num = 2, 
+                     by.fold = 1, 
+                     side = "in")
+RCircos.Tile.Plot(tile.data = RCircos.Tile.Data, 
+                  track.num = 3, 
+                  side = "in")
+RCircos.Link.Plot(link.data = RCircos.Link.Data, 
+                  track.num = 4, 
+                  by.chromosome = TRUE)
+RCircos.Ribbon.Plot(ribbon.data = RCircos.Ribbon.Data, 
+                    track.num = 5, 
+                    by.chromosome = FALSE, 
+                    twist = FALSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
