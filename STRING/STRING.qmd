@@ -7,7 +7,7 @@ format: html
 # Introduction
 STRING (https://www.string-db.org) is a database of known and predicted protein-protein interactions. The interactions include direct (physical) and indirect (functional) associations. The database contains information from numerous sources, including experimental repositories, computational prediction methods and public text collections. Each interaction is associated with a combined confidence score that integrates the various evidences.
 
-In the `STRINGdb` R package we use the new `ReferenceClasses` of R (search for "ReferenceClasses" in the R documentation.). Besides we make use of the `igraph` package (http://igraph.sourceforge.net) as a data structure to represent our protein-protein interaction network.
+In the `STRINGdb` R package we use the new `ReferenceClasses` of R (search for "ReferenceClasses" in the R documentation). Besides we make use of the `igraph` package (http://igraph.sourceforge.net) as a data structure to represent our protein-protein interaction network.
 
 ```{r}
 #| message: false
