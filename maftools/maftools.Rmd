@@ -1,0 +1,55 @@
+---
+title: "maftools"
+author: "YinCY"
+date: "2024/5/13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(maftools)
+```
+
+
+```{r}
+TCGA_DLBC_cnv <- readRDS("")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
