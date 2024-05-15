@@ -4,11 +4,21 @@ library(magrittr)
 
 volcano <- function(data, x, y, p = 0.05, top = 10, threshold = 1, ann = TRUE, label = "symbol", ...){
     df <- data
-    df_to_plot <- df %>% 
+    
+    x <- colnames(data)[which(colnames(data) == x)]
+    y <- colnames(data)[which(colnames(data) == y)]
+    
+    # df_to_plot <- transform(df, 
+    #                         log10pval = -log10(y), 
+    #                         colors = ifelse(y <= p & x >= threshold, "tomato", 
+    #                                         ifelse(y <= p & x <= -threshold, "steelblue", "grey")), 
+    #                         size = ifelse(abs(x) >= threshold & y <= p, 3, 0.5))
+    
+    f_to_plot <- df %>% 
         dplyr::mutate(log10pval = -log10(y), 
                       colors = ifelse(y <= p & x >= threshold, "tomato", 
-                                      ifelse(y <= p & x <= -threshold, "steelblue", "grey")), 
-                      size = ifelse(abs(x) >= threshold & p <= p, 3, 0.5))
+                                      ifelse(y <= p & x <= -threshold, "steelblue", "grey")))
+    
     
     data_to_ann <- rbind(df_to_plot %>% dplyr::filter(y <= p & x >= threshold) %>% dplyr::arrange(y) %>% head(top), 
                          df_to_plot %>% dplyr::filter(y <= p & x <= -threshold) %>% dplyr::arrange(y) %>% head(top))
@@ -28,7 +38,5 @@ volcano <- function(data, x, y, p = 0.05, top = 10, threshold = 1, ann = TRUE, l
     }
     return(p)
 }
-
-
 
 
