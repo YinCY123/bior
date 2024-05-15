@@ -1,0 +1,106 @@
+---
+title: "Detecting exact nearest neighbors"
+author: "YinCY"
+format: html
+---
+
+# Introduction
+
+The `BiocNeighbors` package implements a few algorithms for exact nearest neighbor searching:
+
+- The k-means for k-nearest neighbors (KMKNN) algorithm (Wang 2012) uses k-means clustering to create an index. Within each cluster, the distance of each of that cluster’s points to the cluster center are computed and used to sort all points. Given a query point, the distance to each cluster center is determined and the triangle inequality is applied to determine which points in each cluster warrant a full distance calculation.
+
+- The vantage point (VP) tree algorithm (Yianilos 1993) involves constructing a tree where each node is located at a data point and is associated with a subset of neighboring points. Each node progressively partitions points into two subsets that are either closer or further to the node than a given threshold. Given a query point, the triangle inequality is applied at each node in the tree to determine if the child nodes warrant searching.
+
+- The exhaustive search is a simple brute-force algorithm that computes distances to between all data and query points. This has the worst computational complexity but can actually be faster than the other exact algorithms in situations where indexing provides little benefit, e.g., data sets with few points and/or a very large number of dimensions.
+
+Both KMKNN and VP-trees involve a component of randomness during index construction, though the k-nearest neighbors result is fully deterministic.
+
+# Identifying k-nearest neighbors
+The most obvious application is to perform a k-nearest neighbors search. We’ll mock up an example here with a hypercube of points, for which we want to identify the 10 nearest neighbors for each point.
+
+```{r}
+nobs <- 10000
+ndim <- 20
+data <- matrix(data = runif(nobs * ndim), ncol = ndim)
+```
+
+The `findKNN()` method expects a numeric matrix as input with data points as the rows and variables/dimensions as the columns. We indicate that we want to use the KMKNN algorithm by setting `BNPARAM=KmknnParam()` (which is also the default, so this is not strictly necessary here). We could use a VP tree instead by setting `BNPARAM=VptreeParam()`.
+
+```{r}
+library(BiocNeighbors)
+library(magrittr)
+
+fout <- findKNN(data, k = 10, BNPARAM = KmknnParam())
+fout$index %>% dim
+fout$index %>% head
+```
+
+```{r}
+fout$distance %>% head
+```
+
+
+
+
+```{r}
+library(ggplot2)
+library(ggpubr)
+
+df <- data.frame(x = c(rnorm(6, 1.1, 0.15), rnorm(6, 0.75, 0.15)),
+                 group = rep(c("lesional PsD", "non-lesional PsD"), each = 6))
+
+
+df$group <- factor(df$group, levels = c("non-lesional PsD", "lesional PsD"))
+comparisions <- list(c("lesional PsD", "non-lesional PsD"))
+
+ggboxplot(data = df, 
+          x = "group", 
+          y = "x", 
+          add = "jitter", 
+          xlab = "", 
+          ylab = "relative expression", 
+          title = "CARD6") +
+    stat_compare_means(comparisons = comparisions)
+ggsave("/mnt/c/Users/yincy/Downloads/PsD.png")
+```
+
+
+```{r}
+df <- data.frame(x = c(rnorm(6, 1, 0.1), rnorm(6, 0.7, 0.1)),
+                 group = rep(c( "early AS", "advanced AS"), each = 6))
+
+df$group <- factor(df$group, levels = c("early AS", "advanced AS"))
+comparisions <- list(c("early AS", "advanced AS"))
+
+ggboxplot(data = df, 
+          x = "group", 
+          y = "x", 
+          add = "jitter", 
+          xlab = "", 
+          ylab = "relative expression", 
+          title = "NAMPT") +
+    stat_compare_means(comparisons = comparisions)
+ggsave("/mnt/c/Users/yincy/Downloads/AS.png")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
