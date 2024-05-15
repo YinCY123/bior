@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # Introduction
 ```{r, message=FALSE}
 library(magrittr)
-library(sloop)
+# library(sloop)
 library(DropletUtils)
 ls("package:DropletUtils")
 ```
@@ -43,10 +43,10 @@ The counts themselves are loaded as a sparse matrix, specifically a `dgCMatrix` 
 class(counts(sce))
 ```
 
-Users can also load multiple samples at once by supplying a character vector to `read10xCounts()`. *This will return a single `SingleCellExperiment` where all of the individual matrices are combined by column*. Obviously, this only makes sense when the same set of genes is being used across samples.  
+Users can also load multiple samples at once by supplying a character vector to `read10xCounts()`. *This will return a single `SingleCellExperiment` where all of the individual matrices are combined by column*. **Obviously, this only makes sense when the same set of genes is being used across samples**.  
 
 ## From the molecule information file
-`CellRanger` will also produce a molecule information file (molecule_info.h5) that contains… well, information about the transcript molecules. This includes the UMI sequence, the cell barcode sequence, the gene to which it was assigned, and the number of reads covering the molecule.  
+`CellRanger` will also produce a molecule information file (molecule_info.h5) that contains information about the transcript molecules. This includes the UMI sequence, the cell barcode sequence, the gene to which it was assigned, and the number of reads covering the molecule.  
 
 ```{r, eval=FALSE}
 library(rhdf5)
@@ -68,9 +68,7 @@ mol.info
 
 This information can be useful for quality control purposes, especially when the underlying read counts are required, e.g., to investigate sequencing saturation. Note that the information will automatically guess the length of the barcode sequence, as this is not formally defined in the molecule information file. For most experiments, the guess is correct, but users can force the function to use a known barcode length with the `barcode.length` argument.
 
-
 # Downsampling on the reads
-
 Given multiple batches of very different sequencing depths, it can be beneficial to downsample the deepest batches to match the coverage of the shallowest batches. This avoids differences in technical noise that can drive clustering by batch. The `scuttle` package provides some utilities to downsample count matrices, but technically speaking, downsampling on the reads is more appropriate as it recapitulates the effect of differences in sequencing depth per cell. This can be achieved by applying the `downsampleReads()` function to the molecule information file containing the read counts:  
 
 ```{r, eval=FALSE}
@@ -93,11 +91,23 @@ A useful diagnostic for droplet-based data is the barcode rank plot, which shows
 
 ```{r}
 set.seed(0)
-source("simCounts.R")
-my.counts <- simCounts()
-my.counts %>% colSums() %>% plot(type = "h")
+# source("simCounts.R")
+# my.counts <- simCounts()
+my.counts <- DropletUtils:::simCounts()
+my.counts %>% class
+br.out <- barcodeRanks(m = my.counts)
 ```
 
+```{r, message=FALSE, warning=FALSE}
+plot(br.out$rank, br.out$total, log = "xy", xlab = "Rank", ylab = "Total")
+o <- order(br.out$rank)
+lines(br.out$rank[o], br.out$fitted[o], col = "red")
+
+abline(h = metadata(br.out)$knee, col = "dodgerblue", lty = 2)
+abline(h = metadata(br.out)$inflection, col = "forestgreen", lty = 2)
+legend("bottomleft", lty = 2, col = c("dodgerblue", "forestgreen"), 
+       legend = c("knee", "inflection"))
+```
 
 ```{r}
 br.out <- barcodeRanks(m = my.counts)
@@ -119,7 +129,6 @@ legend("bottomleft", lty = 2, col = c("dodgerblue", "forestgreen"), legend = c("
 
 The knee and inflection position on the curve mark the transition between two components of the total count distribution. This is assumed to represent the difference between empty droplets with little RNA and cell-containing droplets with much more RNA, though a more rigorous method for distinguishing between these two possibilities is discussed below.
 
-
 # Detecting empty droplets
 Empty droplets often contain RNA from the ambient solution, resulting in non-zero counts after debarcoding. The `emptyDrops()` function is designed to distinguish between empty droplets and cells. It does so by testing each barcode's expression profile for significant deviation from the ambient profile. Given a matrix `my.counts` containing UMI counts for all barcodes, we call
 
@@ -129,8 +138,7 @@ e.out <- emptyDrops(m = my.counts, niters = 1e4)
 e.out
 ```
 
-
-Droplets with significant deviations from th anbient profile are detected at a specified FDR threshold, e.g., with `FDR` below 1%. These can be considered to be cell-containing droplets, with a frequency of false positive (i.e., empty droplets) at the specified FDR. Furthermore, droplets with very large counts are automatically retained be setting their p-value to zero. This avoids discarding droplets containing cells that are to the ambient profile.
+Droplets with significant deviations from th ambient profile are detected at a specified FDR threshold, e.g., with `FDR` below 1%. These can be considered to be cell-containing droplets, with a frequency of false positive (i.e., empty droplets) at the specified FDR. Furthermore, droplets with very large counts are automatically retained be setting their p-value to zero. This avoids discarding droplets containing cells that are to the ambient profile.
 
 ```{r}
 is.cell <- e.out$FDR <= 0.01
@@ -143,7 +151,7 @@ The p-value are calculated by permutation testing, hence the need to set a seed.
 table(Limited = e.out$Limited, Siginificant = is.cell) 
 ```
 
-We recommend making some diagnostic plots such as the total count againt the negative log-probability. Droplets detected as cells should show up with large negative log-probability or very large total counts (based on the knee point reported by `barcodeRanks`). Note that the example below is based on simulated data and is quite exaggerated.
+We recommend making some diagnostic plots such as the total count against the negative log-probability. Droplets detected as cells should show up with large negative log-probability or very large total counts (based on the knee point reported by `barcodeRanks`). Note that the example below is based on simulated data and is quite exaggerated.
 
 ```{r}
 plot(e.out$Total, 
@@ -155,7 +163,7 @@ plot(e.out$Total,
 
 
 # Demultiplexing hashed libraries
-Cell hashing experiments can be demultiplexed using the `hashedDrops()` funtion on the set of cell-containing barcode libraries. To demonstrate, we will mock up some hash tag oligo (HTO) counts for a population with cells from each of 10 samples. We will also add some doublets and empty droplets for some flavor.
+Cell hashing experiments can be demultiplexed using the `hashedDrops()` function on the set of cell-containing barcode libraries. To demonstrate, we will mock up some hash tag oligo (HTO) counts for a population with cells from each of 10 samples. We will also add some doublets and empty droplets for some flavor.
 
 
 ```{r}
@@ -178,7 +186,6 @@ next.sample[next.sample == 0] <- nrow(y)
 y[cbind(next.sample, seq_len(ndoub))] <- 500
 ```
 
-
 Our first task is to identify the barcode that actually contain cells. If we already did the calling with `emptyDrops()`, we could just re-use those calls; otherwise we can obtain calls directly from the HTO count matrix, though this requires some fidding with `lower=` to match the sequencing depth of the HTO library.
 
 ```{r}
@@ -186,7 +193,6 @@ hto.calls <- emptyDrops(m = y, lower = 500)
 has.cell <- hto.calls$FDR <= 0.001
 has.cell %>% summary
 ```
-
 
 Each cell-containing barcode library is simply assigned to the sample of origin based on its most abundant HTO. The confidence of the assignment is quantified by the log-fold change between the top and second-most abundant HTOs. The function will automatically adjust for differences in the ambient levels for each HTO based on the ambient profile; if this is not provided, it is roughly estimated the ambient profile from the supplied count matrix.
 
@@ -205,7 +211,7 @@ It is then simple matter to determine the sample of origin for each cell. We pro
 demux$Best[demux$Confident] %>% table
 ```
 
-We also identify doublets based on the log-flod change between the second HTO's abundance and the ambient contamination. A large log-fold change indicates that the second HTO exceeds that from contamination, consistent with the presence of a doublet.
+We also identify doublets based on the log-fold change between the second HTO's abundance and the ambient contamination. **A large log-fold change indicates that the second HTO exceeds that from contamination, consistent with the presence of a doublet**.
 
 ```{r}
 colors <- ifelse(demux$Confident, "black", 
@@ -218,22 +224,37 @@ plot(demux$LogFC,
      ylab = "Log-fold change between second HTO and ambient")
 ```
 
-
 # Removing swapping effects
 ## barcode swapping between samples
 barcode swapping is a phenomenon that occurs upon multiplexing samples on the Illumina 4000 sequencer. Molecules from one sample are incorrectly labelled with sample barcodes from another sample, resulting in their misassignment upon demultiplexing. Fortunately, droplet experiments provide a unique opportumity to elimminate this effect, by assuming that it is effectively impossible to generate multiple sequence. Thus, any molecules with the same combination across multiple samples are likely to arise from barcode swapping.
 
 The `swappedDrops()` function will identify overlapping combinations in the molecule information files of all multiplexed 10X samples sequenced on the same run. It will remove these combinations and return 'cleaned' MUI count matrices for all samples to use in downstream analysis. To demonstrate, we mock up a set of molecule information files for three multiplexed 10X samples.
 
+```{r}
+set.seed(1000)
+multi.mol.info <- DropletUtils:::simSwappedMolInfo(prefix = tempfile(), nsamples = 3)
+multi.mol.info
+```
 
+We then apply `swappedDrops` to these files to remove the effect of swapping in our count matrices.
 
+```{r}
+s.out <- swappedDrops(samples = multi.mol.info, 
+                      min.frac = 0.9)
+s.out$cleaned %>% length
+```
 
+For combinations where 90% of the reads belong to a single sample, the molecule is assigned to that sample rather than being removed. Ths assumes that swapping is relatively rare, so that the read count should be highest in the sample of origin. The exact percentage can be tuned by altering `min.frac` in the `swappedDrops` call.
 
+## Chimeric reads within cells
+On occasion, chimeric molecules are generated during library preparation where incomplete PCR products from one cDNA molecule hybridise to another molecule for extension using shared sequences like the poly-A tail for 3’ protocols. This produces an amplicon where the UMI and cell barcode originate from one transcript molecule but the gene sequence is from another, equivalent to swapping of reads between genes. We handle this effect by removing all molecules in the same cell with the same UMI sequence using the `chimericDrops()` function. This is applied below to a molecule information file to obtain a single cleaned count matrix for the relevant sample.
 
+```{r}
+out <- chimericDrops(sample = multi.mol.info[1])
+out %>% class()
+```
 
-
-
-
+Of course, this may also remove non-chimeric molecules that have the same UMI by chance, but for typical UMI lengths (10-12 bp for 10X protocols) we expect UMI collisions to be very rare between molecules from the same cell. Nonetheless, to mitigate losses due to collisions, we retain any molecule that has a much greater number of reads compared to all other molecules with the same UMI in the same cell.
 
 
 
