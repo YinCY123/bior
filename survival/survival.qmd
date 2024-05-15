@@ -1,0 +1,40 @@
+---
+title: "survival"
+author: "YinCY"
+format: html
+---
+
+the survival package
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
