@@ -5,25 +5,28 @@ date: "2023-03-01"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Introduction: The NCBI, entrez and `rentrez`
-The NCBI shares a lot of data. At the time this document was compiled, there were 31.7 million papers in PubMed, including 6.6 million full-text records available in PubMed Central. The NCBI Nucleotide Database (which includes GenBank) has data for 432 million different sequences, and dbSNP describes 702 million different genetic variants. All of these records can be cross-referenced with the 1.86 million species in the NCBI taxonomy or 27 thousand disease-associated records in OMIM.
+The NCBI shares a lot of data. At the time this document was compiled, there were 31.7 million papers in PubMed, including 6.6 million full-text records available in PubMed Central. The NCBI Nucleotide Database (which includes GenBank) has data for 432 million different sequences, and dbSNP describes 702 million different genetic variants. All of these records can be cross-referenced with the 1.86 million species in the NCBI taxonomy or 27 thousand *disease-associated records* in OMIM.
 
-The NCBI makes this data available through a web interface, an FTP server and through a REST API called the Entrez Utilities (Eutils for short). This package provides functions to use that API, allowing users to gather and combine data from multiple NCBI databases in the comfort of an R session or script.
+The NCBI makes this data available through a web interface, an FTP server and through a REST API called the *Entrez Utilities* (Eutils for short). This package provides functions to use that API, allowing users to gather and combine data from multiple NCBI databases in the comfort of an R session or script.
 
-# Getting started with the rentrez
-To make the most of all the data the NCBI shares you need to know a little about their databases, the records they contain and the ways you can find those records. The NCBI provides extensive documentation for each of their databases and for the EUtils API that rentrez takes advantage of. There are also some helper functions in rentrez that help users learn their way around the NCBI's databases.
+# Getting started with the `rentrez`
+To make the most of all the data the NCBI shares you need to know a little about their databases, the records they contain and the ways you can find those records. The NCBI provides extensive documentation for each of their databases and for the EUtils API that `rentrez` takes advantage of. There are also some helper functions in `rentrez` that help users learn their way around the NCBI's databases.
 
 First, you can use `entrez_dbs()` to find the list of available databases.  
 
 ```{r}
+#| message: false
+#| warning: false
+
 library(rentrez)
 library(magrittr)
 
-entrez_dbs() %>% sort()
+entrez_dbs()
 ```
 
 There is a set of functions with names starting `entrez_db_` that can be used to gather more information about each of these databases.  
@@ -34,17 +37,15 @@ There is a set of functions with names starting `entrez_db_` that can be used to
 - `entrez_db_searchable()`  
 - `entrez_db_links()`  
 
-
-
 ```{r}
 # Brief description of what the database is
-entrez_db_summary(db = "gds")
+entrez_db_summary(db = "cdd")
 
 # Set of search terms that can used with this database
-entrez_db_searchable(db = "gds")
+entrez_db_searchable(db = "cdd")
 
 # Set of databases that might contain linked records
-entrez_db_links(db = "gds")
+entrez_db_links(db = "cdd")
 ```
 
 # Searching databases: `entrez_search()`  
@@ -53,7 +54,7 @@ Very often, the first thing you'll want to do with `rentrez` is search a given N
 ```{r}
 r_search <- entrez_search(db = "pubmed", term = "R language")
 
-aortic <- entrez_search(db = "gds", term = "aortic dissection", retmax = 1000)
+aortic <- entrez_search(db = "gds", term = "aortic dissection", retmax = 20)
 aortic$ids
 ```
 
@@ -63,9 +64,9 @@ The object returned by a search acts like a list, and you can get a summary of i
 r_search
 ```
 
-There are a few things to note here. First, the NCBI's server has worked out that we meant R as a programming language, and so included the 'MeSH' term term associated with programming languages. We'll worry about MeSH terms and other special queries later, for now just note that you can use this feature to check that your search term was interpreted in the way you intended. Second, there are many more 'hits' for this search than there are unique IDs contained in this object. That's because the optional argument `retmax`, which controls the maximum number of returned values has a default value of 20.
+There are a few things to note here. First, the NCBI's server has worked out that we meant R as a programming language, and so included the 'MeSH' term associated with programming languages. We'll worry about MeSH terms and other special queries later, for now just note that you can use this feature to check that your search term was interpreted in the way you intended. Second, there are many more 'hits' for this search than there are unique IDs contained in this object. That's because the optional argument `retmax`, which controls the maximum number of returned values has a default value of 20.
 
-The IDs are the most important thing returned here. They allow us to fetch records matching those IDs, gather summary data about them or find cross-referenced records in other databases. We access the IDs as a vector using the `$` operator.
+**The IDs are the most important thing returned here**. They allow us to fetch records matching those IDs, gather summary data about them or find cross-referenced records in other databases. We access the IDs as a vector using the `$` operator.
 
 ```{r}
 r_search$ids
@@ -86,7 +87,7 @@ The EUtils API uses a special syntax to build search terms. You can search a dat
 For instance, we can find next generation sequence datasets for the (amazing...) ciliate Tetrahymena thermophila by using the organism ('ORGN') search field.
 
 ```{r}
-entrez_search(db = "sra", term = "Tetrahymena thermophila[ORGN]", retmax = 0)
+entrez_search(db = "sra", term = "Tetrahymena thermophila[ORGN]", retmax = 10)
 ```
 
 We can narrow our focus to only those records that have been added recently (using the colon to specify a range of values):
@@ -110,13 +111,13 @@ entrez_db_searchable(db = "sra")
 ```
 
 ## Using the filter field
-"Filter" is a special field that, as the names suggests, allows you to limit records returned by a search to set of filtering criteria. There is no programmatic way to find the particular terms that can be used with the Filter field. However, the NCBI's website provides an "advanced search" tool for some databases that can be used to discover these terms.
+`Filter` is a special field that, as the names suggests, allows you to limit records returned by a search to set of filtering criteria. There is no programmatic way to find the particular terms that can be used with the `Filter` field. However, the NCBI's website provides an "advanced search" tool for some databases that can be used to discover these terms.
 
-For example, to find the list of possible to find all of the terms that can be used to filter searches to the nucleotide database using the advanced search for that databse. On that page selecting "Filter" from the first drop-down box then clicking "Show index list" will allow the user to scroll through possible filtering terms.
+For example, to find the list of possible terms that can be used to filter searches to the nucleotide database using *the advanced search for that databse*. On that page selecting "Filter" from the first drop-down box then clicking "Show index list" will allow the user to scroll through possible filtering terms.
 
 
 ## Precise queries using MeSH terms
-In addition to the search terms described above, the NCBI allows searches using Medical Subject Heading (MeSH) terms. These terms create a 'controlled vocabulary', and allow users to make very finely controlled queries of databases.
+In addition to the search terms described above, the NCBI allows searches using *Medical Subject Heading* (MeSH) terms. These terms create a 'controlled vocabulary', and allow users to make very finely controlled queries of databases.
 
 For instance, if you were interested in reviewing studies on how a class of anti-malarial drugs called Folic Acid Antagonists work against Plasmodium vivax (a particular species of malarial parasite), you could use this search:
 
@@ -128,7 +129,7 @@ entrez_search(db = "pubmed",
 The complete set of MeSH terms is available as a database from the NCBI. That means it is possible to download detailed information about each term and find the ways in which terms relate to each other using `rentrez`. You can search for specific terms with `entrez_search(db="mesh", term =...)` and learn about the results of your search using the tools described below.
 
 ```{r}
-entrez_search(db = "mesh", term = "macrophage")
+(x <- entrez_search(db = "mesh", term = "macrophage[MeSH]"))
 ```
 
 ## Advanced counting
@@ -140,7 +141,7 @@ search_year <- function(year, term){
     entrez_search(db = "pubmed", term = query, retmax = 0)$count
 }
 
-year <- 2008:2014
+year <- 2008:2023
 papers <- sapply(year, search_year, term = "Connectome", USE.NAMES = FALSE)
 plot(year, papers, type = "b")
 ```
@@ -151,14 +152,14 @@ One of the strength of the NCBI databases is the degree to which records of one 
 
 To get an idea of the degree to which records in the NCBI are cross-linked we can find all NCBI data associated with a single gene (in this case the Amyloid Beta Precursor gene, the product of which is associated with the plaques that form in the brains of Alzheimer's Disease patients).
 
-The function entrez_link() can be used to find cross-referenced records. In the most basic case we need to provide an ID (id), the database from which this ID comes (dbfrom) and the name of a database in which to find linked records (db). If we set this last argument to 'all' we can find links in multiple databases.
+The function `entrez_link()` can be used to find cross-referenced records. In the most basic case we need to provide an ID (id), the database from which this ID comes (dbfrom) and the name of a database in which to find linked records (db). If we set this last argument to 'all' we can find links in multiple databases.
 
 ```{r}
 all_the_links <- entrez_link(dbfrom = "gene", id = 351, db = "all")
-all_the_links
+all_the_links$links$gene_gene_neighbors
 ```
 
-Just as with entrez_search the returned object behaves like a list, and we can learn a little about its contents by printing it. In the case, all of the information is in links (and there's a lot of them!). 
+Just as with `entrez_search` the returned object behaves like a list, and we can learn a little about its contents by printing it. In the case, all of the information is in links (and there's a lot of them!). 
 
 ```{r}
 all_the_links$links
@@ -179,7 +180,7 @@ all_the_links$links$gene_clinvar %>% str
 ## Narrowing our focus
 If we know beforehand what sort of links we'd like to find , we can to use the db argument to narrow the focus of a call to `entrez_link`.
 
-For instance, say we are interested in knowing about all of the RNA transcripts associated with the Amyloid Beta Precursor gene in humans. Transcript sequences are stored in the nucleotide database (referred to as `nuccore` in EUtils), so to find transcripts associated with a given gene we need to set `dbfrom=gene` and `db=nuccore`.
+For instance, say we are interested in knowing about all of the RNA transcripts associated with the Amyloid Beta Precursor gene in humans. Transcript sequences are stored in the `nucleotide` database (referred to as `nuccore` in EUtils), so to find transcripts associated with a given gene we need to set `dbfrom=gene` and `db=nuccore`.
 
 ```{r}
 nuc_links <- entrez_link(dbfrom = "gene", id = 351, db = "nuccore")
@@ -197,7 +198,8 @@ We can use these ids in calls to `entrez_fetch()` or `entrez_summary()` to learn
 
 
 ```{r}
-entrez_summary(db = "nuccore", id = "1889693417")
+x <- entrez_summary(db = "nuccore", id = "1889693417")
+x
 ```
 
 ```{r}
@@ -206,7 +208,7 @@ entrez_fetch(db = "nuccore", id = "1889693417", rettype = "fasta")
 
 
 ## External links
-In addition to finding data within the NCBI, entrez_link can turn up connections to external databases. Perhaps the most interesting example is finding links to the full text of papers in PubMed. For example, when I wrote this document the first paper linked to Amyloid Beta Precursor had a unique ID of 25500142. We can find links to the full text of that paper with entrez_link by setting the cmd argument to 'llinks'.
+In addition to finding data within the NCBI, `entrez_link` can turn up connections to external databases. Perhaps the most interesting example is finding links to the full text of papers in PubMed. For example, when I wrote this document the first paper linked to Amyloid Beta Precursor had a unique ID of 25500142. We can find links to the full text of that paper with `entrez_link` by setting the `cmd` argument to `'llinks'`.
 
 ```{r}
 paper_links <- entrez_link(dbfrom = "pubmed", 
@@ -231,7 +233,7 @@ all_links_together <- entrez_link(db = "protein",
 all_links_together
 ```
 
-Although this behaviour might sometimes be useful, it means we've lost track of which protein ID is linked to which gene ID. To retain that information we can set by_id to TRUE. This gives us a list of elink objects, each once containing links from a single gene ID.
+Although this behaviour might sometimes be useful, it means we've lost track of which protein ID is linked to which gene ID. To retain that information we can set `by_id` to `TRUE`. This gives us a list of elink objects, each once containing links from a single gene ID.
 
 ```{r}
 all_links_sep <- entrez_link(db = "protein", 
@@ -254,7 +256,7 @@ taxize_summ <- entrez_summary(db = "pubmed", id = 24555091)
 taxize_summ
 ```
 
-Once again, the object returned by `entrez_summary` behaves like a list, so you can extract elements using $. For instance, we could convert our PubMed ID to another article identifier.
+Once again, the object returned by `entrez_summary` behaves like a list, so you can extract elements using `$`. For instance, we could convert our PubMed ID to another article identifier.
 
 ```{r}
 taxize_summ$articleids
@@ -267,7 +269,6 @@ or see how many times the article has been cited in PubMed Central papers.
 taxize_summ$pmcrefcount
 ```
 
-
 ## Dealing with many records
 If you give `entrez_summary()` a vector with more than one ID you'll get a list of summary records back. Let's get those Plasmodium vivax papers we found in the `entrez_search()` section back, and fetch some summary data on each paper.
 
@@ -279,19 +280,16 @@ multi_summs <- entrez_summary(db = "pubmed",
 multi_summs
 ```
 
-
 ```{r}
 date_and_cite <- extract_from_esummary(multi_summs, elements = c("pubdate", "pmcrefcount", "title"))
 date_and_cite 
 ```
 
-
-
 # Fetaching full records: `entrez_fetch()`
 As useful as the summary records are, sometimes they just don't have the information that you need. If you want a complete representation of a record you can use `entrez_fetch`, using the argument `rettype` to specify the format you'd like the record in.
 
 ## fetch DNA sequences in fasta format
-Let's extend the example given in the `entrez_link()` section about finding transcript for a given gene. This time we will fetch cDNA sequences of those transcripts.We can start by repeating the steps in the earlier example to get nucleotide IDs for refseq transcripts of two genes.
+Let's extend the example given in the `entrez_link()` section about finding transcript for a given gene. This time we will fetch cDNA sequences of those transcripts. We can start by repeating the steps in the earlier example to get nucleotide IDs for refseq transcripts of two genes.
 
 ```{r}
 gene_ids <- c(351, 11647)
@@ -309,7 +307,6 @@ all_recs %>% class()
 all_recs %>% length()
 ```
 
-
 Congratulations, now you have a really huge character vector! Rather than printing all those thousands of bases we can take a peak at the top of the file.  
 
 ```{r}
@@ -322,7 +319,6 @@ If we wanted to use these sequences in some other application we could write the
 write(all_recs, file = "my_transcripts.fasta")
 ```
 
-
 ## Fetch a parsed XML document
 Most of the NCBI's databases can return records in XML format. In additional to downloading the text-representation of these files, `entrez_fetch()` can return objects parsed by the `XML` package. As an example, we can check out the Taxonomy database's record for (did I mention they are amazing....) Tetrahymena thermophila, specifying we want the result to be parsed by setting `parsed=TRUE`.
 
@@ -334,8 +330,7 @@ tax_list <- XML::xmlToList(tax_rec)
 tax_list$Taxon$GeneticCode
 ```
 
-
-For more complex records, which generate deeply-nested lists, you can use XPath expressions along with the function XML::xpathSApply or the extraction operatord [ and [[ to extract specific parts of the file. For instance, we can get the scientific name of each taxon in T. thermophila's lineage by specifying a path through the XML. 
+For more complex records, which generate deeply-nested lists, you can use `XPath` expressions along with the function `XML::xpathSApply` or the extraction operator `[` and `[[` to extract specific parts of the file. For instance, we can get the scientific name of each taxon in T. thermophila's lineage by specifying a path through the XML. 
 
 ```{r}
 tt_lineage <- tax_rec["//LineageEx/Taxon/ScientificName"]
@@ -348,7 +343,6 @@ As the name suggests, `XML::xpathSApply()` is a counterpart of base R's `sapply`
 XML::xpathSApply(tax_rec, "//LineageEx/Taxon/ScientificName", fun = XML::xmlValue)
 ```
 
-
 # Using NCBI's Web History features
 When you are dealing with very large queries it can be time consuming to pass long vectors of unique IDs to and from the NCBI. To avoid this problem, the NCBI provides a feature called "web history" which allows users to store IDs on the NCBI servers then refer to them in future calls.
 
@@ -360,7 +354,7 @@ upload <- entrez_post(db = "omim", id = 600807)
 upload
 ```
 
-The NCBI sends you back some information you can use to refer to the posted IDs. In rentrez, that information is represented as a web_history object.
+The NCBI sends you back some information you can use to refer to the posted IDs. In `rentrez`, that information is represented as a `web_history` object.
 
 Note that if you have a very long list of IDs you may receive a 414 error when you try to upload them. If you have such a list (and they come from an external sources rather than a search that can be save to a web_history object), you may have to 'chunk' the IDs into smaller sets that can processed.
 
@@ -378,12 +372,11 @@ snail_coi <- entrez_search(db = "nuccore", term = "COI[Gene] AND Gastropoda[ORGN
 snail_coi
 ```
 
-
 ```{r}
 snail_coi$web_history
 ```
 
-Similarity, `entrez_link()` can return `web_history` objects by using the cmd neighbor_history. Let's find genetic variants (from the clinvar database) associated with asthma (using the same OMIM ID we identified earlier).
+Similarity, `entrez_link()` can return `web_history` objects by using the `cmd = 'neighbor_history'`. Let's find genetic variants (from the `clinvar` database) associated with asthma (using the same OMIM ID we identified earlier).
 
 ```{r}
 asthma_clinvar <- entrez_link(dbfrom = "omim", 
@@ -393,11 +386,11 @@ asthma_clinvar <- entrez_link(dbfrom = "omim",
 asthma_clinvar$web_histories
 ```
 
-As you can see, instead of returning lists of IDs for each linked database (as it would be default), `entrez_link()` now returns a list of web_histories.
+As you can see, instead of returning lists of IDs for each linked database (as it would be default), `entrez_link()` now returns a list of `web_histories`.
 
 
 ## Use a `web_history` object
-Once you have those IDs stored on the NCBI's servers, you are going to want to do something with them. The functions `entrez_fetch()`, `entrez_summary()` and `entrez_link()` can all use web_history objects in exactly the same way they use IDs.
+Once you have those IDs stored on the NCBI's servers, you are going to want to do something with them. The functions `entrez_fetch()`, `entrez_summary()` and `entrez_link()` can all use `web_history` objects in exactly the same way they use IDs.
 
 So, we could repeat the last example (finding variants linked to asthma), but this time using the ID we uploaded earlier.
 
@@ -410,7 +403,7 @@ asthma_variants <- entrez_link(dbfrom = "omim",
 asthma_variants
 ```
 
-if we want to get some genetic information about these variants we need to map our clinvar IDs to SNP IDs.
+if we want to get some genetic information about these variants we need to map our `clinvar` IDs to SNP IDs.
 
 ```{r}
 snp_links <- entrez_link(dbfrom = "clinvar", 
@@ -424,9 +417,8 @@ snp_summ <- entrez_summary(db = "snp",
 snp_summ %>% extract_from_esummary(c("chr", "fxn_class", "global_maf")) %>% knitr::kable()
 ```
 
-If you really wanted to you could also use web_history objects to download all those thousands of COI sequences. When downloading large sets of data, it is a good idea to take advantage of the arguments retmax and restart to split the request up into smaller chunks. For instance, we could get the first 200 sequences in 50-sequence chunks.
+If you really wanted to you could also use `web_history` objects to download all those thousands of COI sequences. When downloading large sets of data, it is a good idea to take advantage of the arguments retmax and restart to split the request up into smaller chunks. For instance, we could get the first 200 sequences in 50-sequence chunks.
 (Note: this code block is not executed as part of the  vignette to save time and bandwidth).  
-
 
 ```{r}
 for(seq_start in seq(1, 200, 50)){
@@ -439,11 +431,10 @@ for(seq_start in seq(1, 200, 50)){
 }
 ```
 
-
 # Rate-limiting and API Keys
-By default, the NCBI limits users to making only 3 requests per second (and rentrez enforces that limit). Users who register for an "API key" are able to make up to ten requests per second. Getting one of these keys is simple, you just need to register for "my ncbi" account then click on a button in the account settings page.
+**By default, the NCBI limits users to making only 3 requests per second** (and `rentrez` enforces that limit). **Users who register for an "API key" are able to make up to ten requests per second**. Getting one of these keys is simple, you just need to register for "my ncbi" account then click on a button in the account settings page.
 
-Once you have an API key, rentrez will allow you to take advantage of it. For one-off cases, this is as simple as adding the api_key argument to given function call. (Note these examples are not executed as part of this document, as the API key used here not a real one).
+Once you have an API key, `rentrez` will allow you to take advantage of it. For one-off cases, this is as simple as adding the `api_key` argument to given function call. (Note these examples are not executed as part of this document, as the API key used here not a real one).
 
 ```{r}
 entrez_link(db = "protein", 
@@ -452,33 +443,19 @@ entrez_link(db = "protein",
             api_key = "ABCD123")
 ```
 
-
-It most cases you will want to use your API for each of several calls to the NCBI. rentrez makes this easy by allowing you to set an environment variable ,ENTREZ_KEY. Once this value is set to your key rentrez will use it for all requests to the NCBI. To set the value for a single R session you can use the function set_entrez_key(). Here we set the value and confirm it is available.
+It most cases you will want to use your API for each of several calls to the NCBI. `rentrez` makes this easy by allowing you to set an environment variable `ENTREZ_KEY`. Once this value is set to your key `rentrez` will use it for all requests to the NCBI. To set the value for a single R session you can use the function `set_entrez_key()`. Here we set the value and confirm it is available.
 
 ```{r}
 set_entrez_key()
 Sys.getenv("ENTREZ_KEY")
 ```
 
-If you use rentrez often you should edit your .Renviron file (see `r help(Startup)` for description of this file) to include your key. Doing so will mean all requests you send will take advantage of your API key.
+If you use `rentrez` often you should edit your `.Renviron` file (see `r help(Startup)` for description of this file) to include your key. Doing so will mean all requests you send will take advantage of your API key.
 
-As long as an API key is set by one of these methods, rentrez will allow you to make up to ten requests per second.
+As long as an API key is set by one of these methods, `rentrez` will allow you to make up to ten requests per second.
 
-
-
-## Slowing rentrez down when yu hit the rate-limit
+## Slowing `rentrez` down when yu hit the rate-limit
 `rentrez` won't let you send requests to the NCBI at a rate higher than the rate-limit, but it is sometimes possible that they will arrive too close together an produce errors. If you are using `rentrez` functions in a for loop and find rate-limiting errors are occurring, you may consider adding a call to `Sys.sleep(0.1)` before each message sent to the NCBI. This will ensure you stay below the rate limit.
-
-
-
-
-
-
-
-
-
-
-
 
 
 
