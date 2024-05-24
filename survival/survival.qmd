@@ -4,7 +4,22 @@ author: "YinCY"
 format: html
 ---
 
-the survival package
+# Overview
+`Surv()`: a packaging function, like `I()` it doesn't transform its argument.
+- `Surv(time, status)` - right censored data
+- `Surv(time, endpoint == "death")` - right censored data, where the status variable is a character of factor.
+- `Surv(t1, t2, status)` - counting process data
+- `Surv(t1, ind, type=="left")` - left censoring
+- `Surv(time, fstat)` - multiple stat data, fstat is a factor
+
+`aareg`: Aalen's additive regression model.
+- The `timereg` package is a much more comprehensive implementation of the Aalen model, so this document will say little about `aareg`.
+
+`coxph()`: Cox's proportional harzards model.
+- `coxph(Surv(time, status) ~ x, data = aml)` - standard Cox model.
+- 
+
+
 
 
 
