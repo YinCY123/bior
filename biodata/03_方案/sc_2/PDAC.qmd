@@ -1,0 +1,70 @@
+---
+title: "代谢与胰腺癌"
+format: docx
+number-sections: true
+number-depth: 3
+link-citations: true
+csl: /home/yincy/styles/american-journal-of-medical-genetics.csl
+bibliography: PDAC.bib
+editor: source
+---
+
+# 背景
+胰腺癌属于消化系统肿瘤，虽然其发病率不高但是死亡率却是所有肿瘤中最高的，5年生存率不足5%[@Cohen2015]。究其原因主要是胰腺癌早期症状不明显，当前的早期筛查费用比较贵，在确诊时绝大多数患者都已处于晚期[@Vareedayah2018-xv]。上个世纪20年代Otto Warburg发现在分裂旺盛的肿瘤组织中细胞摄取葡萄糖的速率增加，但是代谢上却主要使用糖酵解而非氧化磷酸化为细胞提供能量，这一现象称为瓦格博效应。在PDAC患者中发现90%的患者都带有KRAS突变，而研究发现KRAS突变能够促进PDAC代谢重编程、促进PDAC葡萄糖转运体和六磷酸葡萄糖激酶的表达，进而促进糖酵解过程[@Cohen2015]。类似地研究也发现TP53突变也能够促进PDAC代谢重编程。但是这些突变信息不是很容易得获得，因此并不能作为早期筛查PDAC的标志物。
+
+
+# 数据
+## 胰腺癌测序数据
+| Dataset ID  | 样本类型 | 样本数 | 样本特征                                                | 数据类型    |
+|:------------|:---------|:-------|:--------------------------------------------------------|:------------|
+|GSE253260    |组织      |397     |106个转移样本和291个胰腺癌样本                           |bulk RNAseq  |
+|GSE77858     |组织      |85      |77个胰腺癌样本，3个正常胰腺样本，5个胰腺炎样本           |microarray   |
+|GSE263733    |组织      |218     |175胰腺癌样本和43个肝转移样本                            |single cell  |
+|GSE79668     |组织      |51      |胰腺癌组织                                               |bulk RNAseq  |
+|TCGA-PAAD    |组织      |178     |胰腺癌组织                                               |bulk RNAseq  |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r, echo=FALSE, eval=FALSE}
+library(rentrez)
+
+term = "(Pancreatic Adenocarcinoma[title]) AND (Homo sapiens[orgn]) AND (10:49[nsam])"
+res <- entrez_search(db = "gds", term = term, retmax = 1000)
+res$ids
+```
+
+
+
+
+
+
